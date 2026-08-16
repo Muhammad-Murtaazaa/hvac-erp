@@ -9,7 +9,7 @@ import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 
-export default function SalesPage() {
+function SalesPageContent() {
   const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
@@ -1804,5 +1804,13 @@ export default function SalesPage() {
         document.body
       )}
     </div>
+  );
+}
+
+export default function SalesPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Sales...</div>}>
+      <SalesPageContent />
+    </React.Suspense>
   );
 }

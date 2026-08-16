@@ -9,7 +9,7 @@ import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 
-export default function SupportPage() {
+function SupportPageContent() {
   const searchParams = useSearchParams();
   const [complaints, setComplaints] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -1337,5 +1337,13 @@ export default function SupportPage() {
         document.body
       )}
     </div>
+  );
+}
+
+export default function SupportPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Support...</div>}>
+      <SupportPageContent />
+    </React.Suspense>
   );
 }

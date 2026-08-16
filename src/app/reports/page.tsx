@@ -6,7 +6,7 @@ import { FileSpreadsheet, Printer, Download, Search, Calendar, ChevronRight, Fil
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 
-export default function ReportsPage() {
+function ReportsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialType = searchParams.get("type") || "pnl";
@@ -533,5 +533,13 @@ export default function ReportsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Reports...</div>}>
+      <ReportsPageContent />
+    </React.Suspense>
   );
 }

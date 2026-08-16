@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Box,
@@ -67,8 +67,6 @@ const MENU_ITEMS: MenuItem[] = [
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab");
 
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -281,20 +279,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           {/* Links navigation list */}
           <nav className="p-4 space-y-1">
             {filteredMenuItems.map((item) => {
-              const itemUrl = new URL(item.href, "http://localhost");
-              
-              let paramsMatch = true;
-              itemUrl.searchParams.forEach((value, key) => {
-                if (searchParams.get(key) !== value) {
-                  paramsMatch = false;
-                }
-              });
-
-              if (itemUrl.searchParams.toString() === "" && (searchParams.has("tab") || searchParams.has("type"))) {
-                paramsMatch = false;
-              }
-
-              const active = pathname === itemUrl.pathname && paramsMatch;
+              const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
               const Icon = item.icon;
 
               return (

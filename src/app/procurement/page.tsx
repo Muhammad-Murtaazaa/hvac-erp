@@ -7,7 +7,7 @@ import SkeletonTable from "@/components/shared/SkeletonTable";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 
-export default function ProcurementPage() {
+function ProcurementPageContent() {
   const searchParams = useSearchParams();
   const [vendors, setVendors] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -1549,5 +1549,13 @@ export default function ProcurementPage() {
         document.body
       )}
     </div>
+  );
+}
+
+export default function ProcurementPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading Procurement...</div>}>
+      <ProcurementPageContent />
+    </React.Suspense>
   );
 }

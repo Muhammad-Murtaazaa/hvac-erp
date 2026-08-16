@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
   if (!session || !hasPermission(session, "VIEW_REPORTS")) {

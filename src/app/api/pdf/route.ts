@@ -3,6 +3,8 @@ import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { generateInvoicePDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF } from "@/lib/pdfGenerator";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
   if (!session) {
