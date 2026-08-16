@@ -1,0 +1,203 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/db";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordLedgerEntry, recordStockMovement, updateProductAverageCost } from "@/lib/ledger";
+
+export async function POST(req: Request) {
+  const session = await getCurrentUser(req);
+  if (!session || !hasPermission(session, "MANAGE_PROCUREMENT")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { poId, lineItems, notes } = await req.json(); // lineItems = Array of { productId, quantityReceived, unitCost, poPendingItemId? }
+
+    if (!poId || !lineItems || lineItems.length === 0) {
+      return NextResponse.json({ error: "PO ID and received line items are required" }, { status: 400 });
+    }
+
+    const po = await prisma.purchaseOrder.findUnique({
+      where: { id: poId },
+      include: {
+        lineItems: true,
+        pendingItems: true,
+      },
+    });
+
+    if (!po) {
+      return NextResponse.json({ error: "Purchase Order not found" }, { status: 404 });
+    }
+
+    if (po.status === "DRAFT" || po.status === "CANCELLED" || po.status === "COMPLETED") {
+      return NextResponse.json({ error: `Cannot receive items against PO in ${po.status} status` }, { status: 400 });
+    }
+
+    const grnCount = await prisma.goodsReceivedNote.count();
+    const grnNumber = `GRN-${10001 + grnCount}`;
+
+    // Wrap the entire stock-in + ledger-write in a single database transaction
+    const grn = await prisma.$transaction(async (tx) => {
+      // 1. Create GoodsReceivedNote header
+      const createdGRN = await tx.goodsReceivedNote.create({
+        data: {
+          grnNumber,
+          poId,
+          receivedById: session.id,
+          notes: notes || "",
+        },
+      });
+
+      // Process each received item
+      for (const item of lineItems) {
+        const qtyReceived = parseInt(item.quantityReceived);
+        const costPerUnit = Number(item.unitCost);
+        const productId = item.productId;
+
+        if (isNaN(qtyReceived) || qtyReceived <= 0) {
+          throw new Error(`Invalid quantity received: ${item.quantityReceived}`);
+        }
+
+        const product = await tx.product.findUnique({ where: { id: productId } });
+        if (!product) throw new Error(`Product not found: ${productId}`);
+
+        // Find the original PO line item to update quantityReceived
+        const poLine = po.lineItems.find((l) => l.productId === productId);
+        if (!poLine) {
+          throw new Error(`Product ${product.sku} is not part of this Purchase Order`);
+        }
+
+        const remaining = poLine.quantityOrdered - poLine.quantityReceived;
+        if (qtyReceived > remaining) {
+          throw new Error(`Cannot receive ${qtyReceived} units for SKU ${product.sku}. Only ${remaining} outstanding units remain.`);
+        }
+
+        // a. Update PO Line Item quantities
+        await tx.pOLineItem.update({
+          where: { id: poLine.id },
+          data: {
+            quantityReceived: {
+              increment: qtyReceived,
+            },
+          },
+        });
+
+        // b. Update product incomingQty
+        const newIncoming = Math.max(0, product.incomingQty - qtyReceived);
+        await tx.product.update({
+          where: { id: productId },
+          data: {
+            incomingQty: newIncoming,
+          },
+        });
+
+        // c. Update weighted average cost BEFORE updating the inventory count
+        await updateProductAverageCost(tx, productId, qtyReceived, costPerUnit);
+
+        // d. Increment inventory and create StockLedger log
+        await recordStockMovement(tx, {
+          productId,
+          type: "PO_RECEIPT",
+          quantity: qtyReceived,
+          referenceDoc: grnNumber,
+        });
+
+        // e. Handle shortfalls / shortage resolutions
+        let linkedPendingId: string | null = null;
+
+        if (item.poPendingItemId) {
+          // Case 1: Subsequent receipt resolving an active shortage from Pending Stock view
+          const pendingItem = await tx.pOPendingItem.findUnique({
+            where: { id: item.poPendingItemId },
+          });
+
+          if (!pendingItem) throw new Error(`Pending stock item ${item.poPendingItemId} not found`);
+
+          const outstandingShortage = pendingItem.quantityMissing - pendingItem.quantityResolved;
+          if (qtyReceived > outstandingShortage) {
+            throw new Error(`Cannot receive ${qtyReceived} units for shortage. Only ${outstandingShortage} outstanding units remain.`);
+          }
+
+          const resolved = Math.min(qtyReceived, outstandingShortage);
+          const newResolvedTotal = pendingItem.quantityResolved + resolved;
+          const isNowResolved = newResolvedTotal >= pendingItem.quantityMissing;
+
+          await tx.pOPendingItem.update({
+            where: { id: pendingItem.id },
+            data: {
+              quantityResolved: newResolvedTotal,
+              isResolved: isNowResolved,
+            },
+          });
+          linkedPendingId = pendingItem.id;
+        } else {
+          // Case 2: Initial receipt from PO screen
+          const totalReceivedSoFar = poLine.quantityReceived + qtyReceived;
+          const ordered = poLine.quantityOrdered;
+
+          if (totalReceivedSoFar < ordered) {
+            // Log shortfall shortage
+            const shortfall = ordered - totalReceivedSoFar;
+            const newPending = await tx.pOPendingItem.create({
+              data: {
+                poId,
+                productId,
+                quantityMissing: shortfall,
+                quantityResolved: 0,
+                isResolved: false,
+              },
+            });
+            linkedPendingId = newPending.id;
+          }
+        }
+
+        // f. Double-Entry General Ledger write (Debit Inventory Asset / Credit Accounts Payable)
+        const lineTotalAmount = qtyReceived * costPerUnit;
+        await recordLedgerEntry(tx, {
+          description: `Received ${qtyReceived} units of ${product.sku} against ${po.poNumber} (${grnNumber})`,
+          debitAccount: "Inventory Asset",
+          creditAccount: "Accounts Payable",
+          amount: lineTotalAmount,
+          referenceType: "PO_RECEIPT",
+          referenceId: createdGRN.id,
+        });
+
+        // g. Write GRN Line Item
+        await tx.gRNLineItem.create({
+          data: {
+            grnId: createdGRN.id,
+            productId,
+            quantityReceived: qtyReceived,
+            unitCost: costPerUnit,
+            poPendingItemId: linkedPendingId,
+          },
+        });
+      }
+
+      // 2. Recalculate and update PO overall status
+      const allPoLines = await tx.pOLineItem.findMany({ where: { poId } });
+      const allPendingLines = await tx.pOPendingItem.findMany({ where: { poId } });
+
+      const allReceived = allPoLines.every((l) => l.quantityReceived >= l.quantityOrdered);
+      const allShortagesResolved = allPendingLines.every((l) => l.isResolved);
+
+      let finalStatus = "PARTIALLY_RECEIVED";
+      if (allReceived && allShortagesResolved) {
+        finalStatus = "COMPLETED";
+      }
+
+      await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: {
+          status: finalStatus as any,
+        },
+      });
+
+      return createdGRN;
+    });
+
+    return NextResponse.json({ grn });
+  } catch (error: any) {
+    console.error("[GRN POST] Error:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
+}

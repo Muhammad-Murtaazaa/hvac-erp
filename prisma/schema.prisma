@@ -1,0 +1,524 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String               @id @default(uuid())
+  email            String               @unique
+  passwordHash     String
+  name             String
+  roleId           String
+  role             Role                 @relation(fields: [roleId], references: [id])
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  auditLogs        AuditLog[]
+  timelines        ComplaintTimeline[]
+  loginLogs        LoginActivityLog[]
+  grnsReceived     GoodsReceivedNote[]
+  stockAdjustments StockAdjustment[]
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique // e.g. "Admin", "Sales", "Accountant"
+  description String?
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String       @id @default(uuid())
+  name        String       @unique // e.g. "VIEW_DASHBOARD", "MANAGE_PO", "MANAGE_INVENTORY"
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model LoginActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  email     String
+  ipAddress String?
+  userAgent String?
+  status    String   // SUCCESS, FAILED
+  timestamp DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Employee {
+  id                String           @id @default(uuid())
+  name              String
+  cnic              String           @unique
+  phone             String
+  address           String
+  department        String
+  position          String
+  joiningDate       DateTime
+  status            String           @default("ACTIVE") // ACTIVE, ON_LEAVE, TERMINATED
+  baseSalary        Decimal
+  bankDetails       String
+  fatherName        String?
+  fatherPhone       String?
+  responsiblePerson String?
+  refPhone          String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  attendance        Attendance[]
+  payrollRuns       PayrollRun[]
+  complaints        Complaint[]      @relation("TechnicianRelation")
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+  date       DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     String           // PRESENT, ABSENT, LEAVE, HALF_DAY
+
+  @@unique([employeeId, date])
+}
+
+model PayrollRun {
+  id          String        @id @default(uuid())
+  employeeId  String
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  month       Int
+  year        Int
+  baseSalary  Decimal
+  allowances  Decimal       @default(0.00)
+  deductions  Decimal       @default(0.00)
+  netPay      Decimal
+  status      String        @default("PENDING") // PENDING, PAID
+  paymentDate DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([employeeId, month, year])
+}
+
+model Vendor {
+  id            String          @id @default(uuid())
+  name          String          @unique
+  contactPerson String
+  phone         String
+  email         String
+  address       String
+  paymentTerms  String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+  vendorReturns VendorReturn[]
+  attachments   Attachment[]
+}
+
+model Product {
+  id                String             @id @default(uuid())
+  sku               String             @unique
+  name              String
+  category          String
+  unit              String
+  reorderLevel      Int
+  onHandQty         Int                @default(0)
+  incomingQty       Int                @default(0)
+  averageCost       Decimal            @default(0.00)
+  salesPrice        Decimal            @default(0.00)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  poLineItems       POLineItem[]
+  poPendingItems    POPendingItem[]
+  doLineItems       DOLineItem[]
+  invoiceLineItems  InvoiceLineItem[]
+  stockLedgerLogs   StockLedger[]
+  grnLineItems      GRNLineItem[]
+  returnLineItems   ReturnLineItem[]
+  vendorReturnLines VendorReturnLineItem[]
+  stockAdjustments  StockAdjustment[]
+}
+
+model PurchaseOrder {
+  id            String          @id @default(uuid())
+  poNumber      String          @unique
+  vendorId      String
+  vendor        Vendor          @relation(fields: [vendorId], references: [id])
+  status        String          @default("DRAFT") // DRAFT, SUBMITTED, PARTIALLY_RECEIVED, COMPLETED, CANCELLED
+  discount      Decimal         @default(0.00)
+  totalAmount   Decimal         @default(0.00)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lineItems     POLineItem[]
+  pendingItems  POPendingItem[]
+  grns          GoodsReceivedNote[]
+  attachments   Attachment[]
+}
+
+model POLineItem {
+  id                   String        @id @default(uuid())
+  poId                 String
+  purchaseOrder        PurchaseOrder @relation(fields: [poId], references: [id])
+  productId            String
+  product              Product       @relation(fields: [productId], references: [id])
+  quantityOrdered      Int
+  quantityReceived     Int           @default(0)
+  unitCost             Decimal
+  expectedDeliveryDate DateTime
+}
+
+model POPendingItem {
+  id               String        @id @default(uuid())
+  poId             String
+  purchaseOrder    PurchaseOrder @relation(fields: [poId], references: [id])
+  productId        String
+  product          Product       @relation(fields: [productId], references: [id])
+  quantityMissing  Int
+  quantityResolved Int           @default(0)
+  dateFlagged      DateTime      @default(now())
+  isResolved       Boolean       @default(false)
+  grnLineItems     GRNLineItem[]
+}
+
+model GoodsReceivedNote {
+  id           String        @id @default(uuid())
+  grnNumber    String        @unique
+  poId         String
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
+  receivedById String
+  receivedBy   User          @relation(fields: [receivedById], references: [id])
+  receivedAt   DateTime      @default(now())
+  notes        String?
+  lineItems    GRNLineItem[]
+}
+
+model GRNLineItem {
+  id                String            @id @default(uuid())
+  grnId             String
+  goodsReceivedNote GoodsReceivedNote @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product           @relation(fields: [productId], references: [id])
+  quantityReceived  Int
+  unitCost          Decimal
+  poPendingItemId   String?
+  poPendingItem     POPendingItem?    @relation(fields: [poPendingItemId], references: [id])
+  vendorReturnLines VendorReturnLineItem[]
+}
+
+model StockLedger {
+  id             String          @id @default(uuid())
+  productId      String
+  product        Product         @relation(fields: [productId], references: [id])
+  type           String          // PO_RECEIPT, SALE, DO_DISPATCH, RETURN, VENDOR_RETURN, MANUAL_ADJUSTMENT
+  quantity       Int
+  referenceDoc   String
+  timestamp      DateTime        @default(now())
+  runningBalance Int
+}
+
+model StockAdjustment {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  adjustedQty Int
+  reason      String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model DeliveryOrder {
+  id              String        @id @default(uuid())
+  doNumber        String        @unique
+  date            DateTime
+  clientName      String
+  clientPhone     String
+  deliveryAddress String
+  status          String        @default("DRAFT") // DRAFT, DISPATCHED, DELIVERED
+  notes           String?
+  through         String?
+  vehicle         String?
+  poNumber        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  lineItems       DOLineItem[]
+  invoices        Invoice[]
+  attachments     Attachment[]
+}
+
+model DOLineItem {
+  id             String         @id @default(uuid())
+  doId           String
+  deliveryOrder  DeliveryOrder  @relation(fields: [doId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?       @relation(fields: [productId], references: [id])
+  description    String?
+  quantity       Int
+  salesPrice     Decimal
+  extraFields    String?        // JSON-stringified key-value pairs
+}
+
+model Invoice {
+  id                 String        @id @default(uuid())
+  invoiceNumber      String        @unique
+  clientName         String
+  clientPhone        String?
+  clientAddress      String?
+  date               DateTime
+  status             String        @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
+  totalAmount        Decimal
+  amountPaid         Decimal       @default(0.00)
+  notes              String?
+  subjectHeading     String?
+  subjectDescription String?
+  doId               String?
+  deliveryOrder      DeliveryOrder? @relation(fields: [doId], references: [id])
+  isGst              Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  lineItems          InvoiceLineItem[]
+  payments           Payment[]
+  returns            Return[]
+  complaintId        String?       @unique
+  complaint          Complaint?    @relation(fields: [complaintId], references: [id])
+}
+
+model InvoiceLineItem {
+  id               String            @id @default(uuid())
+  invoiceId        String
+  invoice          Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product?          @relation(fields: [productId], references: [id])
+  description      String?
+  quantity         Int
+  salesPrice       Decimal
+  extraFields      String?           // JSON-stringified key-value pairs
+  returnedLines    ReturnLineItem[]
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  amountPaid  Decimal
+  paymentDate DateTime @default(now())
+  method      String   // CASH, CARD, BANK
+}
+
+model Return {
+  id           String        @id @default(uuid())
+  returnNumber String        @unique
+  invoiceId    String
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  status       String        @default("PENDING") // PENDING, COMPLETED
+  reason       String
+  totalAmount  Decimal
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  lineItems    ReturnLineItem[]
+  refunds      Refund[]
+}
+
+model ReturnLineItem {
+  id                String          @id @default(uuid())
+  returnId          String
+  returnOrder       Return          @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  invoiceLineItemId String
+  invoiceLineItem   InvoiceLineItem @relation(fields: [invoiceLineItemId], references: [id])
+  productId         String?
+  product           Product?        @relation(fields: [productId], references: [id])
+  quantity          Int
+  refundPrice       Decimal
+}
+
+model Refund {
+  id             String   @id @default(uuid())
+  returnId       String
+  returnOrder    Return   @relation(fields: [returnId], references: [id])
+  amountRefunded Decimal
+  refundDate     DateTime @default(now())
+  method         String   // CASH, CARD, BANK, CREDIT_NOTE
+}
+
+model VendorReturn {
+  id                 String                 @id @default(uuid())
+  vendorReturnNumber String                 @unique
+  vendorId           String
+  vendor             Vendor                 @relation(fields: [vendorId], references: [id])
+  date               DateTime
+  status             String                 @default("PENDING") // PENDING, COMPLETED
+  reason             String
+  totalAmount        Decimal
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  lineItems          VendorReturnLineItem[]
+}
+
+model VendorReturnLineItem {
+  id             String            @id @default(uuid())
+  vendorReturnId String
+  vendorReturn   VendorReturn      @relation(fields: [vendorReturnId], references: [id], onDelete: Cascade)
+  grnLineItemId  String?
+  grnLineItem    GRNLineItem?      @relation(fields: [grnLineItemId], references: [id])
+  productId      String
+  product           Product        @relation(fields: [productId], references: [id])
+  quantity       Int
+  unitCost       Decimal
+}
+
+model LedgerEntry {
+  id            String              @id @default(uuid())
+  entryDate     DateTime
+  description   String
+  debitAccount  String
+  creditAccount String
+  amount        Decimal
+  referenceType String              // PO_RECEIPT, INVOICE, RETURN, VENDOR_RETURN, STOCK_ADJUSTMENT, PAYROLL
+  referenceId   String
+  createdAt     DateTime            @default(now())
+}
+
+model Complaint {
+  id                   String           @id @default(uuid())
+  complaintNumber      String           @unique
+  date                 DateTime
+  customerName         String
+  customerPhone        String
+  customerAddress      String
+  description          String
+  remarks              String?
+  assignedTechnicianId String?
+  technician           Employee?        @relation("TechnicianRelation", fields: [assignedTechnicianId], references: [id])
+  status               String           @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  amount               Decimal          @default(0.00)
+  amountStatus         String           @default("UNPAID") // UNPAID, PAID, WAIVED
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  timeline             ComplaintTimeline[]
+  invoice              Invoice?
+  attachments          Attachment[]
+}
+
+model ComplaintTimeline {
+  id          String          @id @default(uuid())
+  complaintId String
+  complaint   Complaint       @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User            @relation(fields: [changedById], references: [id])
+  fromStatus  String
+  toStatus    String
+  timestamp   DateTime        @default(now())
+  remarks     String
+}
+
+model Attachment {
+  id              String         @id @default(uuid())
+  fileName        String
+  fileUrl         String
+  fileType        String
+  vendorId        String?
+  vendor          Vendor?        @relation(fields: [vendorId], references: [id])
+  poId            String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [poId], references: [id])
+  doId            String?
+  deliveryOrder   DeliveryOrder? @relation(fields: [doId], references: [id])
+  complaintId     String?
+  complaint       Complaint?     @relation(fields: [complaintId], references: [id])
+  createdAt       DateTime       @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  tableName String
+  recordId  String
+  oldValues String?
+  newValues String?
+  timestamp DateTime @default(now())
+}
+
+model SystemSetting {
+  key   String @id
+  value String
+}
+
+model AuditSnapshot {
+  id           String   @id @default(uuid())
+  entityName   String   // e.g., "Product", "Invoice", "PurchaseOrder", "Employee", "Complaint"
+  entityId     String
+  action       String   // CREATE, UPDATE, DELETE, ROLLBACK
+  actorId      String
+  actorEmail   String
+  beforeState  String?  // JSON string of full entity before change
+  afterState   String?  // JSON string of full entity after change
+  diff         String?  // JSON string of changed fields
+  isRolledBack Boolean  @default(false)
+  timestamp    DateTime @default(now())
+
+  @@index([entityName, entityId])
+  @@index([actorId])
+}
+
+model SavedReportTemplate {
+  id          String            @id @default(uuid())
+  title       String
+  description String?
+  entity      String            // INVOICE, PRODUCT, COMPLAINT, EMPLOYEE, PURCHASE_ORDER
+  config      String            // JSON: { fields: [], filters: [], groupBy: [], aggregates: [] }
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  schedules   ScheduledReport[]
+}
+
+model ScheduledReport {
+  id               String               @id @default(uuid())
+  title            String
+  frequency        String               // DAILY, WEEKLY, MONTHLY
+  dayOfWeek        Int?                 // 1-7 for Weekly (1=Monday)
+  dayOfMonth       Int?                 // 1-31 for Monthly
+  timeOfDay        String               @default("08:00") // "HH:MM"
+  recipientEmails  String               // comma-separated emails
+  templateId       String?
+  template         SavedReportTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  includeAiSummary Boolean              @default(true)
+  format           String               @default("EXCEL") // EXCEL, CSV
+  isActive         Boolean              @default(true)
+  lastRunAt        DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model ProactiveBriefing {
+  id          String   @id @default(uuid())
+  type        String   // DAILY_DIGEST, ANOMALY_ALERT, AMC_ALERT, STOCK_ALERT
+  title       String
+  summary     String
+  detailsJson String   // JSON structured array of anomalies/items
+  severity    String   @default("INFO") // INFO, WARNING, CRITICAL
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

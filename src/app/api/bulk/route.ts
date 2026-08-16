@@ -1,0 +1,115 @@
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/db";
+import { recordAuditSnapshot } from "@/lib/audit";
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { action, ids, data, actor } = body;
+
+    if (!action || !ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ success: false, error: "Missing required fields (action, ids array)" }, { status: 400 });
+    }
+
+    const currentActor = actor || { id: "bulk-user", email: "admin@erp.local" };
+
+    switch (action) {
+      // 1. Bulk Assign Technicians to Complaints
+      case "ASSIGN_TECHNICIAN": {
+        const { technicianId } = data;
+        if (!technicianId) {
+          return NextResponse.json({ success: false, error: "Missing technicianId" }, { status: 400 });
+        }
+
+        const technician = await prisma.employee.findUnique({ where: { id: technicianId } });
+        if (!technician) {
+          return NextResponse.json({ success: false, error: "Technician not found" }, { status: 404 });
+        }
+
+        const updated = await prisma.complaint.updateMany({
+          where: { id: { in: ids } },
+          data: {
+            assignedTechnicianId: technicianId,
+            status: "IN_PROGRESS",
+          },
+        });
+
+        // Add timeline updates
+        for (const cid of ids) {
+          await prisma.complaintTimeline.create({
+            data: {
+              complaintId: cid,
+              changedById: currentActor.id || "admin-user",
+              fromStatus: "OPEN",
+              toStatus: "IN_PROGRESS",
+              remarks: `Bulk assigned to technician: ${technician.name}`,
+            },
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: `Successfully assigned ${technician.name} to ${updated.count} ticket(s).`,
+          count: updated.count,
+        });
+      }
+
+      // 2. Bulk Update Complaints Status
+      case "UPDATE_COMPLAINT_STATUS": {
+        const { status } = data;
+        if (!status) {
+          return NextResponse.json({ success: false, error: "Missing status" }, { status: 400 });
+        }
+
+        const updated = await prisma.complaint.updateMany({
+          where: { id: { in: ids } },
+          data: { status },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: `Updated status to ${status} for ${updated.count} complaint(s).`,
+          count: updated.count,
+        });
+      }
+
+      // 3. Bulk Update Invoices Status
+      case "UPDATE_INVOICE_STATUS": {
+        const { status } = data;
+        if (!status) {
+          return NextResponse.json({ success: false, error: "Missing status" }, { status: 400 });
+        }
+
+        const updated = await prisma.invoice.updateMany({
+          where: { id: { in: ids } },
+          data: { status },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: `Updated ${updated.count} invoice(s) to ${status}.`,
+          count: updated.count,
+        });
+      }
+
+      // 4. Bulk Delete Stock / Products
+      case "DELETE_PRODUCTS": {
+        const deleted = await prisma.product.deleteMany({
+          where: { id: { in: ids } },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: `Deleted ${deleted.count} product item(s).`,
+          count: deleted.count,
+        });
+      }
+
+      default:
+        return NextResponse.json({ success: false, error: `Unsupported bulk action: ${action}` }, { status: 400 });
+    }
+  } catch (error: any) {
+    console.error("Bulk action error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

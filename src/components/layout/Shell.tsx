@@ -1,0 +1,586 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  LayoutDashboard,
+  Box,
+  Truck,
+  FileSpreadsheet,
+  Receipt,
+  Users,
+  Wrench,
+  BarChart3,
+  LogOut,
+  Sun,
+  Moon,
+  Menu,
+  X,
+  User,
+  ShoppingBag,
+  Store,
+  UserCheck,
+  BookOpen,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Bot,
+  ShieldCheck,
+  Sliders,
+  Mail,
+  ChevronDown,
+  Bell,
+} from "lucide-react";
+import { ToastProvider } from "@/components/shared/ToastProvider";
+import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
+import MobileBottomNav from "@/components/shared/MobileBottomNav";
+
+interface MenuItem {
+  name: string;
+  href: string;
+  icon: any;
+  roles?: string[]; // Allowed roles. If undefined, visible to all
+}
+
+const MENU_ITEMS: MenuItem[] = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement"] },
+  { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement"] },
+  { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },
+  { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
+  { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"] },
+  { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
+  { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales"] },
+  { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"] },
+  { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"] },
+  { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"] },
+  { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement"] },
+  { name: "Technicians", href: "/support?tab=technicians", icon: UserCheck, roles: ["Admin", "Support", "Technician", "Sales"] },
+  { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"] },
+  { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"] },
+  { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"] },
+  { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"] },
+  { name: "Settings", href: "/settings", icon: Settings, roles: ["Admin"] },
+];
+
+export default function Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab");
+
+  const [darkMode, setDarkMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [universalSearch, setUniversalSearch] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [globalSearchResults, setGlobalSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [stats, setStats] = useState<any>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!universalSearch.trim() || universalSearch.length < 2) {
+      setGlobalSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const res = await fetch(`/api/search/global?q=${encodeURIComponent(universalSearch)}`);
+        const data = await res.json();
+        if (data.success) {
+          setGlobalSearchResults(data.results || []);
+        }
+      } catch (err) {
+        console.error("Global search fetch error", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [universalSearch]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        const searchInput = document.getElementById("universal-search-input");
+        if (searchInput) searchInput.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const isCollapsed = localStorage.getItem("sidebar-collapsed") === "true";
+    setCollapsed(isCollapsed);
+  }, []);
+
+  const toggleCollapse = () => {
+    const nextCollapsed = !collapsed;
+    setCollapsed(nextCollapsed);
+    localStorage.setItem("sidebar-collapsed", String(nextCollapsed));
+  };
+
+  // 1. Theme configuration
+  useEffect(() => {
+    const isDark = localStorage.getItem("theme") === "dark";
+    setDarkMode(isDark);
+    if (isDark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !darkMode;
+    setDarkMode(nextDark);
+    localStorage.setItem("theme", nextDark ? "dark" : "light");
+    if (nextDark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  };
+
+  // 2. Authentication check
+  const isLoginPage = pathname === "/" || pathname.startsWith("/auth/reset-password");
+
+  useEffect(() => {
+    if (isLoginPage) {
+      setLoading(false);
+      return;
+    }
+
+    const verifySession = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          localStorage.removeItem("token");
+          router.push("/");
+          return;
+        }
+
+        const data = await res.json();
+        setCurrentUser(data.user);
+      } catch (err) {
+        console.error("Session verification failed", err);
+        router.push("/");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    verifySession();
+  }, [pathname, isLoginPage, router]);
+
+  // 3. System indicators stats polling
+  useEffect(() => {
+    if (isLoginPage) return;
+    const fetchStats = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch("/api/dashboard", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.summary) {
+            setStats(data.summary);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard stats in Shell", err);
+      }
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 45000); // poll every 45s
+    return () => clearInterval(interval);
+  }, [isLoginPage]);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {}
+    localStorage.removeItem("token");
+    setCurrentUser(null);
+    router.push("/");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // If on login, bypass sidebar shell layout entirely
+  if (isLoginPage) {
+    return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">{children}</div>;
+  }
+
+  // Filter menu items by user role
+  const userRole = currentUser?.role?.name || "";
+  const filteredMenuItems = MENU_ITEMS.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(userRole) || userRole.toLowerCase() === "admin";
+  });
+
+  return (
+    <ToastProvider>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex transition-colors duration-200">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm lg:hidden transition-all"
+        />
+      )}
+
+      {/* Sidebar navigation panel */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between transform lg:translate-x-0 lg:static lg:h-screen transition-all duration-200 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } ${collapsed ? "lg:w-20" : "lg:w-64"} w-64`}
+      >
+        <div>
+          {/* Sidebar Brand header */}
+          <div className="h-20 flex items-center justify-center px-4 border-b border-slate-100 dark:border-slate-800/80 relative">
+            {!collapsed ? (
+              <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
+                <img src="/logo.png" alt="TCE Logo" className="h-14 w-auto object-contain" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
+                <img src="/logo.png" alt="TCE Logo" className="h-10 w-auto object-contain" />
+              </div>
+            )}
+            <button
+              onClick={toggleCollapse}
+              className="absolute right-2 hidden lg:flex p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+            >
+              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden absolute right-4 top-6 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Links navigation list */}
+          <nav className="p-4 space-y-1">
+            {filteredMenuItems.map((item) => {
+              const itemUrl = new URL(item.href, "http://localhost");
+              
+              let paramsMatch = true;
+              itemUrl.searchParams.forEach((value, key) => {
+                if (searchParams.get(key) !== value) {
+                  paramsMatch = false;
+                }
+              });
+
+              if (itemUrl.searchParams.toString() === "" && (searchParams.has("tab") || searchParams.has("type"))) {
+                paramsMatch = false;
+              }
+
+              const active = pathname === itemUrl.pathname && paramsMatch;
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    router.push(item.href);
+                  }}
+                  title={collapsed ? item.name : undefined}
+                  className={`w-full flex items-center rounded-xl text-sm font-semibold transition-all ${
+                    active
+                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/20"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
+                  } ${collapsed ? "justify-center p-3" : "gap-3 px-4 py-2.5"}`}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {!collapsed && <span className="truncate">{item.name}</span>}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* User logout section bottom */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800/80">
+          <div className={`flex items-center mb-4 px-2 ${collapsed ? "justify-center" : "gap-3"}`}>
+            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+              <User className="w-5 h-5" />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">{currentUser?.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate capitalize">{userRole}</p>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleLogout}
+            title={collapsed ? "Sign Out" : undefined}
+            className={`w-full flex items-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl text-sm font-bold transition-all ${
+              collapsed ? "justify-center p-3" : "gap-3 px-4 py-2"
+            }`}
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main viewport */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Top Navbar */}
+        <header className="h-16 flex items-center justify-between px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800/80 z-30">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100 uppercase hidden xl:block">
+              {pathname.split("/").filter(Boolean).join(" / ") || "Dashboard"}
+            </h1>
+          </div>
+
+          {/* Center actions: Live DB Metrics & Shortcuts */}
+          <div className="flex items-center gap-4 flex-1 justify-center max-w-xl px-4">
+            {/* Universal Search Bar */}
+            <div className="relative hidden md:block w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  id="universal-search-input"
+                  type="text"
+                  placeholder="Search database or pages..."
+                  className="w-full pl-9 pr-16 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-800 dark:text-slate-100 transition-all"
+                  value={universalSearch}
+                  onFocus={() => setShowDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                  onChange={(e) => setUniversalSearch(e.target.value)}
+                />
+                <div className="absolute right-2 top-1.5 flex items-center pointer-events-none text-[9px] font-bold text-slate-400 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded px-1.5 py-0.5 shadow-xs">
+                  Ctrl + K
+                </div>
+              </div>
+
+              {showDropdown && (
+                <div className="absolute top-11 left-0 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 max-h-96 overflow-y-auto p-2 animate-fadeIn">
+                  {/* Navigation Matches */}
+                  {filteredMenuItems.filter((item) =>
+                    item.name.toLowerCase().includes(universalSearch.toLowerCase())
+                  ).length > 0 && (
+                    <div className="mb-2">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1 block tracking-wider">
+                        Pages & Modules
+                      </span>
+                      {filteredMenuItems
+                        .filter((item) =>
+                          item.name.toLowerCase().includes(universalSearch.toLowerCase())
+                        )
+                        .map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <button
+                              key={item.href}
+                              onMouseDown={() => {
+                                router.push(item.href);
+                                setUniversalSearch("");
+                                setShowDropdown(false);
+                              }}
+                              className="w-full px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg flex items-center gap-2.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+                            >
+                              <Icon className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                              <span>{item.name}</span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+
+                  {/* Database Matches */}
+                  {globalSearchResults.length > 0 && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1 block tracking-wider border-t border-slate-100 dark:border-slate-800 pt-2">
+                        Database Records ({globalSearchResults.length})
+                      </span>
+                      {globalSearchResults.map((res, idx) => (
+                        <button
+                          key={idx}
+                          onMouseDown={() => {
+                            router.push(res.url);
+                            setUniversalSearch("");
+                            setShowDropdown(false);
+                          }}
+                          className="w-full px-3 py-2 hover:bg-blue-50/50 dark:hover:bg-slate-800 rounded-xl flex flex-col text-left transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {res.title}
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded font-mono">
+                              {res.category}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 truncate mt-0.5">{res.subtitle}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchLoading && (
+                    <div className="px-3 py-2 text-xs text-slate-400 flex items-center gap-2 justify-center">
+                      <Search className="w-3.5 h-3.5 animate-spin text-blue-500" /> Searching database...
+                    </div>
+                  )}
+
+                  {!searchLoading &&
+                    globalSearchResults.length === 0 &&
+                    filteredMenuItems.filter((item) =>
+                      item.name.toLowerCase().includes(universalSearch.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-4 py-4 text-xs text-slate-400 text-center font-medium">
+                        No matching records or pages found
+                      </div>
+                    )}
+                </div>
+              )}
+            </div>
+
+            {/* DB Alerts indicators */}
+            {stats && (
+              <div className="hidden lg:flex items-center gap-2 text-xs">
+                {stats.lowStockCount > 0 && (
+                  <button
+                    onClick={() => router.push("/inventory")}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/40 font-bold hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+                    title={`${stats.lowStockCount} Low stock items`}
+                  >
+                    <Box className="w-3.5 h-3.5" />
+                    <span>{stats.lowStockCount}</span>
+                  </button>
+                )}
+                {stats.openComplaintsCount > 0 && (
+                  <button
+                    onClick={() => router.push("/support")}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/40 font-bold hover:bg-rose-100 dark:hover:bg-rose-900 transition-colors"
+                    title={`${stats.openComplaintsCount} Open complaints`}
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>{stats.openComplaintsCount}</span>
+                  </button>
+                )}
+                {stats.pendingPOItemsCount > 0 && (
+                  <button
+                    onClick={() => router.push("/procurement?tab=pos")}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/40 font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900 transition-colors"
+                    title={`${stats.pendingPOItemsCount} PO delivery items pending`}
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    <span>{stats.pendingPOItemsCount}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right actions panel */}
+          <div className="flex items-center gap-3">
+            {/* Gradient Ask Copilot shortcut */}
+            {pathname !== "/copilot" && (
+              <button
+                onClick={() => router.push("/copilot")}
+                className="relative hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-95 transition-all"
+              >
+                <Bot className="w-4 h-4 animate-bounce" style={{ animationDuration: "2s" }} />
+                <span>Ask AI</span>
+                <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+              </button>
+            )}
+
+            {/* Theme switcher */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-500 dark:text-slate-400 transition-all"
+              title="Toggle Light/Dark Theme"
+            >
+              {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+            </button>
+
+            {/* Logged in profile dropdown menu */}
+            <div className="relative">
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                onBlur={() => setTimeout(() => setUserMenuOpen(false), 200)}
+                className="flex items-center gap-2 p-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl transition-all"
+              >
+                <div className="w-7 h-7 rounded-lg bg-indigo-500 text-white font-bold text-xs flex items-center justify-center">
+                  {currentUser?.name?.slice(0, 2).toUpperCase() || "US"}
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {userMenuOpen && (
+                <div className="absolute right-0 top-11 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50 animate-fadeIn flex flex-col gap-0.5">
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/60 mb-1">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{currentUser?.name}</p>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize block mt-0.5 font-semibold">
+                      {userRole}
+                    </span>
+                  </div>
+                  <button
+                    onMouseDown={() => router.push("/settings")}
+                    className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors flex items-center gap-2"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Settings</span>
+                  </button>
+                  <button
+                    onMouseDown={handleLogout}
+                    className="w-full px-3 py-2 text-left text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-colors flex items-center gap-2"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Dynamic page container */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20 md:pb-6 no-scrollbar">
+          <div className="max-w-7xl mx-auto animate-fadeIn">{children}</div>
+        </main>
+      </div>
+
+      {/* Global Quick Add Speed Dial FAB */}
+      <SpeedDialFAB />
+
+      {/* Mobile Bottom Thumb Navigation Bar */}
+      <MobileBottomNav />
+    </div>
+    </ToastProvider>
+  );
+}
