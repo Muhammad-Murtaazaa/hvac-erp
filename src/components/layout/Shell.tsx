@@ -27,10 +27,13 @@ import {
   Search,
   Bot,
   ShieldCheck,
+  TrendingUp,
   Sliders,
   Mail,
   ChevronDown,
   Bell,
+  Headphones,
+  Zap,
 } from "lucide-react";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
@@ -46,6 +49,8 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement"] },
+  { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales"] },
+  { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"] },
   { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement"] },
   { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },
   { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
@@ -53,6 +58,7 @@ const MENU_ITEMS: MenuItem[] = [
   { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
   { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales"] },
   { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"] },
+  { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"] },
   { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"] },
   { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"] },
   { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement"] },
