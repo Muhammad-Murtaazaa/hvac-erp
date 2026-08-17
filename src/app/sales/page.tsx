@@ -309,8 +309,17 @@ function SalesPageContent() {
 
   const handleDoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!doClientName || !doClientPhone || !doAddress || doLines.some((l) => (!l.productId && !l.description) || !l.quantity)) {
-      alert("Please enter client details, delivery address, and fill out DO lines.");
+    const formattedLines = doLines
+      .filter((l) => l.productId || (l.description && l.description.trim()))
+      .map((l) => ({
+        productId: l.productId || null,
+        description: l.description ? l.description.trim() : null,
+        quantity: isNaN(parseInt(l.quantity)) ? 1 : Math.max(1, parseInt(l.quantity)),
+        salesPrice: isNaN(Number(l.salesPrice)) || !l.salesPrice ? "0" : l.salesPrice,
+      }));
+
+    if (!doClientName.trim() || !doClientPhone.trim() || !doAddress.trim() || formattedLines.length === 0) {
+      alert("Please enter client name, phone, delivery address, and at least one valid product line.");
       return;
     }
 
@@ -320,19 +329,22 @@ function SalesPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          clientName: doClientName,
-          clientPhone: doClientPhone,
-          deliveryAddress: doAddress,
+          clientName: doClientName.trim(),
+          clientPhone: doClientPhone.trim(),
+          deliveryAddress: doAddress.trim(),
           notes: doNotes,
           through: doThrough,
           vehicle: doVehicle,
-          lineItems: doLines,
-          poNumber: doPoNumber || undefined,
+          lineItems: formattedLines,
+          poNumber: doPoNumber.trim() || undefined,
           status: "DISPATCHED", // Dispatch directly to deduct stock
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create DO");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create Delivery Order");
+      }
       alert("Delivery Order created and stock dispatched.");
       setIsDoOpen(false);
       setDoClientName("");

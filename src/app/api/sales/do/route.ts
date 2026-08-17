@@ -56,11 +56,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Client details and line items are required" }, { status: 400 });
     }
 
+    // Filter and sanitize valid line items
+    const validLines = lineItems
+      .filter((item: any) => item.productId || (item.description && item.description.trim()))
+      .map((item: any) => {
+        const qty = isNaN(parseInt(item.quantity)) ? 1 : Math.max(1, parseInt(item.quantity));
+        const price = isNaN(Number(item.salesPrice)) || !item.salesPrice ? 0 : Math.round(Number(item.salesPrice));
+        return {
+          productId: item.productId || null,
+          description: item.description ? item.description.trim() : null,
+          quantity: qty,
+          salesPrice: price,
+          extraFields: item.extraFields ? (typeof item.extraFields === "string" ? item.extraFields : JSON.stringify(item.extraFields)) : null,
+        };
+      });
+
+    if (validLines.length === 0) {
+      return NextResponse.json({ error: "Please enter at least one valid line item with product or description." }, { status: 400 });
+    }
+
     const doStatus = status || "DRAFT";
     const count = await prisma.deliveryOrder.count();
     const doNumber = `DO-${10001 + count}`;
 
     const deliveryOrder = await prisma.$transaction(async (tx) => {
+      // Pre-fill missing descriptions for catalog products
+      for (const line of validLines) {
+        if (line.productId && !line.description) {
+          const p = await tx.product.findUnique({ where: { id: line.productId } });
+          if (p) line.description = p.name;
+        }
+      }
+
       const createdDO = await tx.deliveryOrder.create({
         data: {
           doNumber,
@@ -74,13 +101,7 @@ export async function POST(req: Request) {
           vehicle: vehicle || "",
           poNumber: poNumber || null,
           lineItems: {
-            create: lineItems.map((item: any) => ({
-              productId: item.productId || null,
-              description: item.description || null,
-              quantity: parseInt(item.quantity),
-              salesPrice: item.salesPrice,
-              extraFields: item.extraFields ? (typeof item.extraFields === "string" ? item.extraFields : JSON.stringify(item.extraFields)) : null,
-            })),
+            create: validLines,
           },
         },
         include: {
@@ -94,7 +115,7 @@ export async function POST(req: Request) {
             const product = await tx.product.findUnique({ where: { id: item.productId } });
             if (!product) throw new Error("Catalog product not found");
             if (product.onHandQty < item.quantity) {
-              throw new Error(`Insufficient stock for product ${product.sku} on dispatch. On Hand: ${product.onHandQty}, Dispatch: ${item.quantity}`);
+              throw new Error(`Insufficient stock for "${product.sku} - ${product.name}". Available in stock: ${product.onHandQty}, Requested: ${item.quantity}.`);
             }
 
             await recordStockMovement(tx, {
