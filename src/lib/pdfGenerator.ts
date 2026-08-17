@@ -183,7 +183,8 @@ export function generateDeliveryOrderPDF(doData: any): Promise<Buffer> {
 
       // Generate and embed QR code
       try {
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        const rawHost = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || process.env.NEXTAUTH_URL || "https://hvac-erp-bay.vercel.app";
+        const baseUrl = rawHost.startsWith("http") ? rawHost : `https://${rawHost}`;
         const confirmUrl = `${baseUrl}/delivery/confirm/${doData.id}`;
         const qrBuffer = await QRCode.toBuffer(confirmUrl, {
           errorCorrectionLevel: "H",
