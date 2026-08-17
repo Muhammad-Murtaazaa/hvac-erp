@@ -39,9 +39,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
 
       // 2. Increment the amount paid on the invoice
-      const newPaidTotal = Number(invoice.amountPaid) + Number(amountPaid);
+      const newPaidTotal = Math.round(Number(invoice.amountPaid) + Number(amountPaid));
       let newStatus = "PARTIALLY_PAID";
-      if (newPaidTotal >= Number(invoice.totalAmount) - 0.01) {
+      if (newPaidTotal >= Math.round(Number(invoice.totalAmount))) {
         newStatus = "PAID";
       }
 

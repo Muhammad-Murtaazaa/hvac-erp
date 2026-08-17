@@ -10,7 +10,12 @@ async function main() {
     SET "totalAmount" = ROUND("totalAmount"),
         "amountPaid" = ROUND("amountPaid");
   `);
-  console.log("Rounded Invoice totals.");
+  await prisma.$executeRawUnsafe(`
+    UPDATE "Invoice"
+    SET "status" = 'PAID'
+    WHERE "amountPaid" >= "totalAmount";
+  `);
+  console.log("Rounded Invoice totals and updated PAID statuses.");
 
   // 2. InvoiceLineItem
   await prisma.$executeRawUnsafe(`

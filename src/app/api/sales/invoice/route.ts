@@ -47,7 +47,15 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({ invoices });
+  const normalizedInvoices = invoices.map((inv) => {
+    const isPaid = Math.round(Number(inv.amountPaid)) >= Math.round(Number(inv.totalAmount));
+    return {
+      ...inv,
+      status: isPaid ? "PAID" : inv.status,
+    };
+  });
+
+  return NextResponse.json({ invoices: normalizedInvoices });
 }
 
 export async function POST(req: Request) {

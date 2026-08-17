@@ -637,6 +637,8 @@ function SalesPageContent() {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                       {filteredInvoices.map((inv) => {
                         const isSelected = selectedInvoiceIds.includes(inv.id);
+                        const isFullyPaid = Math.round(Number(inv.amountPaid)) >= Math.round(Number(inv.totalAmount));
+                        const displayStatus = isFullyPaid ? "PAID" : inv.status;
                         return (
                           <tr
                             key={inv.id}
@@ -662,17 +664,17 @@ function SalesPageContent() {
                             <td className="p-3 font-semibold">{inv.clientName}</td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                inv.status === "PAID"
+                                displayStatus === "PAID"
                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                                  : inv.status === "PARTIALLY_PAID"
+                                  : displayStatus === "PARTIALLY_PAID"
                                   ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
                                   : "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
                               }`}>
-                                {inv.status}
+                                {displayStatus}
                               </span>
                             </td>
-                              <td className="p-3 text-right font-bold">{Math.round(Number(inv.totalAmount)).toLocaleString("en-US")}</td>
-                              <td className="p-3 text-right text-emerald-500 font-semibold">{Math.round(Number(inv.amountPaid)).toLocaleString("en-US")}</td>
+                            <td className="p-3 text-right font-bold">{Math.round(Number(inv.totalAmount)).toLocaleString("en-US")}</td>
+                            <td className="p-3 text-right text-emerald-500 font-semibold">{Math.round(Number(inv.amountPaid)).toLocaleString("en-US")}</td>
                             <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-2">
@@ -685,11 +687,11 @@ function SalesPageContent() {
                                 >
                                   <FileText className="w-4 h-4" />
                                 </a>
-                                {inv.status !== "PAID" && (
+                                {!isFullyPaid && displayStatus !== "PAID" && (
                                   <button
                                     onClick={() => {
                                       setSelectedInvoice(inv);
-                                      const outstanding = Number(inv.totalAmount) - Number(inv.amountPaid);
+                                      const outstanding = Math.round(Number(inv.totalAmount) - Number(inv.amountPaid));
                                       setPaymentAmount(String(outstanding));
                                       setIsPaymentOpen(true);
                                     }}
