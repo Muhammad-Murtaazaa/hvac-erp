@@ -149,11 +149,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     else document.documentElement.classList.remove("dark");
   };
 
-  // 2. Authentication check
-  const isLoginPage = pathname === "/" || pathname.startsWith("/auth/reset-password");
+  // 2. Authentication check - Allow public routes without login redirect
+  const isPublicPage =
+    pathname === "/" ||
+    pathname.startsWith("/auth/reset-password") ||
+    pathname.startsWith("/delivery/confirm");
 
   useEffect(() => {
-    if (isLoginPage) {
+    if (isPublicPage) {
       setLoading(false);
       return;
     }
@@ -187,11 +190,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     };
 
     verifySession();
-  }, [pathname, isLoginPage, router]);
+  }, [pathname, isPublicPage, router]);
 
   // 3. System indicators stats polling
   useEffect(() => {
-    if (isLoginPage) return;
+    if (isPublicPage) return;
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -211,7 +214,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     fetchStats();
     const interval = setInterval(fetchStats, 45000); // poll every 45s
     return () => clearInterval(interval);
-  }, [isLoginPage]);
+  }, [isPublicPage]);
 
   const handleLogout = async () => {
     try {
@@ -230,8 +233,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If on login, bypass sidebar shell layout entirely
-  if (isLoginPage) {
+  // If on public page (login, reset password, or delivery QR verification), bypass sidebar shell layout entirely
+  if (isPublicPage) {
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">{children}</div>;
   }
 
