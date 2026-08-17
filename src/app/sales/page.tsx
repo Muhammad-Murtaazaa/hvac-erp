@@ -276,7 +276,7 @@ function SalesPageContent() {
       clientPhone,
       clientAddress,
       lineItems: formattedLines,
-      payments: immediatePayment ? [{ amountPaid: formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0) * (isGst ? (1 + salesTaxRate / 100) : 1), method: payMethod }] : [],
+      payments: immediatePayment ? [{ amountPaid: Math.round(formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0) * (isGst ? (1 + salesTaxRate / 100) : 1)), method: payMethod }] : [],
       notes,
       subjectHeading,
       subjectDescription,
@@ -671,8 +671,8 @@ function SalesPageContent() {
                                 {inv.status}
                               </span>
                             </td>
-                            <td className="p-3 text-right font-bold">{Number(inv.totalAmount).toFixed(2)}</td>
-                            <td className="p-3 text-right text-emerald-500 font-semibold">{Number(inv.amountPaid).toFixed(2)}</td>
+                              <td className="p-3 text-right font-bold">{Math.round(Number(inv.totalAmount)).toLocaleString("en-US")}</td>
+                              <td className="p-3 text-right text-emerald-500 font-semibold">{Math.round(Number(inv.amountPaid)).toLocaleString("en-US")}</td>
                             <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-2">
@@ -817,15 +817,15 @@ function SalesPageContent() {
                           <td className="p-3 font-bold whitespace-nowrap">{ret.returnNumber}</td>
                           <td className="p-3 font-semibold">{ret.invoice.invoiceNumber}</td>
                           <td className="p-3 truncate max-w-[150px]">{ret.reason}</td>
-                          <td className="p-3 text-right font-bold text-rose-500">({Number(ret.totalAmount).toFixed(2)})</td>
-                          <td className="p-3 text-right text-emerald-500 font-bold">{refunded.toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-rose-500">({Math.round(Number(ret.totalAmount)).toLocaleString("en-US")})</td>
+                          <td className="p-3 text-right text-emerald-500 font-bold">{Math.round(refunded).toLocaleString("en-US")}</td>
                           <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(ret.createdAt).toLocaleDateString()}</td>
                           <td className="p-3 text-center">
                             {!isFullyRefunded && (
                               <button
                                 onClick={() => {
                                   setSelectedReturn(ret);
-                                  setRefundAmount(String(Number(ret.totalAmount) - refunded));
+                                  setRefundAmount(String(Math.round(Number(ret.totalAmount) - refunded)));
                                   setIsRefundOpen(true);
                                 }}
                                 className="px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto"
@@ -863,7 +863,7 @@ function SalesPageContent() {
                         <td className="p-3 font-bold whitespace-nowrap">{vr.vendorReturnNumber}</td>
                         <td className="p-3 font-semibold">{vr.vendor.name}</td>
                         <td className="p-3 truncate max-w-xs">{vr.reason}</td>
-                        <td className="p-3 text-right font-bold text-rose-500">({Number(vr.totalAmount).toFixed(2)})</td>
+                        <td className="p-3 text-right font-bold text-rose-500">({Math.round(Number(vr.totalAmount)).toLocaleString("en-US")})</td>
                         <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(vr.createdAt).toLocaleDateString()}</td>
                       </tr>
                     ))}
@@ -901,8 +901,8 @@ function SalesPageContent() {
                             <tr key={prod.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                               <td className="p-3 font-bold whitespace-nowrap">{prod.sku}</td>
                               <td className="p-3 font-semibold">{prod.name}</td>
-                              <td className="p-3 text-right font-mono">{Number(prod.averageCost).toFixed(2)}</td>
-                              <td className="p-3 text-right font-bold text-blue-500 font-mono">{Number(prod.salesPrice).toFixed(2)}</td>
+                              <td className="p-3 text-right font-mono">{Math.round(Number(prod.averageCost)).toLocaleString("en-US")}</td>
+                              <td className="p-3 text-right font-bold text-blue-500 font-mono">{Math.round(Number(prod.salesPrice)).toLocaleString("en-US")}</td>
                               <td className="p-3 text-center">
                                 <input
                                   type="number"
@@ -1467,7 +1467,7 @@ function SalesPageContent() {
                 >
                   <option value="">Select Invoice...</option>
                   {invoices.map((inv) => (
-                    <option key={inv.id} value={inv.id}>{inv.invoiceNumber} - {inv.clientName} (PKR {Number(inv.totalAmount).toFixed(2)})</option>
+                    <option key={inv.id} value={inv.id}>{inv.invoiceNumber} - {inv.clientName} (PKR {Math.round(Number(inv.totalAmount)).toLocaleString("en-US")})</option>
                   ))}
                 </select>
               </div>
@@ -1598,7 +1598,7 @@ function SalesPageContent() {
                             <span className="block text-[9px] text-slate-500">{line.grnNumber} ({new Date(line.grnDate).toLocaleDateString()})</span>
                           </div>
                           <div className="text-slate-400">
-                            Received: {line.quantityReceived} | Cost: {Number(line.unitCost).toFixed(2)}
+                            Received: {line.quantityReceived} | Cost: {Math.round(Number(line.unitCost)).toLocaleString("en-US")}
                           </div>
                           <div>
                             <label className="block text-[9px] text-slate-500 mb-1">Return Qty</label>
@@ -1619,7 +1619,7 @@ function SalesPageContent() {
                             />
                           </div>
                           <div className="text-right font-semibold">
-                            Total: PKR {( (existing?.quantity || 0) * Number(line.unitCost) ).toFixed(2)}
+                            Total: PKR {Math.round(( (existing?.quantity || 0) * Number(line.unitCost) )).toLocaleString("en-US")}
                           </div>
                         </div>
                       );
@@ -1743,7 +1743,7 @@ function SalesPageContent() {
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-6">Log payments against Invoice {selectedInvoice.invoiceNumber}. Outstanding: PKR {(Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid)).toFixed(2)}</p>
+            <p className="text-xs text-slate-500 mb-6">Log payments against Invoice {selectedInvoice.invoiceNumber}. Outstanding: PKR {Math.round(Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid)).toLocaleString("en-US")}</p>
 
             <form onSubmit={handlePaymentSubmit} className="space-y-4">
               <div>
@@ -1752,14 +1752,14 @@ function SalesPageContent() {
                   type="number"
                   required
                   min="1"
-                  max={Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid)}
+                  max={Math.round(Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-emerald-500 font-mono"
                   value={paymentAmount}
                   onChange={(e) => {
-                    const maxAmount = Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid);
-                    const val = Number(e.target.value) || 0;
+                    const maxAmount = Math.round(Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid));
+                    const val = Math.round(Number(e.target.value)) || 0;
                     if (val > maxAmount) {
-                      alert(`Payment amount cannot exceed outstanding balance (${maxAmount.toFixed(2)} PKR).`);
+                      alert(`Payment amount cannot exceed outstanding balance (${maxAmount.toLocaleString("en-US")} PKR).`);
                       setPaymentAmount(String(maxAmount));
                     } else {
                       setPaymentAmount(e.target.value);

@@ -86,12 +86,12 @@ export async function POST(req: Request) {
           if (!productInfo) throw new Error(`Product not found`);
         }
 
-        const lineTotal = qty * price;
+        const lineTotal = Math.round(qty * price);
         subtotalAmount += lineTotal;
 
         let lineCogs = 0;
         if (productInfo) {
-          lineCogs = qty * Number(productInfo.averageCost);
+          lineCogs = Math.round(qty * Number(productInfo.averageCost));
           totalCogs += lineCogs;
         }
 
@@ -99,19 +99,21 @@ export async function POST(req: Request) {
           productId,
           description: item.description || null,
           quantity: qty,
-          salesPrice: price,
+          salesPrice: Math.round(price),
           cogs: lineCogs,
           extraFields: item.extraFields ? (typeof item.extraFields === "string" ? item.extraFields : JSON.stringify(item.extraFields)) : null,
         });
       }
+
+      subtotalAmount = Math.round(subtotalAmount);
 
       // Fetch active sales tax rate setting (defaults to 18)
       const taxSetting = await tx.systemSetting.findUnique({
         where: { key: "salesTaxRate" },
       });
       const salesTaxRate = taxSetting ? Number(taxSetting.value) : 18;
-      const taxAmount = isGst !== false ? (subtotalAmount * (salesTaxRate / 100)) : 0;
-      const finalTotalAmount = subtotalAmount + taxAmount;
+      const taxAmount = isGst !== false ? Math.round(subtotalAmount * (salesTaxRate / 100)) : 0;
+      const finalTotalAmount = Math.round(subtotalAmount + taxAmount);
 
       // If converting from DO, check and verify the DO status
       if (doId) {
@@ -125,7 +127,7 @@ export async function POST(req: Request) {
 
       if (payments && payments.length > 0) {
         payments.forEach((p: any) => {
-          amountPaid += Number(p.amountPaid);
+          amountPaid += Math.round(Number(p.amountPaid));
         });
         if (amountPaid >= finalTotalAmount) {
           invoiceStatus = "PAID";
@@ -155,7 +157,7 @@ export async function POST(req: Request) {
               productId: l.productId,
               description: l.description,
               quantity: l.quantity,
-              salesPrice: l.salesPrice,
+              salesPrice: Math.round(l.salesPrice),
               extraFields: l.extraFields,
             })),
           },

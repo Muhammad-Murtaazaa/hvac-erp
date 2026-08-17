@@ -79,9 +79,9 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
         
         doc.fontSize(10).text(desc, 50, y, { width: 240 });
         doc.text(String(item.quantity), 300, y, { width: 50, align: "right" });
-        doc.text(Number(item.salesPrice).toFixed(2), 380, y, { width: 80, align: "right" });
-        const lineTotal = item.quantity * Number(item.salesPrice);
-        doc.text(lineTotal.toFixed(2), 475, y, { width: 75, align: "right" });
+        doc.text(Math.round(Number(item.salesPrice)).toLocaleString("en-US"), 380, y, { width: 80, align: "right" });
+        const lineTotal = Math.round(item.quantity * Number(item.salesPrice));
+        doc.text(lineTotal.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
         
         y += 20;
 
@@ -103,35 +103,37 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.moveTo(50, y + 5).lineTo(550, y + 5).strokeColor("#e5e7eb").stroke();
       y += 20;
 
-      const subtotal = invoiceData.lineItems.reduce((acc: number, item: any) => acc + (item.quantity * Number(item.salesPrice)), 0);
-      const taxAmount = Math.max(0, Number(invoiceData.totalAmount) - subtotal);
+      const subtotal = Math.round(invoiceData.lineItems.reduce((acc: number, item: any) => acc + (item.quantity * Number(item.salesPrice)), 0));
+      const totalAmount = Math.round(Number(invoiceData.totalAmount));
+      const taxAmount = Math.round(Math.max(0, totalAmount - subtotal));
       const computedTaxRate = subtotal > 0 ? Math.round((taxAmount / subtotal) * 100) : 0;
+      const amountPaid = Math.round(Number(invoiceData.amountPaid || 0));
+      const balance = Math.round(totalAmount - amountPaid);
 
       // Print Totals
       doc.fontSize(10).fillColor("#4b5563");
       doc.text("Subtotal:", 320, y, { width: 140, align: "right" });
-      doc.text(subtotal.toFixed(2), 475, y, { width: 75, align: "right" });
+      doc.text(subtotal.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
       if (taxAmount > 0) {
         y += 18;
         doc.text(`Sales Tax (${computedTaxRate}%):`, 320, y, { width: 140, align: "right" });
-        doc.text(taxAmount.toFixed(2), 475, y, { width: 75, align: "right" });
+        doc.text(taxAmount.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
       }
 
       y += 18;
       doc.font("Roboto-Bold").fontSize(10).fillColor("#1f2937");
       doc.text("Total Invoice Amount:", 320, y, { width: 140, align: "right" });
-      doc.text(Number(invoiceData.totalAmount).toFixed(2), 475, y, { width: 75, align: "right" });
+      doc.text(totalAmount.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
       y += 18;
       doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
       doc.text("Amount Paid:", 320, y, { width: 140, align: "right" });
-      doc.text(Number(invoiceData.amountPaid).toFixed(2), 475, y, { width: 75, align: "right" });
+      doc.text(amountPaid.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
       y += 18;
-      const balance = Number(invoiceData.totalAmount) - Number(invoiceData.amountPaid);
       doc.font("Roboto-Bold").fontSize(11).fillColor("#b91c1c").text("Balance Due (PKR):", 320, y, { width: 140, align: "right" });
-      doc.text(balance.toFixed(2), 475, y, { width: 75, align: "right" });
+      doc.text(balance.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
       if (invoiceData.notes) {
         y += 30;
@@ -337,14 +339,14 @@ export function generatePayslipPDF(payslipData: any): Promise<Buffer> {
       doc.font("Roboto-Regular").fontSize(10).fillColor("#374151");
       // Earnings Column
       doc.text("Base Salary:", 50, y);
-      doc.text(Number(payslipData.baseSalary).toFixed(2), 200, y, { align: "right" });
+      doc.text(Math.round(Number(payslipData.baseSalary)).toLocaleString("en-US"), 200, y, { align: "right" });
       
       doc.text("Allowances:", 50, y + 20);
-      doc.text(Number(payslipData.allowances).toFixed(2), 200, y + 20, { align: "right" });
+      doc.text(Math.round(Number(payslipData.allowances)).toLocaleString("en-US"), 200, y + 20, { align: "right" });
 
       // Deductions Column
       doc.text("Total Deductions:", 320, y);
-      doc.text(Number(payslipData.deductions).toFixed(2), 470, y, { align: "right" });
+      doc.text(Math.round(Number(payslipData.deductions)).toLocaleString("en-US"), 470, y, { align: "right" });
 
       y += 60;
       doc.moveTo(50, y).lineTo(550, y).strokeColor("#e5e7eb").stroke();
@@ -352,7 +354,7 @@ export function generatePayslipPDF(payslipData: any): Promise<Buffer> {
 
       doc.font("Roboto-Bold").fontSize(12).fillColor("#111827");
       doc.text("Net Take-Home Pay (PKR):", 200, y);
-      doc.fontSize(13).fillColor("#1e3a8a").text(Number(payslipData.netPay).toFixed(2), 400, y, { align: "right" });
+      doc.fontSize(13).fillColor("#1e3a8a").text(Math.round(Number(payslipData.netPay)).toLocaleString("en-US"), 400, y, { align: "right" });
 
       // Universal TCE Footer
       doc.moveTo(50, 715).lineTo(550, 715).strokeColor("#000000").lineWidth(0.5).stroke();

@@ -78,9 +78,9 @@ export default function InvoicePdfPage() {
   }
 
   // Calculate pricing
-  const subtotal = invoice.lineItems.reduce((acc: number, item: any) => acc + Number(item.quantity) * Number(item.salesPrice), 0);
-  const totalAmount = Number(invoice.totalAmount);
-  const taxAmount = Math.max(0, totalAmount - subtotal);
+  const subtotal = Math.round(invoice.lineItems.reduce((acc: number, item: any) => acc + Number(item.quantity) * Number(item.salesPrice), 0));
+  const totalAmount = Math.round(Number(invoice.totalAmount));
+  const taxAmount = Math.round(Math.max(0, totalAmount - subtotal));
   const computedTaxRate = subtotal > 0 ? Math.round((taxAmount / subtotal) * 100) : 0;
 
   return (
@@ -94,39 +94,31 @@ export default function InvoicePdfPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Sales
         </button>
 
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10"
-        >
-          <Printer className="w-4 h-4" /> Print / Save as PDF
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10"
+          >
+            <Printer className="w-4 h-4" /> Print / Save PDF
+          </button>
+        </div>
       </div>
 
-      {/* Invoice Sheet */}
-      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 text-slate-800 dark:text-slate-100 font-sans relative overflow-hidden">
+      {/* Main A4 Document Paper Container */}
+      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 sm:p-12 rounded-2xl shadow-xl print:border-none print:shadow-none print:p-0">
         
-        {/* Background Logo Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
-          <img src="/logo.png" alt="Watermark" className="w-[400px] h-[400px] object-contain" />
-        </div>
-
-        {/* Brand Header */}
-        <div className="flex items-start gap-4 mb-6 relative z-10">
-          {/* Static Branding Logo */}
-          <div className="w-28 h-28 flex-shrink-0">
-            <img src="/logo.png" alt="TCE Logo" className="w-28 h-28 object-contain" />
+        {/* Universal TCE Header */}
+        <div className="flex items-center gap-4 border-b border-black pb-4">
+          <div className="shrink-0">
+            <img src="/logo.png" alt="TCE Logo" className="h-16 w-auto object-contain" />
           </div>
-
-          <div className="flex-grow pt-1">
-            <div className="flex justify-between items-end border-b-2 border-slate-900 pb-1">
-              <h1 className="text-3xl font-bold tracking-wider text-sky-950 dark:text-sky-400" style={{ fontFamily: "Arial, sans-serif" }}>
-                Technicool Engineering
-              </h1>
-              <span className="text-[10px] font-black italic text-slate-600 dark:text-slate-400 tracking-wider">
-                MAKE YOUR DESIRE CLIMATE
-              </span>
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white uppercase font-sans">
+              Technicool Engineering
+            </h1>
+            <div className="text-[10px] text-slate-500 tracking-wider uppercase font-semibold">
+              MAKE YOUR DESIRE CLIMATE
             </div>
-
             <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
               <div>
                 OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH<br />
@@ -181,7 +173,7 @@ export default function InvoicePdfPage() {
           </div>
         </div>
 
-        {/* Subject Heading / Description (Plain text down with billing items) */}
+        {/* Subject Heading / Description */}
         {(invoice.subjectHeading || invoice.subjectDescription) && (
           <div className="mb-4 text-xs">
             {invoice.subjectHeading && (
@@ -214,7 +206,7 @@ export default function InvoicePdfPage() {
             </thead>
             <tbody className="divide-y divide-black dark:divide-slate-800">
               {invoice.lineItems.map((item: any, index: number) => {
-                const lineTotal = Number(item.quantity) * Number(item.salesPrice);
+                const lineTotal = Math.round(Number(item.quantity) * Number(item.salesPrice));
                 return (
                   <tr key={item.id} className="text-slate-700 dark:text-slate-300">
                     <td className="p-2 border-r border-black dark:border-slate-800 text-center">{index + 1}</td>
@@ -222,7 +214,7 @@ export default function InvoicePdfPage() {
                     <td className="p-2 border-r border-black dark:border-slate-800 font-medium">{item.product?.name || item.description || "Service Item"}</td>
                     <td className="p-2 border-r border-black dark:border-slate-800 text-center">{item.product?.unit || "Nos"}</td>
                     <td className="p-2 border-r border-black dark:border-slate-800 text-right font-semibold">{item.quantity}</td>
-                    <td className="p-2 border-r border-black dark:border-slate-800 text-right font-mono">{Number(item.salesPrice).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                    <td className="p-2 border-r border-black dark:border-slate-800 text-right font-mono">{Math.round(Number(item.salesPrice)).toLocaleString("en-US")}</td>
                     <td className="p-2 border-r border-black dark:border-slate-800 text-right font-mono">-</td>
                     <td className="p-2 text-right font-bold font-mono">{lineTotal.toLocaleString("en-US")}</td>
                   </tr>
@@ -237,26 +229,26 @@ export default function InvoicePdfPage() {
           <div className="w-80 text-xs space-y-2 border-t border-slate-200 dark:border-slate-800 pt-2">
             <div className="flex justify-between font-semibold text-slate-600 dark:text-slate-400">
               <span>Sub Total:</span>
-              <span className="font-mono">{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+              <span className="font-mono">{subtotal.toLocaleString("en-US")}</span>
             </div>
 
             {taxAmount > 0 && (
               <>
                 <div className="flex justify-between font-semibold text-slate-600 dark:text-slate-400">
                   <span>Sale Tax ({computedTaxRate}%):</span>
-                  <span className="font-mono">{taxAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono">{taxAmount.toLocaleString("en-US")}</span>
                 </div>
 
                 <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-200 border-t border-slate-100 dark:border-slate-800 pt-1">
                   <span>Sub Total Incl Sale Tax:</span>
-                  <span className="font-mono">{totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono">{totalAmount.toLocaleString("en-US")}</span>
                 </div>
               </>
             )}
 
             <div className="flex justify-between font-black text-slate-900 dark:text-white border-y-2 border-slate-900 py-1.5 text-sm">
               <span>Total:</span>
-              <span className="font-mono">Rs. {totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+              <span className="font-mono">Rs. {totalAmount.toLocaleString("en-US")}</span>
             </div>
           </div>
         </div>

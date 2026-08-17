@@ -266,7 +266,7 @@ export default function DeliveryOrderPdfPage() {
                     </td>
                     <td className="p-2.5 border-r border-black dark:border-slate-800 text-center">-</td>
                     <td className="p-2.5 border-r border-black dark:border-slate-800 text-right font-bold">
-                      {Number(item.quantity).toFixed(2)}
+                      {Number(item.quantity)}
                     </td>
                     <td className="p-2.5 text-center">-</td>
                   </tr>
@@ -279,7 +279,7 @@ export default function DeliveryOrderPdfPage() {
                 </td>
                 <td className="p-2.5 border-r border-black dark:border-slate-800 text-center">-</td>
                 <td className="p-2.5 border-r border-black dark:border-slate-800 text-right font-black font-mono">
-                  {totalQty.toFixed(2)}
+                  {totalQty}
                 </td>
                 <td className="p-2.5 text-center">-</td>
               </tr>

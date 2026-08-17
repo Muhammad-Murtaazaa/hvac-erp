@@ -177,7 +177,7 @@ export default function PosPage() {
                   <p className="text-[10px] text-slate-500 mt-1 font-semibold">{p.sku}</p>
                 </div>
                 <div className="flex justify-between items-center mt-4">
-                  <span className="text-xs font-black text-blue-500">PKR {Number(p.averageCost * 1.3).toFixed(2)}</span>
+                  <span className="text-xs font-black text-blue-500">PKR {Math.round(Number(p.salesPrice || p.averageCost * 1.3)).toLocaleString("en-US")}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                     p.onHandQty <= 0 ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
                   }`}>
