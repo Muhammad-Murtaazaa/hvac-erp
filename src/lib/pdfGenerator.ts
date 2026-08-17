@@ -315,7 +315,7 @@ export function generatePayslipPDF(payslipData: any): Promise<Buffer> {
 
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`PAYSLIP RECORD: ${payslipData.month}/${payslipData.year}`, 50, 125);
       doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
-      doc.text(`Employee Name: ${payslipData.employee.name}`, 50, 145);
+      doc.text(`Employee Name: ${payslipData.employee.name}${payslipData.employee.employeeNo ? ` (${payslipData.employee.employeeNo})` : ""}`, 50, 145);
       doc.text(`CNIC/ID: ${payslipData.employee.cnic}`, 50, 160);
       doc.text(`Department: ${payslipData.employee.department}`, 50, 175);
       doc.text(`Position: ${payslipData.employee.position}`, 50, 190);
@@ -586,8 +586,11 @@ export function generateEmployeeFormPDF(employee: any): Promise<Buffer> {
       doc.rect(50, 95, 500, 20).fill("#1e293b"); // slate-800
       doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("EMPLOYMENT FORM", 50, 100, { align: "center", width: 500 });
 
-      // Joining Date
+      // Joining Date & Employee No
       const dateStr = employee.joiningDate ? new Date(employee.joiningDate).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB");
+      if (employee.employeeNo) {
+        doc.font("Roboto-Bold").fontSize(9).fillColor("#000000").text(`EMP NO: ${employee.employeeNo}`, 50, 125, { align: "left" });
+      }
       doc.font("Roboto-Bold").fontSize(9).fillColor("#000000").text(`DATE: ${dateStr}`, 50, 125, { align: "right", width: 500 });
 
       // Meta grid

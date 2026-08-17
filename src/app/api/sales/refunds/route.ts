@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
@@ -66,6 +67,16 @@ export async function POST(req: Request) {
       });
 
       return createdRefund;
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Return",
+      entityId: returnId,
+      action: "UPDATE",
+      actor: { id: session.id, email: session.email },
+      diff: JSON.stringify({ refundPaid: amountRefunded, method }),
+      afterState: refund,
     });
 
     return NextResponse.json({ refund });

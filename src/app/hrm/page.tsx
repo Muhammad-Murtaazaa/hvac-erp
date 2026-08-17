@@ -18,6 +18,7 @@ export default function HrmPage() {
 
   // Create Employee States
   const [isEmpOpen, setIsEmpOpen] = useState(false);
+  const [empNo, setEmpNo] = useState("");
   const [empName, setEmpName] = useState("");
   const [empCnic, setEmpCnic] = useState("");
   const [empPhone, setEmpPhone] = useState("");
@@ -83,6 +84,7 @@ export default function HrmPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          employeeNo: empNo || undefined,
           name: empName,
           cnic: empCnic,
           phone: empPhone,
@@ -105,6 +107,7 @@ export default function HrmPage() {
       alert("Employee profile onboarded successfully.");
       setIsEmpOpen(false);
       // clear fields
+      setEmpNo("");
       setEmpName("");
       setEmpCnic("");
       setEmpPhone("");
@@ -219,9 +222,11 @@ export default function HrmPage() {
 
   // Filter
   const filteredEmployees = employees.filter((e) =>
+    (e.employeeNo && e.employeeNo.toLowerCase().includes(search.toLowerCase())) ||
     e.name.toLowerCase().includes(search.toLowerCase()) ||
     e.position.toLowerCase().includes(search.toLowerCase()) ||
-    e.department.toLowerCase().includes(search.toLowerCase())
+    e.department.toLowerCase().includes(search.toLowerCase()) ||
+    e.cnic.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -282,6 +287,7 @@ export default function HrmPage() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
+                      <th className="p-3">Emp #</th>
                       <th className="p-3">Employee Name</th>
                       <th className="p-3">CNIC / ID</th>
                       <th className="p-3">Department</th>
@@ -295,6 +301,9 @@ export default function HrmPage() {
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                     {filteredEmployees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                        <td className="p-3 font-mono font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                          {emp.employeeNo || "-"}
+                        </td>
                         <td className="p-3">
                           <span className="font-bold block">{emp.name}</span>
                           <span className="text-[10px] text-slate-500">{emp.phone}</span>
@@ -445,7 +454,19 @@ export default function HrmPage() {
             <p className="text-xs text-slate-500 mb-6">Create new active employee profiles for daily rosters and monthly payroll calculation runs.</p>
 
             <form onSubmit={handleCreateEmployee} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Emp # (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Auto: EMP-100x"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
+                    value={empNo}
+                    onChange={(e) => setEmpNo(e.target.value)}
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Employee Name</label>
                   <input

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -38,6 +39,15 @@ export async function POST(req: Request) {
         onHandQty: 0,
         incomingQty: 0,
       },
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Product",
+      entityId: product.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: product,
     });
 
     return NextResponse.json({ product });

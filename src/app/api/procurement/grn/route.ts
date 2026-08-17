@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement, updateProductAverageCost } from "@/lib/ledger";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
@@ -193,6 +194,15 @@ export async function POST(req: Request) {
       });
 
       return createdGRN;
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "GoodsReceivedNote",
+      entityId: grn.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: grn,
     });
 
     return NextResponse.json({ grn });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -36,6 +37,15 @@ export async function POST(req: Request) {
         address: address || "",
         paymentTerms: paymentTerms || "Net 30 Days",
       },
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Vendor",
+      entityId: vendor.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: vendor,
     });
 
     return NextResponse.json({ vendor });

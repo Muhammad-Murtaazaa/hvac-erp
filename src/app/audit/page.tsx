@@ -14,6 +14,7 @@ import {
   User,
   Database,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 
 interface AuditLog {
@@ -34,6 +35,7 @@ export default function AuditTrailPage() {
   const [loading, setLoading] = useState(true);
   const [entityFilter, setEntityFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -48,6 +50,7 @@ export default function AuditTrailPage() {
       const params = new URLSearchParams();
       if (entityFilter) params.append("entityName", entityFilter);
       if (actionFilter) params.append("action", actionFilter);
+      params.append("limit", "100");
 
       const res = await fetch(`/api/audit/logs?${params.toString()}`);
       const json = await res.json();
@@ -62,7 +65,7 @@ export default function AuditTrailPage() {
   };
 
   const handleRollback = async (snapshotId: string) => {
-    if (!confirm("Are you sure you want to rollback this change? This will revert the record in the database.")) {
+    if (!confirm("Are you sure you want to rollback this change? This will accurately revert database records, stock levels, and ledger finances.")) {
       return;
     }
 
@@ -90,9 +93,17 @@ export default function AuditTrailPage() {
     }
   };
 
-  const downloadBackup = () => {
-    window.location.href = "/api/system/backup";
-  };
+  const filteredLogs = logs.filter((log) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      log.entityName.toLowerCase().includes(q) ||
+      log.entityId.toLowerCase().includes(q) ||
+      log.action.toLowerCase().includes(q) ||
+      log.actorEmail.toLowerCase().includes(q) ||
+      (log.diff && log.diff.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -104,17 +115,17 @@ export default function AuditTrailPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">Audit Trail & Rollback</h1>
-            <p className="text-xs text-slate-500">Immutable change log with one-click snapshot reversion</p>
+            <p className="text-xs text-slate-500">Immutable transaction history with one-click multi-table financial rollback</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={downloadBackup}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl hover:border-indigo-400 transition-colors shadow-xs"
+            onClick={() => fetchLogs()}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-xs"
           >
-            <Database className="w-4 h-4 text-indigo-500" />
-            Download DB Backup
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh Trail
           </button>
         </div>
       </div>
@@ -133,13 +144,26 @@ export default function AuditTrailPage() {
           ) : (
             <AlertCircle className="w-5 h-5 text-rose-500" />
           )}
-          <span>{statusMessage.text}</span>
+          <span className="font-semibold">{statusMessage.text}</span>
         </div>
       )}
 
       {/* Filter Controls */}
       <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mr-2">
+        <div className="flex-1 min-w-[220px]">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search audit trail by ID, email, entity..."
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mr-1">
           <Filter className="w-4 h-4" />
           Filters:
         </div>
@@ -150,11 +174,18 @@ export default function AuditTrailPage() {
           className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs"
         >
           <option value="">All Entities</option>
-          <option value="Product">Products / Stock</option>
-          <option value="Invoice">Invoices</option>
+          <option value="Invoice">Invoices / Sales</option>
           <option value="PurchaseOrder">Purchase Orders</option>
-          <option value="Complaint">Complaints</option>
-          <option value="Employee">Employees</option>
+          <option value="GoodsReceivedNote">GRN / Receiving</option>
+          <option value="Product">Products / Catalog</option>
+          <option value="StockAdjustment">Stock Adjustments</option>
+          <option value="DeliveryOrder">Delivery Orders</option>
+          <option value="Employee">Employees / HRM</option>
+          <option value="PayrollRun">Payroll Runs</option>
+          <option value="Complaint">Complaints / Service</option>
+          <option value="Return">Sales Returns</option>
+          <option value="VendorReturn">Vendor Returns</option>
+          <option value="Vendor">Vendors / Suppliers</option>
         </select>
 
         <select
@@ -192,19 +223,23 @@ export default function AuditTrailPage() {
                     Loading audit trail...
                   </td>
                 </tr>
-              ) : logs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-slate-400">
                     No audit records match the selected filters.
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
+                filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="p-3.5 whitespace-nowrap text-slate-500">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
-                    <td className="p-3.5 font-medium text-slate-900 dark:text-white">{log.entityName}</td>
+                    <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 font-mono text-[11px]">
+                        {log.entityName}
+                      </span>
+                    </td>
                     <td className="p-3.5 font-mono text-[11px] text-slate-500">{log.entityId.slice(0, 8)}...</td>
                     <td className="p-3.5">
                       <span
@@ -236,7 +271,7 @@ export default function AuditTrailPage() {
                     <td className="p-3.5 text-right space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => setSelectedLog(log)}
-                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs transition-colors"
+                        className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs transition-colors font-medium"
                       >
                         Inspect Diff
                       </button>
@@ -244,7 +279,7 @@ export default function AuditTrailPage() {
                         <button
                           onClick={() => handleRollback(log.id)}
                           disabled={rollbackLoading}
-                          className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold transition-colors"
+                          className="px-2.5 py-1 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
                         >
                           Rollback
                         </button>
@@ -267,11 +302,11 @@ export default function AuditTrailPage() {
                 <h3 className="font-bold text-slate-900 dark:text-white text-base">
                   Audit Snapshot Details ({selectedLog.entityName})
                 </h3>
-                <p className="text-xs text-slate-500">Record ID: {selectedLog.entityId}</p>
+                <p className="text-xs text-slate-500 font-mono">Record ID: {selectedLog.entityId}</p>
               </div>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm p-1"
               >
                 ✕
               </button>
@@ -285,10 +320,14 @@ export default function AuditTrailPage() {
               </div>
 
               <div>
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Captured Field Diff</h4>
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Captured Field Diff / Payload</h4>
                 {selectedLog.diff ? (
-                  <pre className="p-3 bg-slate-950 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto">
+                  <pre className="p-3 bg-slate-950 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-56">
                     {JSON.stringify(JSON.parse(selectedLog.diff), null, 2)}
+                  </pre>
+                ) : selectedLog.afterState ? (
+                  <pre className="p-3 bg-slate-950 text-sky-400 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-56">
+                    {JSON.stringify(JSON.parse(selectedLog.afterState), null, 2)}
                   </pre>
                 ) : (
                   <p className="text-xs text-slate-400 italic">No field-level diff recorded for this event.</p>
@@ -299,7 +338,7 @@ export default function AuditTrailPage() {
             <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium hover:bg-slate-200 transition-colors"
               >
                 Close
               </button>
@@ -307,7 +346,7 @@ export default function AuditTrailPage() {
                 <button
                   onClick={() => handleRollback(selectedLog.id)}
                   disabled={rollbackLoading}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition-colors"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
                 >
                   Confirm Rollback
                 </button>

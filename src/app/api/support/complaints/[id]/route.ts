@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -166,6 +167,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       }
 
       return updated;
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Complaint",
+      entityId: params.id,
+      action: "UPDATE",
+      actor: { id: session.id, email: session.email },
+      afterState: updatedTicket,
     });
 
     return NextResponse.json({ complaint: updatedTicket });

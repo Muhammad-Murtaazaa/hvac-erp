@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -113,6 +114,15 @@ export async function POST(req: Request) {
       }
 
       return ticket;
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Complaint",
+      entityId: complaint.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: complaint,
     });
 
     return NextResponse.json({ complaint });

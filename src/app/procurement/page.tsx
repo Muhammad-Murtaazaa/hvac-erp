@@ -54,6 +54,7 @@ function ProcurementPageContent() {
   const [registering, setRegistering] = useState(false);
 
   // New PO state
+  const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
   const [newPoDeliveryDate, setNewPoDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
@@ -123,6 +124,7 @@ function ProcurementPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          poNumber: newPoNumber || undefined,
           vendorId: newPoVendor,
           lineItems: newPoLines,
           status: "SUBMITTED", // Submit directly to trigger incomingQty increment
@@ -133,9 +135,13 @@ function ProcurementPageContent() {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create PO");
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to create PO");
+      }
       alert("Purchase Order created and submitted successfully.");
       setIsCreateOpen(false);
+      setNewPoNumber("");
       setNewPoVendor("");
       setNewPoDate(new Date().toISOString().split("T")[0]);
       setNewPoDeliveryDate(new Date().toISOString().split("T")[0]);
@@ -744,7 +750,17 @@ function ProcurementPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">PO Number (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Auto: PO-1000x"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    value={newPoNumber}
+                    onChange={(e) => setNewPoNumber(e.target.value)}
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">PO Date</label>
                   <input

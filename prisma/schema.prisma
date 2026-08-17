@@ -69,6 +69,7 @@ model PasswordResetToken {
 
 model Employee {
   id                String           @id @default(uuid())
+  employeeNo        String?          @unique
   name              String
   cnic              String           @unique
   phone             String

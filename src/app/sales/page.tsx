@@ -1317,18 +1317,21 @@ function SalesPageContent() {
                 </div>
                 <div>
                   <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Link PO (Optional)</label>
-                  <select
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                  <input
+                    type="text"
+                    list="po-options"
+                    placeholder="Type or select PO number..."
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
                     value={doPoNumber}
                     onChange={(e) => setDoPoNumber(e.target.value)}
-                  >
-                    <option value="">No PO Link</option>
+                  />
+                  <datalist id="po-options">
                     {purchaseOrders.map((po) => (
                       <option key={po.id} value={po.poNumber}>
                         {po.poNumber} ({po.vendor?.name || "No Vendor"})
                       </option>
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -11,20 +12,40 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
 
+  // Auto-backfill employeeNo for any legacy employee records without one
+  const unassigned = await prisma.employee.findMany({
+    where: { employeeNo: null },
+    orderBy: { createdAt: "asc" },
+  });
+  if (unassigned.length > 0) {
+    const existingCount = await prisma.employee.count({ where: { employeeNo: { not: null } } });
+    for (let i = 0; i < unassigned.length; i++) {
+      const generatedNo = `EMP-${1001 + existingCount + i}`;
+      try {
+        await prisma.employee.update({
+          where: { id: unassigned[i].id },
+          data: { employeeNo: generatedNo },
+        });
+      } catch (e) {}
+    }
+  }
+
   const whereClause: any = {};
 
   if (search) {
     whereClause.OR = [
+      { employeeNo: { contains: search } },
       { name: { contains: search } },
       { cnic: { contains: search } },
       { department: { contains: search } },
       { position: { contains: search } },
+      { phone: { contains: search } },
     ];
   }
 
   const employees = await prisma.employee.findMany({
     where: whereClause,
-    orderBy: { name: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json({ employees });
@@ -40,7 +61,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, cnic, phone, address, department, position, joiningDate, baseSalary, bankDetails, fatherName, fatherPhone, responsiblePerson, refPhone } = await req.json();
+    const {
+      employeeNo: customEmpNo,
+      name,
+      cnic,
+      phone,
+      address,
+      department,
+      position,
+      joiningDate,
+      baseSalary,
+      bankDetails,
+      fatherName,
+      fatherPhone,
+      responsiblePerson,
+      refPhone,
+    } = await req.json();
 
     if (!name || !cnic || !phone || !department || !position || !joiningDate || isNaN(Number(baseSalary))) {
       return NextResponse.json({ error: "Required profile fields are missing" }, { status: 400 });
@@ -51,8 +87,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Support staff can only onboard Service Technicians" }, { status: 403 });
     }
 
+    // Auto-generate employee number if not explicitly provided
+    let employeeNo = customEmpNo ? customEmpNo.trim() : "";
+    if (!employeeNo) {
+      const count = await prisma.employee.count();
+      employeeNo = `EMP-${1001 + count}`;
+    }
+
     const employee = await prisma.employee.create({
       data: {
+        employeeNo,
         name,
         cnic,
         phone,
@@ -69,11 +113,20 @@ export async function POST(req: Request) {
       },
     });
 
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Employee",
+      entityId: employee.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: employee,
+    });
+
     return NextResponse.json({ employee });
   } catch (error: any) {
     console.error("[Employees POST] Error:", error);
     if (error.code === "P2002") {
-      return NextResponse.json({ error: "CNIC ID is already registered" }, { status: 400 });
+      return NextResponse.json({ error: "CNIC ID or Employee Number is already registered" }, { status: 400 });
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

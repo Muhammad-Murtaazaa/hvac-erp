@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -97,6 +98,16 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           lineItems: true,
         },
       });
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "PurchaseOrder",
+      entityId: params.id,
+      action: "UPDATE",
+      actor: { id: session.id, email: session.email },
+      beforeState: po,
+      afterState: updatedPO,
     });
 
     return NextResponse.json({ purchaseOrder: updatedPO });

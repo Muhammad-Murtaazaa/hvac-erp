@@ -148,24 +148,8 @@ export default function InvoicePdfPage() {
           BILLING INVOICE
         </h2>
 
-        {/* Subject Heading / Description */}
-        {(invoice.subjectHeading || invoice.subjectDescription) && (
-          <div className="mb-6 p-4 bg-slate-50/60 dark:bg-slate-900/60 border-l-4 border-sky-600 rounded-r-xl">
-            {invoice.subjectHeading && (
-              <h3 className="text-xs font-bold uppercase tracking-wider text-sky-950 dark:text-sky-400 mb-1">
-                Subject: {invoice.subjectHeading}
-              </h3>
-            )}
-            {invoice.subjectDescription && (
-              <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed font-semibold">
-                {invoice.subjectDescription}
-              </p>
-            )}
-          </div>
-        )}
-
         {/* Client and Meta Details Grid */}
-        <div className="grid grid-cols-2 gap-8 text-xs mb-8">
+        <div className="grid grid-cols-2 gap-8 text-xs mb-6">
           <div>
             <span className="text-slate-400 block font-semibold">Bill To:</span>
             <div className="font-bold text-slate-900 dark:text-white text-sm mb-1">{invoice.clientName}</div>
@@ -196,6 +180,22 @@ export default function InvoicePdfPage() {
             </div>
           </div>
         </div>
+
+        {/* Subject Heading / Description (Plain text down with billing items) */}
+        {(invoice.subjectHeading || invoice.subjectDescription) && (
+          <div className="mb-4 text-xs">
+            {invoice.subjectHeading && (
+              <div className="font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-1">
+                Subject: {invoice.subjectHeading}
+              </div>
+            )}
+            {invoice.subjectDescription && (
+              <div className="text-slate-600 dark:text-slate-400 whitespace-pre-line leading-relaxed font-medium">
+                {invoice.subjectDescription}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Line Items Table with black solid borders */}
         <div className="overflow-x-auto mb-6">
@@ -275,13 +275,13 @@ export default function InvoicePdfPage() {
 
         {/* Delivery Terms Note Section at bottom */}
         <div className="mt-8 text-xs mb-8">
-          <h4 className="font-bold text-slate-900 dark:text-white mb-2">Note.</h4>
+          <h4 className="font-bold text-slate-900 dark:text-white mb-1">Note.</h4>
           {invoice.notes && (
-            <div className="mb-3 text-slate-700 dark:text-slate-300 font-semibold whitespace-pre-line border border-slate-200 dark:border-slate-800 p-3 rounded-xl bg-slate-50/50">
+            <div className="mb-2 text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
               {invoice.notes}
             </div>
           )}
-          <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
+          <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
             <li>
               Invoice Date:{" "}
               {invoice.date 

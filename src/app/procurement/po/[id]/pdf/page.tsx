@@ -260,13 +260,13 @@ export default function POPdfPage() {
 
         {/* Delivery Terms Note Section at bottom */}
         <div className="mt-8 text-xs mb-8">
-          <h4 className="font-bold text-slate-900 dark:text-white mb-2">Note.</h4>
+          <h4 className="font-bold text-slate-900 dark:text-white mb-1">Note.</h4>
           {po.notes && (
-            <div className="mb-3 text-slate-700 dark:text-slate-300 font-semibold whitespace-pre-line border border-slate-200 dark:border-slate-800 p-3 rounded-xl bg-slate-50/50">
+            <div className="mb-2 text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
               {po.notes}
             </div>
           )}
-          <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
+          <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
             <li>
               Delivery Date:{" "}
               {po.lineItems[0]?.expectedDeliveryDate 

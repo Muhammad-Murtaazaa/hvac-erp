@@ -290,12 +290,12 @@ export default function DeliveryOrderPdfPage() {
         {/* Note section */}
         {(doRecord.notes || (doRecord.invoices && doRecord.invoices.some((inv: any) => inv.notes))) && (
           <div className="mt-8 text-xs">
-            <h4 className="font-bold text-slate-900 dark:text-white border-b border-slate-200 pb-1 mb-2 max-w-[40px]">Note</h4>
-            <div className="text-slate-700 dark:text-slate-300 font-semibold whitespace-pre-line border border-slate-200 dark:border-slate-800 p-3 rounded-xl bg-slate-50/50 leading-relaxed">
+            <h4 className="font-bold text-slate-900 dark:text-white mb-1">Note</h4>
+            <div className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
               {doRecord.notes && <div>{doRecord.notes}</div>}
               {doRecord.invoices?.filter((inv: any) => inv.notes).map((inv: any, i: number) => (
-                <div key={i} className={doRecord.notes || i > 0 ? "mt-2 pt-2 border-t border-slate-200 dark:border-slate-800" : ""}>
-                  <span className="text-[10px] uppercase text-slate-400 font-bold block mb-0.5">Invoice Notes:</span>
+                <div key={i} className={doRecord.notes || i > 0 ? "mt-1.5" : ""}>
+                  <span className="text-[10px] uppercase text-slate-500 font-bold block mb-0.5">Invoice Notes:</span>
                   {inv.notes}
                 </div>
               ))}

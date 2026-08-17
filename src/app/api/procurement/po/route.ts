@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -62,14 +63,17 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { vendorId, lineItems, status, discount, poDate, deliveryDate, notes } = await req.json();
+    const { poNumber: customPoNumber, vendorId, lineItems, status, discount, poDate, deliveryDate, notes } = await req.json();
 
     if (!vendorId || !lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Vendor and line items are required" }, { status: 400 });
     }
 
-    const count = await prisma.purchaseOrder.count();
-    const poNumber = `PO-${10001 + count}`;
+    let poNumber = customPoNumber ? customPoNumber.trim() : "";
+    if (!poNumber) {
+      const count = await prisma.purchaseOrder.count();
+      poNumber = `PO-${10001 + count}`;
+    }
     const poStatus = status || "DRAFT";
 
     const purchaseOrder = await prisma.$transaction(async (tx) => {
@@ -129,9 +133,21 @@ export async function POST(req: Request) {
       return po;
     });
 
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "PurchaseOrder",
+      entityId: purchaseOrder.id,
+      action: "CREATE",
+      actor: { id: session.id, email: session.email },
+      afterState: purchaseOrder,
+    });
+
     return NextResponse.json({ purchaseOrder });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[PO POST] Error:", error);
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "PO Number is already in use" }, { status: 400 });
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
