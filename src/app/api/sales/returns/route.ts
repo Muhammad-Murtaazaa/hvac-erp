@@ -162,6 +162,9 @@ export async function POST(req: Request) {
           lineItems: true,
         },
       });
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     // Record audit snapshot

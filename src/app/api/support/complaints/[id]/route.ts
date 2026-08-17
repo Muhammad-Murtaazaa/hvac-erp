@@ -167,6 +167,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       }
 
       return updated;
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     // Record audit snapshot

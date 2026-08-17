@@ -496,5 +496,8 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
       success: true,
       message: `Successfully rolled back ${snapshot.entityName} (${snapshot.entityId}) and restored inventory & financial balances.`,
     };
+  }, {
+    maxWait: 20000,
+    timeout: 60000,
   });
 }

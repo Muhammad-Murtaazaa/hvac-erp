@@ -81,6 +81,9 @@ export async function POST(req: Request) {
             },
           });
         }
+      }, {
+        maxWait: 15000,
+        timeout: 30000,
       });
 
       return NextResponse.json({ message: "Role permission mapping updated successfully" });

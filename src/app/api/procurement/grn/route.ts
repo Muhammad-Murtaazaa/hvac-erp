@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const grnCount = await prisma.goodsReceivedNote.count();
     const grnNumber = `GRN-${10001 + grnCount}`;
 
-    // Wrap the entire stock-in + ledger-write in a single database transaction
+    // Wrap the entire stock-in + ledger-write in a single database transaction with extended timeout for cloud databases
     const grn = await prisma.$transaction(async (tx) => {
       // 1. Create GoodsReceivedNote header
       const createdGRN = await tx.goodsReceivedNote.create({
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       // Process each received item
       for (const item of lineItems) {
         const qtyReceived = parseInt(item.quantityReceived);
-        const costPerUnit = Number(item.unitCost);
+        const costPerUnit = Math.round(Number(item.unitCost));
         const productId = item.productId;
 
         if (isNaN(qtyReceived) || qtyReceived <= 0) {
@@ -82,27 +82,40 @@ export async function POST(req: Request) {
           },
         });
 
-        // b. Update product incomingQty
+        // b. Calculate new stock, incoming, and weighted average cost together
+        const currentOnHand = product.onHandQty;
+        const currentCost = Number(product.averageCost);
+        const runningBalance = currentOnHand + qtyReceived;
         const newIncoming = Math.max(0, product.incomingQty - qtyReceived);
+        let newCost = currentCost;
+        if (runningBalance > 0) {
+          newCost = Math.round((currentOnHand * currentCost + qtyReceived * costPerUnit) / runningBalance);
+        } else {
+          newCost = costPerUnit;
+        }
+
+        // Single atomic Product update for stock, incoming, and cost
         await tx.product.update({
           where: { id: productId },
           data: {
+            onHandQty: runningBalance,
             incomingQty: newIncoming,
+            averageCost: newCost,
           },
         });
 
-        // c. Update weighted average cost BEFORE updating the inventory count
-        await updateProductAverageCost(tx, productId, qtyReceived, costPerUnit);
-
-        // d. Increment inventory and create StockLedger log
-        await recordStockMovement(tx, {
-          productId,
-          type: "PO_RECEIPT",
-          quantity: qtyReceived,
-          referenceDoc: grnNumber,
+        // c. Create StockLedger log
+        await tx.stockLedger.create({
+          data: {
+            productId,
+            type: "PO_RECEIPT",
+            quantity: qtyReceived,
+            referenceDoc: grnNumber,
+            runningBalance,
+          },
         });
 
-        // e. Handle shortfalls / shortage resolutions
+        // d. Handle shortfalls / shortage resolutions
         let linkedPendingId: string | null = null;
 
         if (item.poPendingItemId) {
@@ -151,8 +164,8 @@ export async function POST(req: Request) {
           }
         }
 
-        // f. Double-Entry General Ledger write (Debit Inventory Asset / Credit Accounts Payable)
-        const lineTotalAmount = qtyReceived * costPerUnit;
+        // e. Double-Entry General Ledger write (Debit Inventory Asset / Credit Accounts Payable)
+        const lineTotalAmount = Math.round(qtyReceived * costPerUnit);
         await recordLedgerEntry(tx, {
           description: `Received ${qtyReceived} units of ${product.sku} against ${po.poNumber} (${grnNumber})`,
           debitAccount: "Inventory Asset",
@@ -162,7 +175,7 @@ export async function POST(req: Request) {
           referenceId: createdGRN.id,
         });
 
-        // g. Write GRN Line Item
+        // f. Write GRN Line Item
         await tx.gRNLineItem.create({
           data: {
             grnId: createdGRN.id,
@@ -194,6 +207,9 @@ export async function POST(req: Request) {
       });
 
       return createdGRN;
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     // Record audit snapshot
