@@ -80,6 +80,7 @@ function SupportPageContent() {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [techId, setTechId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Update State inside Detail
   const [editStatus, setEditStatus] = useState("");
@@ -227,11 +228,13 @@ function SupportPageContent() {
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!customerName || !customerPhone || !customerAddress || !description) {
       alert("Please fill out all required customer and job details.");
       return;
     }
 
+    setIsSubmitting(true);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/support/complaints", {
@@ -259,6 +262,8 @@ function SupportPageContent() {
       fetchData();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -909,9 +914,17 @@ function SupportPageContent() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 hover:shadow-blue-500/20"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 flex items-center gap-2"
                 >
-                  Register Complaint
+                  {isSubmitting ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Registering...
+                    </>
+                  ) : (
+                    "Register Complaint"
+                  )}
                 </button>
               </div>
             </form>
