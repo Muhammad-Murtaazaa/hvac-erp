@@ -155,6 +155,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/auth/reset-password") ||
     pathname.startsWith("/delivery/confirm");
 
+  const isPdfPage = pathname.endsWith("/pdf") || pathname.includes("/pdf/");
+
   useEffect(() => {
     if (isPublicPage) {
       setLoading(false);
@@ -194,7 +196,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   // 3. System indicators stats polling
   useEffect(() => {
-    if (isPublicPage) return;
+    if (isPublicPage || isPdfPage) return;
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -214,7 +216,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     fetchStats();
     const interval = setInterval(fetchStats, 45000); // poll every 45s
     return () => clearInterval(interval);
-  }, [isPublicPage]);
+  }, [isPublicPage, isPdfPage]);
 
   const handleLogout = async () => {
     try {
@@ -236,6 +238,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   // If on public page (login, reset password, or delivery QR verification), bypass sidebar shell layout entirely
   if (isPublicPage) {
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">{children}</div>;
+  }
+
+  // If on dedicated PDF print page (Invoice, PO, DO), bypass sidebar, top bar, floating widgets, and shell chrome entirely
+  if (isPdfPage) {
+    return (
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-900 print:bg-white text-slate-800 dark:text-slate-100">
+        {children}
+      </div>
+    );
   }
 
   // Filter menu items by user role

@@ -105,14 +105,16 @@
 
 /* Print layouts styling */
 @page {
-  margin: 10mm 12mm;
+  margin: 10mm;
   size: auto;
 }
 
 @media print {
   html, body {
     background: #ffffff !important;
-    color: #0f172a !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     font-size: 10pt !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -123,10 +125,13 @@
   nav,
   aside,
   header,
+  footer,
   button:not(.print-include),
   .search-filter,
   .actions-row,
-  .print\\:hidden {
+  .print\:hidden,
+  [class*="print:hidden"],
+  [data-radix-portal] {
     display: none !important;
   }
 

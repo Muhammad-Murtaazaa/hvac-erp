@@ -84,7 +84,7 @@ export default function InvoicePdfPage() {
   const computedTaxRate = subtotal > 0 ? Math.round((taxAmount / subtotal) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
       {/* Top control bar */}
       <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden">
         <button
@@ -105,7 +105,7 @@ export default function InvoicePdfPage() {
       </div>
 
       {/* Main A4 Document Paper Container */}
-      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 sm:p-12 rounded-2xl shadow-xl print:border-none print:shadow-none print:p-0">
+      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 sm:p-12 rounded-2xl shadow-xl print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:bg-white print:text-black">
         
         {/* Universal TCE Header */}
         <div className="flex items-center gap-4 border-b border-black pb-4">

@@ -87,7 +87,7 @@ export default function POPdfPage() {
   const totalAmount = taxableAmount + salesTax;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
       {/* Top control bar */}
       <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden">
         <button
@@ -106,7 +106,7 @@ export default function POPdfPage() {
       </div>
 
       {/* Invoice Sheet */}
-      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 text-slate-800 dark:text-slate-100 font-sans relative overflow-hidden">
+      <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:bg-white print:text-black font-sans relative overflow-hidden">
         
         {/* Background Logo Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">

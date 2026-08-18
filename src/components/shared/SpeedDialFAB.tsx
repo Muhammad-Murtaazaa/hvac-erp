@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Plus,
   X,
@@ -16,6 +16,11 @@ import {
 export default function SpeedDialFAB() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  if (pathname === "/" || pathname.startsWith("/auth/reset-password") || pathname.includes("/pdf")) {
+    return null;
+  }
 
   const actions = [
     {
@@ -51,7 +56,7 @@ export default function SpeedDialFAB() {
   ];
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2.5">
+    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2.5 print:hidden">
       {/* Expanded Action Menu */}
       {open && (
         <div className="flex flex-col items-end gap-2 mb-1 animate-slideUp">

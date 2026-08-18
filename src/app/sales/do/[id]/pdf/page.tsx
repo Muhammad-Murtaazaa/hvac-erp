@@ -75,7 +75,7 @@ export default function DeliveryOrderPdfPage() {
   const formattedDN = doRecord.doNumber ? doRecord.doNumber.replace("DO-", "TCE/") : "";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
       {/* Top control bar */}
       <div className="max-w-4xl mx-auto mb-6 flex flex-wrap justify-between items-center gap-3 print:hidden">
         <button
@@ -108,7 +108,7 @@ export default function DeliveryOrderPdfPage() {
 
       {stickerMode ? (
         /* Box Shipping Label / QR Sticker Mode (4x6 format) */
-        <div className="max-w-md mx-auto bg-white border-2 border-slate-900 rounded-2xl p-6 shadow-xl print:shadow-none print:border-2 print:border-black text-slate-900 font-sans">
+        <div className="max-w-md mx-auto bg-white border-2 border-slate-900 rounded-2xl p-6 shadow-xl print:shadow-none print:border-2 print:border-black print:m-0 print:p-4 print:bg-white text-slate-900 font-sans">
           <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
             <div>
               <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">TECHNICOOL ENGINEERING</div>
@@ -128,10 +128,8 @@ export default function DeliveryOrderPdfPage() {
 
           {qrDataUrl && (
             <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-400 rounded-xl my-4 text-center">
-              <img src={qrDataUrl} alt="Delivery QR Code" className="w-44 h-44 object-contain" />
-              <p className="text-[11px] font-black uppercase text-slate-900 mt-2 tracking-wider">
-                SCAN WITH PHONE TO CONFIRM RECEIPT
-              </p>
+              <img src={qrDataUrl} alt="Delivery QR Code" className="w-40 h-40 object-contain" />
+              <p className="text-[10px] font-bold text-slate-700 mt-2">SCAN TO CONFIRM DELIVERY</p>
               <p className="text-[9px] text-slate-500">Auto-notifies dispatch & marks DO delivered</p>
             </div>
           )}
@@ -142,7 +140,7 @@ export default function DeliveryOrderPdfPage() {
         </div>
       ) : (
         /* Full DO Sheet */
-        <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 text-slate-800 dark:text-slate-100 font-sans relative overflow-hidden">
+        <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:bg-white print:text-black font-sans relative overflow-hidden">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
             <img src="/logo.png" alt="Watermark" className="w-[400px] h-[400px] object-contain" />
