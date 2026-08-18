@@ -1,21 +1,7 @@
-import nodemailer from "nodemailer";
 import prisma from "./db";
 import { executeDynamicReport } from "./report-compiler";
 import { convertToExcelBuffer } from "./export";
-
-export async function createTransporter() {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = parseInt(process.env.SMTP_PORT || "587", 10);
-  const user = process.env.SMTP_USER || "";
-  const pass = process.env.SMTP_PASS || "";
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: user && pass ? { user, pass } : undefined,
-  });
-}
+import { sendMail } from "./mail";
 
 export async function processDueScheduledReports() {
   const schedules = await prisma.scheduledReport.findMany({
@@ -76,24 +62,21 @@ export async function processDueScheduledReports() {
         </div>
       `;
 
-      if (process.env.SMTP_USER) {
-        const transporter = await createTransporter();
-        const recipients = schedule.recipientEmails.split(",").map((e) => e.trim());
+      const recipients = schedule.recipientEmails.split(",").map((e) => e.trim());
 
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || `"HVAC ERP Reports" <${process.env.SMTP_USER}>`,
-          to: recipients,
-          subject: `[HVAC ERP] ${title} - ${dateStr}`,
-          html: htmlContent,
-          attachments: [
-            {
-              filename,
-              content: excelBuffer,
-              contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            },
-          ],
-        });
-      }
+      await sendMail({
+        to: recipients,
+        subject: `[HVAC ERP] ${title} - ${dateStr}`,
+        html: htmlContent,
+        senderName: "HVAC ERP Reports",
+        attachments: [
+          {
+            filename,
+            content: excelBuffer,
+            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          },
+        ],
+      });
 
       await prisma.scheduledReport.update({
         where: { id: schedule.id },

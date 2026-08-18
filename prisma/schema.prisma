@@ -126,7 +126,8 @@ model Vendor {
   name          String          @unique
   contactPerson String
   phone         String
-  email         String
+  email         String?
+  ntn           String?
   address       String
   paymentTerms  String
   createdAt     DateTime        @default(now())

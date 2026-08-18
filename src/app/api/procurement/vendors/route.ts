@@ -22,10 +22,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, contactPerson, phone, email, address, paymentTerms } = await req.json();
+    const { name, contactPerson, phone, email, ntn, address, paymentTerms } = await req.json();
 
-    if (!name || !contactPerson || !phone || !email) {
-      return NextResponse.json({ error: "Required fields missing" }, { status: 400 });
+    if (!name || !contactPerson || !phone) {
+      return NextResponse.json({ error: "Name, Contact Person, and Phone are required" }, { status: 400 });
     }
 
     const vendor = await prisma.vendor.create({
@@ -33,7 +33,8 @@ export async function POST(req: Request) {
         name,
         contactPerson,
         phone,
-        email,
+        email: email ? email.trim() : null,
+        ntn: ntn ? ntn.trim() : null,
         address: address || "",
         paymentTerms: paymentTerms || "Net 30 Days",
       },

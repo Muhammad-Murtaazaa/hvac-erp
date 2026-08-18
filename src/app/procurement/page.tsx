@@ -49,6 +49,7 @@ function ProcurementPageContent() {
   const [vendorContact, setVendorContact] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
+  const [vendorNtn, setVendorNtn] = useState("");
   const [vendorAddress, setVendorAddress] = useState("");
   const [vendorPaymentTerms, setVendorPaymentTerms] = useState("Net 30 Days");
   const [registering, setRegistering] = useState(false);
@@ -156,8 +157,8 @@ function ProcurementPageContent() {
 
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vendorName || !vendorContact || !vendorPhone || !vendorEmail) {
-      alert("Please fill out all required vendor fields.");
+    if (!vendorName || !vendorContact || !vendorPhone) {
+      alert("Please fill out required vendor fields (Name, Contact Person, Phone).");
       return;
     }
 
@@ -171,7 +172,8 @@ function ProcurementPageContent() {
           name: vendorName,
           contactPerson: vendorContact,
           phone: vendorPhone,
-          email: vendorEmail,
+          email: vendorEmail || undefined,
+          ntn: vendorNtn || undefined,
           address: vendorAddress,
           paymentTerms: vendorPaymentTerms,
         }),
@@ -187,6 +189,7 @@ function ProcurementPageContent() {
       setVendorContact("");
       setVendorPhone("");
       setVendorEmail("");
+      setVendorNtn("");
       setVendorAddress("");
       setVendorPaymentTerms("Net 30 Days");
       fetchData();
@@ -632,6 +635,7 @@ function ProcurementPageContent() {
                     <th className="p-3">Vendor Name</th>
                     <th className="p-3">Contact Person</th>
                     <th className="p-3">Contact Email</th>
+                    <th className="p-3">NTN Number</th>
                     <th className="p-3">Contact Phone</th>
                     <th className="p-3">Address</th>
                     <th className="p-3">Joined Date</th>
@@ -641,14 +645,15 @@ function ProcurementPageContent() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {vendors
                     .filter((v) => {
-                      const text = v.name.toLowerCase() + v.email.toLowerCase() + v.contactPerson.toLowerCase();
+                      const text = v.name.toLowerCase() + (v.email || "").toLowerCase() + (v.ntn || "").toLowerCase() + v.contactPerson.toLowerCase();
                       return text.includes(search.toLowerCase());
                     })
                     .map((vendor) => (
                       <tr key={vendor.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                         <td className="p-3 font-bold">{vendor.name}</td>
                         <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{vendor.contactPerson}</td>
-                        <td className="p-3 text-blue-500 font-medium">{vendor.email}</td>
+                        <td className="p-3 text-blue-500 font-medium">{vendor.email || "-"}</td>
+                        <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{vendor.ntn || "-"}</td>
                         <td className="p-3 font-medium">{vendor.phone}</td>
                         <td className="p-3 text-slate-500 max-w-xs truncate" title={vendor.address}>{vendor.address || "-"}</td>
                         <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(vendor.createdAt).toLocaleDateString()}</td>
@@ -667,11 +672,11 @@ function ProcurementPageContent() {
                       </tr>
                     ))}
                   {vendors.filter((v) => {
-                    const text = v.name.toLowerCase() + v.email.toLowerCase() + v.contactPerson.toLowerCase();
+                    const text = v.name.toLowerCase() + (v.email || "").toLowerCase() + (v.ntn || "").toLowerCase() + v.contactPerson.toLowerCase();
                     return text.includes(search.toLowerCase());
                   }).length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-400">No vendors registered yet.</td>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">No vendors registered yet.</td>
                     </tr>
                   )}
                 </tbody>
@@ -959,7 +964,11 @@ function ProcurementPageContent() {
               <div>
                 <p className="text-slate-400 font-semibold">Supplier Vendor:</p>
                 <p className="font-bold text-slate-700 dark:text-slate-200">{selectedPO.vendor.name}</p>
-                <p className="text-[10px] text-slate-500">{selectedPO.vendor.phone} | {selectedPO.vendor.email}</p>
+                <p className="text-[10px] text-slate-500">
+                  {selectedPO.vendor.phone}
+                  {selectedPO.vendor.email ? ` | ${selectedPO.vendor.email}` : ""}
+                  {selectedPO.vendor.ntn ? ` | NTN: ${selectedPO.vendor.ntn}` : ""}
+                </p>
               </div>
               <div>
                 <p className="text-slate-400 font-semibold">PO Status:</p>
@@ -1278,16 +1287,27 @@ function ProcurementPageContent() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. contact@supplier.com"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={vendorEmail}
-                  onChange={(e) => setVendorEmail(e.target.value)}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Email Address (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. contact@supplier.com"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={vendorEmail}
+                    onChange={(e) => setVendorEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">NTN Number (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1234567-8"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    value={vendorNtn}
+                    onChange={(e) => setVendorNtn(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div>

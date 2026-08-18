@@ -81,6 +81,8 @@ export async function GET(req: NextRequest) {
             { name: { contains: query } },
             { contactPerson: { contains: query } },
             { phone: { contains: query } },
+            { email: { contains: query } },
+            { ntn: { contains: query } },
           ],
         },
         take: 4,
