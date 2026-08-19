@@ -174,7 +174,7 @@ export async function GET(req: Request) {
     if (type === "support") {
       // Support & Complaint Statistics
       const complaints = await prisma.complaint.findMany();
-      const statusCounts = { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0, CLOSED: 0 };
+      const statusCounts = { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0, CANCELLED: 0 };
 
       complaints.forEach((c) => {
         if (c.status in statusCounts) {

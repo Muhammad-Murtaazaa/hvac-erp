@@ -103,7 +103,7 @@ export async function executeTool(name: string, args: any = {}) {
           OR: [{ position: { contains: "Tech" } }, { department: { contains: "Service" } }],
         },
         include: {
-          complaints: { where: { status: { not: "CLOSED" } } },
+          complaints: { where: { status: { in: ["OPEN", "IN_PROGRESS"] } } },
         },
       });
 
@@ -127,7 +127,7 @@ export async function executeTool(name: string, args: any = {}) {
         where: { createdAt: { gte: cutoff } },
       });
 
-      const openCount = complaints.filter((c) => c.status !== "CLOSED" && c.status !== "RESOLVED").length;
+      const openCount = complaints.filter((c) => c.status === "OPEN" || c.status === "IN_PROGRESS").length;
 
       return {
         periodDays: days,

@@ -41,7 +41,7 @@ export async function compileBusinessData(scopeTitle = "Executive Business Perfo
   const totalComplaints = complaints.length;
   const openComplaints = complaints.filter((c) => c.status === "OPEN").length;
   const inProgressComplaints = complaints.filter((c) => c.status === "IN_PROGRESS").length;
-  const resolvedComplaints = complaints.filter((c) => ["RESOLVED", "CLOSED", "DONE"].includes(c.status)).length;
+  const resolvedComplaints = complaints.filter((c) => c.status === "RESOLVED").length;
   const resolutionRate = totalComplaints > 0 ? Math.round((resolvedComplaints / totalComplaints) * 100) : 100;
 
   // 5. HRM & Payroll

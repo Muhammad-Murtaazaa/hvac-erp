@@ -40,7 +40,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         return NextResponse.json({ error: "Forbidden: You are not authorized to update assignment or billing details" }, { status: 403 });
       }
 
-      if (status && ["RESOLVED", "CLOSED", "CANCELLED"].includes(status)) {
+      if (status && ["RESOLVED", "CANCELLED"].includes(status)) {
         return NextResponse.json({ error: `Forbidden: Technicians are not allowed to transition tickets to ${status}` }, { status: 403 });
       }
     }
