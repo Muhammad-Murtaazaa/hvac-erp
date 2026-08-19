@@ -221,6 +221,7 @@ function SupportPageContent() {
         }
       }
       fetchData();
+      setMounted(true);
     };
     initPage();
   }, []);
