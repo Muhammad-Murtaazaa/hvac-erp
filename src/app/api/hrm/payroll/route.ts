@@ -94,8 +94,19 @@ export async function POST(req: Request) {
         else if (att.status === "HALF_DAY") halfDayCount++;
       });
 
+      // Query active employee advances logged for this employee in this month
+      const activeAdvances = await prisma.ledgerEntry.findMany({
+        where: {
+          partyId: emp.id,
+          debitAccount: { contains: "Employee Advance", mode: "insensitive" },
+          entryDate: { gte: startDate, lte: endDate },
+        },
+      });
+      const totalAdvanceTaken = activeAdvances.reduce((sum, adv) => sum + Number(adv.amount), 0);
+
       const allowances = 0.00; // Can be manually adjusted later
-      const deductions = Math.round((absentCount * dailyRate + halfDayCount * 0.5 * dailyRate) * 100) / 100;
+      const attendanceDeduction = Math.round((absentCount * dailyRate + halfDayCount * 0.5 * dailyRate) * 100) / 100;
+      const deductions = Math.round((attendanceDeduction + totalAdvanceTaken) * 100) / 100;
       const netPay = Math.max(0, Math.round((baseVal + allowances - deductions) * 100) / 100);
 
       const run = await prisma.payrollRun.create({

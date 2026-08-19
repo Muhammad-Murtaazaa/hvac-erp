@@ -106,6 +106,8 @@ function SalesPageContent() {
   const [subjectDescription, setSubjectDescription] = useState("");
   const [immediatePayment, setImmediatePayment] = useState(false);
   const [payMethod, setPayMethod] = useState("CASH");
+  const [applyAdvance, setApplyAdvance] = useState(false);
+  const [advanceToApply, setAdvanceToApply] = useState("");
 
   // Delivery Order Creation State
   const [doClientName, setDoClientName] = useState("");
@@ -271,12 +273,23 @@ function SalesPageContent() {
     }
 
     const token = localStorage.getItem("token");
+    const paymentsList: any[] = [];
+    if (applyAdvance && Number(advanceToApply) > 0) {
+      paymentsList.push({ amountPaid: Number(advanceToApply), method: "CUSTOMER_ADVANCE" });
+    }
+    if (immediatePayment) {
+      const remaining = Math.max(0, Math.round(formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0) * (isGst ? (1 + salesTaxRate / 100) : 1)) - (applyAdvance ? Number(advanceToApply) : 0));
+      if (remaining > 0) {
+        paymentsList.push({ amountPaid: remaining, method: payMethod });
+      }
+    }
+
     const payload = {
       clientName,
       clientPhone,
       clientAddress,
       lineItems: formattedLines,
-      payments: immediatePayment ? [{ amountPaid: Math.round(formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0) * (isGst ? (1 + salesTaxRate / 100) : 1)), method: payMethod }] : [],
+      payments: paymentsList,
       notes,
       subjectHeading,
       subjectDescription,
@@ -1248,6 +1261,34 @@ function SalesPageContent() {
                 </div>
               </div>
 
+              {/* Apply Customer Advance Deposit */}
+              <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-2">
+                <label className="flex items-center gap-2 text-xs font-bold text-emerald-900 dark:text-emerald-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-emerald-400 focus:ring-emerald-500 text-emerald-600"
+                    checked={applyAdvance}
+                    onChange={(e) => setApplyAdvance(e.target.checked)}
+                  />
+                  <span>💰 Apply Customer Advance Deposit to this Invoice</span>
+                </label>
+                {applyAdvance && (
+                  <div className="pt-2">
+                    <label className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-400 mb-1">Advance Amount to Apply (PKR)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 40000"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-lg text-xs font-bold font-mono text-emerald-700 dark:text-emerald-300"
+                      value={advanceToApply}
+                      onChange={(e) => setAdvanceToApply(e.target.value)}
+                    />
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">
+                      This will automatically offset the advance from the customer's ledger account and show remaining balance due on the invoice.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Immediate Payment collection toggle */}
               <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl">
                 <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
@@ -1313,15 +1354,36 @@ function SalesPageContent() {
             <form onSubmit={handleDoSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
                 <div>
-                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Client Name</label>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Recipient (Client / Vendor)</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Acme Corp"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    list="party-do-list"
+                    placeholder="e.g. Acme Corp or Haier Vendor"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
                     value={doClientName}
-                    onChange={(e) => setDoClientName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDoClientName(val);
+                      const matchingClient = invoices.find((inv) => inv.clientName.toLowerCase() === val.toLowerCase());
+                      if (matchingClient && matchingClient.clientPhone && !doClientPhone) {
+                        setDoClientPhone(matchingClient.clientPhone);
+                      }
+                      const matchingVendor = vendors.find((v: any) => v.name.toLowerCase() === val.toLowerCase());
+                      if (matchingVendor) {
+                        if (matchingVendor.phone && !doClientPhone) setDoClientPhone(matchingVendor.phone);
+                        if (matchingVendor.address && !doAddress) setDoAddress(matchingVendor.address);
+                      }
+                    }}
                   />
+                  <datalist id="party-do-list">
+                    {Array.from(new Set(invoices.map((i) => i.clientName))).map((cName) => (
+                      <option key={cName} value={cName}>{cName} (Client)</option>
+                    ))}
+                    {vendors.map((v: any) => (
+                      <option key={v.id} value={v.name}>{v.name} (Vendor / Supplier)</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Client Phone</label>

@@ -147,14 +147,21 @@ export async function POST(req: Request) {
           }
         }
 
-        // Standard ledger journal line
+        const targetVendor = await tx.vendor.findUnique({ where: { id: vendorId } });
+
+        // Standard ledger journal line (Debit Accounts Payable (Trade Creditors) / Credit Inventory Asset)
         await recordLedgerEntry(tx, {
           description: `Return ${qtyToReturn} units of ${product.sku} to vendor (${vendorReturnNumber})`,
-          debitAccount: "Accounts Payable",
+          debitAccount: "Accounts Payable (Trade Creditors)",
           creditAccount: "Inventory Asset",
           amount: Math.min(debitAP, creditInventory),
           referenceType: "VENDOR_RETURN",
           referenceId: createdReturn.id,
+          partyType: "VENDOR",
+          partyId: vendorId,
+          partyName: targetVendor?.name || "Vendor",
+          voucherType: "DN",
+          voucherNumber: vendorReturnNumber,
         });
 
         // 5. Create Return Line Item

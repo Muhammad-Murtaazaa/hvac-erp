@@ -78,14 +78,34 @@ export default function DeliveryOrderPdfPage() {
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
       <style dangerouslySetInnerHTML={{ __html: `
         @page {
-          size: auto;
-          margin: 0mm !important;
+          size: A4 portrait;
+          margin: 0 !important;
         }
         @media print {
           html, body {
             margin: 0 !important;
-            padding: 8mm 10mm !important;
+            padding: 0 !important;
             background: #fff !important;
+            width: 100% !important;
+            height: 100% !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .page-container {
+            min-height: 287mm !important;
+            padding: 6mm 10mm 6mm 10mm !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
+          .page-content {
+            flex: 1 0 auto !important;
+          }
+          .page-footer {
+            margin-top: auto !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         }
       `}} />
@@ -121,62 +141,63 @@ export default function DeliveryOrderPdfPage() {
 
       {stickerMode ? (
         /* Box Shipping Label / QR Sticker Mode (4x6 format) */
-        <div className="max-w-md mx-auto bg-white border-2 border-slate-900 rounded-2xl p-6 shadow-xl print:shadow-none print:border-2 print:border-black print:m-0 print:p-4 print:bg-white text-slate-900 font-sans">
-          <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3">
+        <div className="max-w-md mx-auto bg-white border-2 border-black rounded-2xl p-6 shadow-xl print:shadow-none print:border-2 print:border-black print:m-0 print:p-4 print:bg-white text-black font-sans">
+          <div className="flex justify-between items-start border-b-2 border-black pb-3">
             <div>
-              <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">TECHNICOOL ENGINEERING</div>
-              <h2 className="text-xl font-extrabold">{formattedDN}</h2>
+              <div className="text-[11px] font-black uppercase tracking-widest text-black">TECHNICOOL ENGINEERING</div>
+              <h2 className="text-xl font-extrabold text-black">{formattedDN}</h2>
             </div>
-            <div className="text-right text-[11px] font-bold text-slate-600">
+            <div className="text-right text-[11px] font-bold text-black">
               <div>{new Date(doRecord.date).toLocaleDateString("en-GB")}</div>
               <div>{doRecord.through || "DISPATCH"}</div>
             </div>
           </div>
 
-          <div className="my-4 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
-            <div className="font-extrabold text-sm uppercase text-slate-900">{doRecord.clientName}</div>
-            <div className="text-slate-600 font-semibold">{doRecord.clientPhone}</div>
-            <div className="text-slate-700 font-medium">{doRecord.deliveryAddress}</div>
+          <div className="my-4 p-3 bg-slate-100 border border-black rounded-xl space-y-1 text-[13px]">
+            <div className="font-extrabold text-sm uppercase text-black">{doRecord.clientName}</div>
+            <div className="text-black font-bold">{doRecord.clientPhone}</div>
+            <div className="text-black font-semibold">{doRecord.deliveryAddress}</div>
           </div>
 
           {qrDataUrl && (
-            <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-400 rounded-xl my-4 text-center">
+            <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-black rounded-xl my-4 text-center">
               <img src={qrDataUrl} alt="Delivery QR Code" className="w-40 h-40 object-contain" />
-              <p className="text-[10px] font-bold text-slate-700 mt-2">SCAN TO CONFIRM DELIVERY</p>
-              <p className="text-[9px] text-slate-500">Auto-notifies dispatch & marks DO delivered</p>
+              <p className="text-[11px] font-black text-black mt-2">SCAN TO CONFIRM DELIVERY</p>
+              <p className="text-[10px] text-black font-bold">Auto-notifies dispatch & marks DO delivered</p>
             </div>
           )}
 
-          <div className="text-center text-[10px] font-bold text-slate-400 border-t border-slate-200 pt-2">
+          <div className="text-center text-[10px] font-bold text-black border-t border-black pt-2">
             HVAC ERP Smart Dispatch & Delivery System
           </div>
         </div>
       ) : (
         /* Full DO Sheet */
-        <div className="max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:bg-white print:text-black font-sans relative overflow-hidden">
+        <div className="page-container max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:border-none print:shadow-none print:m-0 print:max-w-none print:w-full print:bg-white text-black font-sans relative overflow-hidden">
+          <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
             <img src="/logo.png" alt="Watermark" className="w-[400px] h-[400px] object-contain" />
           </div>
 
           {/* Brand Header */}
-          <div className="flex items-start gap-4 mb-6 relative z-10">
+          <div className="flex items-start gap-4 mb-4 relative z-10">
             {/* Static Branding Logo */}
-            <div className="w-28 h-28 flex-shrink-0">
-              <img src="/logo.png" alt="TCE Logo" className="w-28 h-28 object-contain" />
+            <div className="w-24 h-24 flex-shrink-0">
+              <img src="/logo.png" alt="TCE Logo" className="w-24 h-24 object-contain" />
             </div>
 
             <div className="flex-grow pt-1">
-              <div className="flex justify-between items-end border-b-2 border-slate-900 pb-1">
-                <h1 className="text-3xl font-bold tracking-wider text-sky-950 dark:text-sky-400" style={{ fontFamily: "Arial, sans-serif" }}>
+              <div className="flex justify-between items-end border-b-2 border-black pb-1">
+                <h1 className="text-2xl font-black tracking-wider text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
                   TECHNICOOL ENGINEERING
                 </h1>
-                <span className="text-[10px] font-black italic text-slate-600 dark:text-slate-400 tracking-wider">
+                <span className="text-[11px] font-bold italic text-black tracking-wider">
                   MAKE YOUR DESIRE CLIMATE
                 </span>
               </div>
 
-              <div className="flex justify-between text-[10px] text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+              <div className="flex justify-between text-[11px] text-black font-semibold mt-1.5 leading-relaxed">
                 <div>
                   Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
                   0300-4384978, services@technicool.com.pk
@@ -186,180 +207,146 @@ export default function DeliveryOrderPdfPage() {
           </div>
 
           {/* Document Title */}
-          <h2 className="text-center text-lg font-black tracking-widest text-slate-900 dark:text-slate-100 uppercase my-6 border-b border-black pb-1.5 font-mono">
+          <h2 className="text-center text-lg font-black tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
             DELIVERY NOTE
           </h2>
 
           {/* Client Metadata block + QR Code */}
-          <div className="grid grid-cols-3 gap-6 text-xs mb-6 font-semibold items-start">
-            <div className="space-y-1.5 col-span-1">
+          <div className="grid grid-cols-3 gap-6 text-[13px] mb-5 font-bold items-start text-black">
+            <div className="space-y-1 col-span-1">
               <div>
-                <span className="text-slate-400 font-bold">To:</span>{" "}
-                <span className="text-slate-900 dark:text-white uppercase font-black">{doRecord.clientName}</span>
+                <span className="text-black font-bold">To:</span>{" "}
+                <span className="text-black uppercase font-extrabold">{doRecord.clientName}</span>
               </div>
               <div>
-                <span className="text-slate-900 dark:text-slate-300 font-bold">{doRecord.clientPhone}</span>
+                <span className="text-black font-bold">{doRecord.clientPhone}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">Through:</span>{" "}
-                <span className="text-slate-900 dark:text-slate-100 uppercase">{doRecord.through || "BUS"}</span>
+                <span className="text-black font-bold">Through:</span>{" "}
+                <span className="text-black uppercase">{doRecord.through || "BUS"}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">Vehicle:</span>{" "}
-                <span className="text-slate-900 dark:text-slate-100 uppercase">{doRecord.vehicle || "-"}</span>
+                <span className="text-black font-bold">Vehicle:</span>{" "}
+                <span className="text-black uppercase">{doRecord.vehicle || "-"}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">To Address:</span>{" "}
-                <span className="text-slate-900 dark:text-slate-100 uppercase">{doRecord.deliveryAddress}</span>
+                <span className="text-black font-bold">To Address:</span>{" "}
+                <span className="text-black uppercase">{doRecord.deliveryAddress}</span>
               </div>
             </div>
 
             {/* QR Code Verification Box */}
-            <div className="col-span-1 flex flex-col items-center justify-center p-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/60 dark:bg-slate-900/50 text-center">
+            <div className="col-span-1 flex flex-col items-center justify-center p-2 border-2 border-black rounded-xl bg-slate-50 text-center">
               {qrDataUrl ? (
                 <>
                   <img src={qrDataUrl} alt="Delivery QR Code" className="w-24 h-24 object-contain" />
-                  <span className="text-[8px] font-black uppercase text-slate-700 dark:text-slate-300 mt-1 tracking-tight">
+                  <span className="text-[9px] font-black uppercase text-black mt-1 tracking-tight">
                     Scan on Delivery to Confirm
                   </span>
-                  <span className="text-[7px] text-slate-400">Auto-updates ERP status</span>
+                  <span className="text-[8px] text-black font-semibold">Auto-updates ERP status</span>
                 </>
               ) : (
-                <div className="w-24 h-24 flex items-center justify-center text-slate-400 text-[9px]">Generating QR...</div>
+                <div className="w-24 h-24 flex items-center justify-center text-black text-[9px] font-bold">Generating QR...</div>
               )}
             </div>
 
-            <div className="flex flex-col items-end text-right space-y-1.5 col-span-1">
+            <div className="flex flex-col items-end text-right space-y-1 col-span-1">
               <div>
-                <span className="text-slate-400 font-bold">Date:</span>{" "}
-                <span className="text-slate-900 dark:text-white font-bold">{new Date(doRecord.date).toLocaleDateString("en-GB")}</span>
+                <span className="text-black font-bold">Date:</span>{" "}
+                <span className="text-black font-extrabold">{new Date(doRecord.date).toLocaleDateString("en-GB")}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">DN.No:</span>{" "}
-                <span className="text-slate-900 dark:text-white font-mono font-bold">{formattedDN}</span>
+                <span className="text-black font-bold">DN.No:</span>{" "}
+                <span className="text-black font-mono font-extrabold">{formattedDN}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">PO.No:</span>{" "}
-                <span className="text-slate-900 dark:text-slate-100 font-mono font-bold">{doRecord.poNumber || "-"}</span>
+                <span className="text-black font-bold">PO.No:</span>{" "}
+                <span className="text-black font-mono font-extrabold">{doRecord.poNumber || "-"}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold">Status:</span>{" "}
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  doRecord.status === "DELIVERED"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}>
+                <span className="text-black font-bold">Status:</span>{" "}
+                <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase text-black border border-black">
                   {doRecord.status}
                 </span>
               </div>
             </div>
           </div>
 
-        {/* Line Items Table with black solid borders */}
-        <div className="overflow-x-auto mb-6">
-          <table className="w-full text-left border-collapse text-xs border border-black dark:border-slate-800">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900 border-b border-black dark:border-slate-800/80 font-bold text-slate-700 dark:text-slate-300">
-                <th className="p-2.5 border-r border-black dark:border-slate-800 text-center w-16">SR#</th>
-                <th className="p-2.5 border-r border-black dark:border-slate-800">DESCRIPTION</th>
-                <th className="p-2.5 border-r border-black dark:border-slate-800 text-center w-24">TYPE</th>
-                <th className="p-2.5 border-r border-black dark:border-slate-800 text-right w-28">QTY</th>
-                <th className="p-2.5 text-center w-28">REMARKS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black dark:divide-slate-800">
-              {doRecord.lineItems.map((item: any, index: number) => {
-                return (
-                  <tr key={item.id} className="text-slate-800 dark:text-slate-200 font-mono">
-                    <td className="p-2.5 border-r border-black dark:border-slate-800 text-center">{index + 1}</td>
-                    <td className="p-2.5 border-r border-black dark:border-slate-800 uppercase font-sans">
-                      {item.product?.name || item.description || "Service Item"}
-                    </td>
-                    <td className="p-2.5 border-r border-black dark:border-slate-800 text-center">-</td>
-                    <td className="p-2.5 border-r border-black dark:border-slate-800 text-right font-bold">
-                      {Number(item.quantity)}
-                    </td>
-                    <td className="p-2.5 text-center">-</td>
-                  </tr>
-                );
-              })}
-              {/* Total Row */}
-              <tr className="bg-slate-50 dark:bg-slate-900 font-bold">
-                <td className="p-2.5 border-r border-black dark:border-slate-800" colSpan={2}>
-                  TOTAL
-                </td>
-                <td className="p-2.5 border-r border-black dark:border-slate-800 text-center">-</td>
-                <td className="p-2.5 border-r border-black dark:border-slate-800 text-right font-black font-mono">
-                  {totalQty}
-                </td>
-                <td className="p-2.5 text-center">-</td>
-              </tr>
-            </tbody>
-          </table>
+          {/* Line Items Table with black solid borders */}
+          <div className="overflow-x-auto mb-5">
+            <table className="w-full text-left border-collapse text-[12.5px] border-2 border-black">
+              <thead>
+                <tr className="bg-slate-100 border-b-2 border-black font-bold text-black">
+                  <th className="p-2 border-r-2 border-black text-center w-16">SR#</th>
+                  <th className="p-2 border-r-2 border-black">DESCRIPTION</th>
+                  <th className="p-2 border-r-2 border-black text-center w-24">TYPE</th>
+                  <th className="p-2 border-r-2 border-black text-right w-28">QTY</th>
+                  <th className="p-2 text-center w-28">REMARKS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y-2 divide-black">
+                {doRecord.lineItems.map((item: any, index: number) => {
+                  return (
+                    <tr key={item.id} className="text-black font-semibold">
+                      <td className="p-2 border-r-2 border-black text-center font-bold">{index + 1}</td>
+                      <td className="p-2 border-r-2 border-black uppercase font-bold">
+                        {item.product?.name || item.description || "Service Item"}
+                      </td>
+                      <td className="p-2 border-r-2 border-black text-center font-bold">{item.product?.unit || "Nos"}</td>
+                      <td className="p-2 border-r-2 border-black text-right font-black">
+                        {item.quantity}
+                      </td>
+                      <td className="p-2 text-center font-mono font-bold">-</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Signatures and Receivers Section */}
+          <div className="grid grid-cols-3 gap-6 text-[13px] font-bold mt-8 mb-4 items-end text-black">
+            <div className="flex flex-col justify-end">
+              <div className="border-t-2 border-black pt-2 w-44 text-black font-bold">
+                Prepared By
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center justify-end text-center">
+              {/* Stamp space */}
+              <div className="w-24 h-24 border-2 border-dashed border-black rounded-full flex items-center justify-center text-[10px] text-black font-bold uppercase tracking-widest leading-none mb-1 select-none">
+                Stamp / Sign
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h5 className="font-black text-black mb-2 uppercase">Received By</h5>
+              <div className="flex justify-between border-b border-black pb-0.5">
+                <span className="text-black font-bold">Name:</span>
+                <span>_________________</span>
+              </div>
+              <div className="flex justify-between border-b border-black pb-0.5">
+                <span className="text-black font-bold">Mobile:</span>
+                <span>_________________</span>
+              </div>
+              <div className="flex justify-between border-b border-black pb-0.5">
+                <span className="text-black font-bold">CNIC:</span>
+                <span>_________________</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Dotted border at bottom */}
+          <div className="border-b border-dotted border-black w-full mt-4 mb-2"></div>
         </div>
-
-        {/* Note section */}
-        {(doRecord.notes || (doRecord.invoices && doRecord.invoices.some((inv: any) => inv.notes))) && (
-          <div className="mt-8 text-xs">
-            <h4 className="font-bold text-slate-900 dark:text-white mb-1">Note</h4>
-            <div className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
-              {doRecord.notes && <div>{doRecord.notes}</div>}
-              {doRecord.invoices?.filter((inv: any) => inv.notes).map((inv: any, i: number) => (
-                <div key={i} className={doRecord.notes || i > 0 ? "mt-1.5" : ""}>
-                  <span className="text-[10px] uppercase text-slate-500 font-bold block mb-0.5">Invoice Notes:</span>
-                  {inv.notes}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Footer Acknowledgement block */}
-        <div className="grid grid-cols-3 gap-8 text-xs mt-20 pt-8 border-t border-slate-100 dark:border-slate-800/80 font-sans font-semibold">
-          <div className="flex flex-col justify-end">
-            <div className="border-t border-dotted border-black pt-2 w-44 text-slate-700 dark:text-slate-300">
-              Prepared By
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center justify-end text-center">
-            {/* Stamp space */}
-            <div className="w-28 h-28 border border-dashed border-slate-300 rounded-full flex items-center justify-center text-[10px] text-slate-300 uppercase tracking-widest leading-none mb-1 select-none">
-              Stamp / Sign
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h5 className="font-black text-slate-900 dark:text-white mb-2">Received By</h5>
-            <div className="flex justify-between border-b border-black pb-0.5">
-              <span className="text-slate-400">Name</span>
-              <span>_________________</span>
-            </div>
-            <div className="flex justify-between border-b border-black pb-0.5">
-              <span className="text-slate-400">Mobile</span>
-              <span>_________________</span>
-            </div>
-            <div className="flex justify-between border-b border-black pb-0.5">
-              <span className="text-slate-400">CNIC</span>
-              <span>_________________</span>
-            </div>
-            <div className="flex justify-between border-b border-black pb-0.5">
-              <span className="text-slate-400">Cell</span>
-              <span>_________________</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dotted border at very bottom */}
-        <div className="border-b border-dotted border-black w-full mt-16 print:mt-12 mb-8"></div>
 
         {/* Universal TCE Footer */}
-        <div className="mt-16 border-t border-black pt-4 text-center font-sans">
-          <div className="flex justify-center items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200 font-bold">
+        <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
+          <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
             <span>📍</span>
             <span>Office No . 22 Inside Aneesa Centre Opp. MashAllah Electronics Khanewal Road Multan.</span>
           </div>
-          <div className="flex justify-center items-center gap-6 text-[10px] text-slate-600 dark:text-slate-400 font-bold mt-1.5">
+          <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
             <span className="flex items-center gap-1">
               <span>🌐</span>
               <span>Web: www.technicool.com.pk</span>
@@ -370,8 +357,7 @@ export default function DeliveryOrderPdfPage() {
             </span>
           </div>
         </div>
-
-      </div>
+        </div>
       )}
     </div>
   );

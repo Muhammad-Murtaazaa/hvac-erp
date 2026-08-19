@@ -54,13 +54,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
 
       // 3. Write General Ledger entries (Debit Cash-Bank / Credit Accounts Receivable)
+      const isBank = (method || "CASH") === "BANK_TRANSFER" || (method || "CASH") === "CHEQUE" || (method || "CASH") === "ONLINE";
+      const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+
       await recordLedgerEntry(tx, {
         description: `Payment received against Invoice ${invoice.invoiceNumber} via ${method || "CASH"}`,
-        debitAccount: "Cash/Bank",
-        creditAccount: "Accounts Receivable",
+        debitAccount: liquidAcc,
+        creditAccount: "Accounts Receivable (Trade Debtors)",
         amount: Number(amountPaid),
         referenceType: "INVOICE",
         referenceId: invoice.id,
+        partyType: "CUSTOMER",
+        partyName: invoice.clientName,
+        voucherType: isBank ? "BRV" : "CRV",
+        voucherNumber: invoice.invoiceNumber,
+        paymentMethod: method || "CASH",
       });
 
       return inv;

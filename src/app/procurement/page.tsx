@@ -56,6 +56,18 @@ function ProcurementPageContent() {
   const [vendorPaymentTerms, setVendorPaymentTerms] = useState("Net 30 Days");
   const [registering, setRegistering] = useState(false);
 
+  // Edit Vendor state
+  const [isEditVendorOpen, setIsEditVendorOpen] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState("");
+  const [editVendorName, setEditVendorName] = useState("");
+  const [editVendorContact, setEditVendorContact] = useState("");
+  const [editVendorPhone, setEditVendorPhone] = useState("");
+  const [editVendorEmail, setEditVendorEmail] = useState("");
+  const [editVendorNtn, setEditVendorNtn] = useState("");
+  const [editVendorAddress, setEditVendorAddress] = useState("");
+  const [editVendorPaymentTerms, setEditVendorPaymentTerms] = useState("Net 30 Days");
+  const [updatingVendor, setUpdatingVendor] = useState(false);
+
   // New PO state
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
@@ -200,6 +212,56 @@ function ProcurementPageContent() {
       toast({ title: "Registration Failed", message: err.message, type: "error" });
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const openEditVendor = (vendor: any) => {
+    setEditingVendorId(vendor.id);
+    setEditVendorName(vendor.name);
+    setEditVendorContact(vendor.contactPerson);
+    setEditVendorPhone(vendor.phone);
+    setEditVendorEmail(vendor.email || "");
+    setEditVendorNtn(vendor.ntn || "");
+    setEditVendorAddress(vendor.address || "");
+    setEditVendorPaymentTerms(vendor.paymentTerms || "Net 30 Days");
+    setIsEditVendorOpen(true);
+  };
+
+  const handleUpdateVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editVendorName || !editVendorContact || !editVendorPhone) {
+      toast({ title: "Required Fields Missing", message: "Please fill out Name, Contact Person, and Phone.", type: "warning" });
+      return;
+    }
+
+    setUpdatingVendor(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/procurement/vendors", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: editingVendorId,
+          name: editVendorName,
+          contactPerson: editVendorContact,
+          phone: editVendorPhone,
+          email: editVendorEmail || undefined,
+          ntn: editVendorNtn || undefined,
+          address: editVendorAddress,
+          paymentTerms: editVendorPaymentTerms,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update vendor");
+
+      toast({ title: "Vendor Updated", message: `Vendor "${editVendorName}" details updated successfully.`, type: "success" });
+      setIsEditVendorOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Update Failed", message: err.message, type: "error" });
+    } finally {
+      setUpdatingVendor(false);
     }
   };
 
@@ -626,7 +688,7 @@ function ProcurementPageContent() {
                     <th className="p-3">Contact Phone</th>
                     <th className="p-3">Address</th>
                     <th className="p-3">Joined Date</th>
-                    <th className="p-3 text-center">Ledger</th>
+                    <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
@@ -645,16 +707,25 @@ function ProcurementPageContent() {
                         <td className="p-3 text-slate-500 max-w-xs truncate" title={vendor.address}>{vendor.address || "-"}</td>
                         <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(vendor.createdAt).toLocaleDateString()}</td>
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedVendor(vendor);
-                              setIsLedgerOpen(true);
-                              setLedgerTab("po");
-                            }}
-                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 rounded text-[10px] font-bold text-blue-500 transition-all"
-                          >
-                            View Statement
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => openEditVendor(vendor)}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-200 transition-all flex items-center gap-1"
+                              title="Edit Vendor Details"
+                            >
+                              <span>✏️ Edit</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedVendor(vendor);
+                                setIsLedgerOpen(true);
+                                setLedgerTab("po");
+                              }}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 rounded text-[10px] font-bold text-blue-500 transition-all"
+                            >
+                              Statement
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1323,6 +1394,117 @@ function ProcurementPageContent() {
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl text-xs font-bold transition-all"
                 >
                   {registering ? "Registering..." : "Onboard Vendor"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT VENDOR MODAL ==================== */}
+      {mounted && isEditVendorOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span>✏️ Edit Supplier / Vendor Details</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditVendorOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-6">Update vendor contact information, NTN, address, and payment terms.</p>
+
+            <form onSubmit={handleUpdateVendor} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Vendor Name / Business Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Carrier Global Suppliers"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                  value={editVendorName}
+                  onChange={(e) => setEditVendorName(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Contact Person</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Mr. Imran"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editVendorContact}
+                    onChange={(e) => setEditVendorContact(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. +923001234567"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    value={editVendorPhone}
+                    onChange={(e) => setEditVendorPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Email Address (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. contact@supplier.com"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editVendorEmail}
+                    onChange={(e) => setEditVendorEmail(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">NTN Number (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1234567-8"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                    value={editVendorNtn}
+                    onChange={(e) => setEditVendorNtn(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Business Address</label>
+                <textarea
+                  placeholder="e.g. Plot 42-C, Industrial Estate, Karachi"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 h-20"
+                  value={editVendorAddress}
+                  onChange={(e) => setEditVendorAddress(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditVendorOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingVendor}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+                >
+                  {updatingVendor ? "Saving Changes..." : "Save Vendor Changes"}
                 </button>
               </div>
             </form>

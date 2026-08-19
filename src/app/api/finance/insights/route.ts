@@ -49,7 +49,12 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       // 1. Current Invoices
       prisma.invoice.findMany({
-        where: { date: { gte: start, lte: end } },
+        where: {
+          OR: [
+            { date: { gte: start, lte: end } },
+            { createdAt: { gte: start, lte: end } },
+          ],
+        },
         include: {
           lineItems: {
             include: { product: true },
@@ -59,7 +64,12 @@ export async function GET(req: NextRequest) {
       }),
       // 2. Previous Invoices
       prisma.invoice.findMany({
-        where: { date: { gte: prevStart, lte: prevEnd } },
+        where: {
+          OR: [
+            { date: { gte: prevStart, lte: prevEnd } },
+            { createdAt: { gte: prevStart, lte: prevEnd } },
+          ],
+        },
         include: { lineItems: { include: { product: true } } },
       }),
       // 3. Current Payments (Cash Inflow)
@@ -105,7 +115,7 @@ export async function GET(req: NextRequest) {
       prisma.return.findMany({
         where: { createdAt: { gte: start, lte: end } },
       }),
-      // 12. Current Ledger Entries (General Expenses)
+      // 12. Current Ledger Entries (General Expenses & Vouchers)
       prisma.ledgerEntry.findMany({
         where: { entryDate: { gte: start, lte: end } },
       }),
@@ -129,7 +139,7 @@ export async function GET(req: NextRequest) {
 
     const returnsTotal = returns.reduce((acc, r) => acc + Number(r.totalAmount), 0);
     const netRevenue = Math.max(0, grossRevenue - returnsTotal);
-    const prevNetRevenue = prevGrossRevenue; // approx
+    const prevNetRevenue = prevGrossRevenue;
 
     // --- COGS CALCULATIONS ---
     let cogs = 0;
@@ -171,18 +181,26 @@ export async function GET(req: NextRequest) {
       expenseCategories.SALARY_PAYROLL.count += 1;
     }
 
+    // Helper to test if an account is Liquid (Cash or Bank)
+    const isLiquid = (accName: string) => {
+      const lower = (accName || "").toLowerCase();
+      return lower.includes("cash") || lower.includes("bank") || lower.includes("meezan") || lower.includes("hbl");
+    };
+
     // Add ledger entries to respective categories
     for (const e of ledgerEntries) {
       const amt = Number(e.amount);
-      const isExpenseDebit = e.debitAccount.toLowerCase().includes("expense") ||
-        e.debitAccount.toLowerCase().includes("payable") ||
-        e.debitAccount.toLowerCase().includes("inventory") ||
+      const isExpenseDebit =
+        e.debitAccount.toLowerCase().includes("expense") ||
+        e.debitAccount.toLowerCase().includes("rent") ||
+        e.debitAccount.toLowerCase().includes("utility") ||
+        e.debitAccount.toLowerCase().includes("salary") ||
+        e.debitAccount.toLowerCase().includes("logistics") ||
         e.referenceType === "PO_RECEIPT" ||
         e.referenceType === "PAYROLL";
 
       if (isExpenseDebit) {
         const { category } = autoTagExpense(e.description, e.referenceType);
-        // Avoid double counting payroll if already in payroll runs
         if (e.referenceType === "PAYROLL" && payrolls.length > 0) continue;
         expenseCategories[category].amount += amt;
         expenseCategories[category].count += 1;
@@ -191,7 +209,6 @@ export async function GET(req: NextRequest) {
 
     const totalOperatingExpenses = Object.values(expenseCategories).reduce((acc, cat) => acc + cat.amount, 0);
 
-    // Prev period operating expenses approximation
     let prevOperatingExpenses = 0;
     for (const p of prevPayrolls) prevOperatingExpenses += Number(p.netPay);
     for (const e of prevLedgerEntries) {
@@ -206,8 +223,19 @@ export async function GET(req: NextRequest) {
     const prevNetMarginPct = prevNetRevenue > 0 ? (prevNetProfit / prevNetRevenue) * 100 : 0;
 
     // --- CASH FLOW CALCULATIONS ---
-    const cashInflow = payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
-    const prevCashInflow = prevPayments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+    // Direct payments recorded + Ledger cash receipts
+    const directPayments = payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+    const ledgerInflows = ledgerEntries
+      .filter((l) => isLiquid(l.debitAccount) && !isLiquid(l.creditAccount))
+      .reduce((acc, l) => acc + Number(l.amount), 0);
+
+    const cashInflow = directPayments + ledgerInflows;
+
+    const prevDirectPayments = prevPayments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+    const prevLedgerInflows = prevLedgerEntries
+      .filter((l) => isLiquid(l.debitAccount) && !isLiquid(l.creditAccount))
+      .reduce((acc, l) => acc + Number(l.amount), 0);
+    const prevCashInflow = prevDirectPayments + prevLedgerInflows;
 
     const vendorPurchases = pos
       .filter((p) => p.status === "COMPLETED" || p.status === "PARTIALLY_RECEIVED" || p.status === "SUBMITTED")
@@ -215,13 +243,21 @@ export async function GET(req: NextRequest) {
     const payrollPaid = payrolls.reduce((acc, p) => acc + Number(p.netPay), 0);
     const refundsPaid = refunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0);
 
-    // Non-PO, non-payroll operating cash outflows
-    const miscOpEx = (expenseCategories.FUEL_TRANSPORT.amount + expenseCategories.OFFICE_UTILITIES.amount + expenseCategories.TOOLS_MAINTENANCE.amount + expenseCategories.OTHER_OPERATING.amount);
+    const ledgerOutflows = ledgerEntries
+      .filter((l) => isLiquid(l.creditAccount) && !isLiquid(l.debitAccount))
+      .reduce((acc, l) => acc + Number(l.amount), 0);
 
-    const cashOutflow = vendorPurchases + payrollPaid + refundsPaid + miscOpEx;
-    const prevCashOutflow = prevPos.reduce((acc, p) => acc + Number(p.totalAmount), 0) +
+    const cashOutflow = vendorPurchases + payrollPaid + refundsPaid + ledgerOutflows;
+
+    const prevLedgerOutflows = prevLedgerEntries
+      .filter((l) => isLiquid(l.creditAccount) && !isLiquid(l.debitAccount))
+      .reduce((acc, l) => acc + Number(l.amount), 0);
+
+    const prevCashOutflow =
+      prevPos.reduce((acc, p) => acc + Number(p.totalAmount), 0) +
       prevPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0) +
-      prevRefunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0);
+      prevRefunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0) +
+      prevLedgerOutflows;
 
     const netCashFlow = cashInflow - cashOutflow;
     const prevNetCashFlow = prevCashInflow - prevCashOutflow;
@@ -241,7 +277,8 @@ export async function GET(req: NextRequest) {
       if (balance <= 0) continue;
       arAging.totalOutstanding += balance;
 
-      const ageDays = Math.floor((now.getTime() - new Date(inv.date).getTime()) / (1000 * 60 * 60 * 24));
+      const invDate = inv.date || inv.createdAt;
+      const ageDays = Math.floor((now.getTime() - new Date(invDate).getTime()) / (1000 * 60 * 60 * 24));
       if (ageDays <= 30) {
         arAging.days0To30 += balance;
       } else if (ageDays <= 60) {
@@ -267,7 +304,12 @@ export async function GET(req: NextRequest) {
       netCashFlow: number;
     }> = [];
 
-    if (diffDays <= 35) {
+    const getDateKey = (d: Date | string) => {
+      const dateObj = typeof d === "string" ? new Date(d) : d;
+      return dateObj.toISOString().split("T")[0];
+    };
+
+    if (diffDays <= 45) {
       // Daily timeline
       for (let i = 0; i <= diffDays; i++) {
         const d = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
@@ -275,14 +317,20 @@ export async function GET(req: NextRequest) {
         const dStr = d.toISOString().split("T")[0];
         const dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-        const dayInvoices = invoices.filter((inv) => inv.date.toISOString().split("T")[0] === dStr);
-        const dayPayments = payments.filter((p) => p.paymentDate.toISOString().split("T")[0] === dStr);
-        const dayLedger = ledgerEntries.filter((l) => l.entryDate.toISOString().split("T")[0] === dStr);
-        const dayPos = pos.filter((p) => p.createdAt.toISOString().split("T")[0] === dStr);
-        const dayPayrolls = payrolls.filter((p) => p.paymentDate && p.paymentDate.toISOString().split("T")[0] === dStr);
+        const dayInvoices = invoices.filter((inv) => getDateKey(inv.date || inv.createdAt) === dStr);
+        const dayPayments = payments.filter((p) => getDateKey(p.paymentDate) === dStr);
+        const dayLedger = ledgerEntries.filter((l) => getDateKey(l.entryDate) === dStr);
+        const dayPos = pos.filter((p) => getDateKey(p.createdAt) === dStr);
+        const dayPayrolls = payrolls.filter((p) => p.paymentDate && getDateKey(p.paymentDate) === dStr);
 
         const rev = dayInvoices.reduce((acc, inv) => acc + Number(inv.totalAmount), 0);
-        const inf = dayPayments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+
+        // Daily Inflow
+        const directInf = dayPayments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+        const ledgerInf = dayLedger
+          .filter((l) => isLiquid(l.debitAccount) && !isLiquid(l.creditAccount))
+          .reduce((acc, l) => acc + Number(l.amount), 0);
+        const inf = directInf + ledgerInf;
 
         let dayCogs = 0;
         for (const inv of dayInvoices) {
@@ -291,12 +339,18 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        const exp = dayLedger.reduce((acc, l) => acc + (l.debitAccount.toLowerCase().includes("expense") ? Number(l.amount) : 0), 0) +
-          dayPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0);
+        const exp =
+          dayLedger
+            .filter((l) => l.debitAccount.toLowerCase().includes("expense"))
+            .reduce((acc, l) => acc + Number(l.amount), 0) + dayPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0);
 
-        const outf = dayPos.reduce((acc, p) => acc + Number(p.totalAmount), 0) +
-          dayPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0) +
-          (exp * 0.3); // estimated operational cash outflow
+        // Daily Outflow
+        const poOutf = dayPos.reduce((acc, p) => acc + Number(p.totalAmount), 0);
+        const payrollOutf = dayPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0);
+        const ledgerOutf = dayLedger
+          .filter((l) => isLiquid(l.creditAccount) && !isLiquid(l.debitAccount))
+          .reduce((acc, l) => acc + Number(l.amount), 0);
+        const outf = poOutf + payrollOutf + ledgerOutf;
 
         const np = rev - dayCogs - exp;
         const ncf = inf - outf;
@@ -315,20 +369,23 @@ export async function GET(req: NextRequest) {
       }
     } else {
       // Monthly / Weekly grouping
-      const monthMap = new Map<string, {
-        label: string;
-        revenue: number;
-        inflow: number;
-        expenses: number;
-        outflow: number;
-        cogs: number;
-        netProfit: number;
-        netCashFlow: number;
-      }>();
+      const monthMap = new Map<
+        string,
+        {
+          label: string;
+          revenue: number;
+          inflow: number;
+          expenses: number;
+          outflow: number;
+          cogs: number;
+          netProfit: number;
+          netCashFlow: number;
+        }
+      >();
 
       for (const inv of invoices) {
-        const key = inv.date.toISOString().slice(0, 7); // YYYY-MM
-        const label = new Date(inv.date).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+        const key = (inv.date || inv.createdAt).toISOString().slice(0, 7);
+        const label = new Date(inv.date || inv.createdAt).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
         const cur = monthMap.get(key) || { label, revenue: 0, inflow: 0, expenses: 0, outflow: 0, cogs: 0, netProfit: 0, netCashFlow: 0 };
         cur.revenue += Number(inv.totalAmount);
         for (const line of inv.lineItems) {
@@ -349,6 +406,13 @@ export async function GET(req: NextRequest) {
         const key = l.entryDate.toISOString().slice(0, 7);
         const label = new Date(l.entryDate).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
         const cur = monthMap.get(key) || { label, revenue: 0, inflow: 0, expenses: 0, outflow: 0, cogs: 0, netProfit: 0, netCashFlow: 0 };
+
+        if (isLiquid(l.debitAccount) && !isLiquid(l.creditAccount)) {
+          cur.inflow += Number(l.amount);
+        }
+        if (isLiquid(l.creditAccount) && !isLiquid(l.debitAccount)) {
+          cur.outflow += Number(l.amount);
+        }
         if (l.debitAccount.toLowerCase().includes("expense")) {
           cur.expenses += Number(l.amount);
         }
@@ -363,7 +427,6 @@ export async function GET(req: NextRequest) {
         monthMap.set(key, cur);
       }
 
-      // Sort chronological
       const sortedKeys = Array.from(monthMap.keys()).sort();
       for (const k of sortedKeys) {
         const item = monthMap.get(k)!;
@@ -404,13 +467,11 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 6);
 
-    // --- HELPER FOR PERCENTAGE VARIANCE ---
     const calcVariance = (curr: number, prev: number) => {
       if (prev === 0) return curr > 0 ? 100 : 0;
       return Number((((curr - prev) / Math.abs(prev)) * 100).toFixed(1));
     };
 
-    // --- P&L WATERFALL DATA ---
     const pnlWaterfall = [
       { name: "Gross Invoiced", amount: grossRevenue, fill: "#3b82f6" },
       { name: "Returns & Refunds", amount: -returnsTotal, fill: "#ef4444" },

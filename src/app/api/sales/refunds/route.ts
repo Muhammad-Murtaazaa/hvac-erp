@@ -56,14 +56,22 @@ export async function POST(req: Request) {
         },
       });
 
-      // 3. Double-Entry ledger journal: Debit Accounts Receivable / Credit Cash/Bank
+      // 3. Double-Entry ledger journal: Debit Accounts Receivable (Trade Debtors) / Credit Cash in Hand or Bank
+      const isBank = (method || "CASH") === "BANK_TRANSFER" || (method || "CASH") === "CHEQUE" || (method || "CASH") === "ONLINE";
+      const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+
       await recordLedgerEntry(tx, {
         description: `Refund cash/bank payout for Return ${ret.returnNumber} against Invoice ${ret.invoice.invoiceNumber} via ${method}`,
-        debitAccount: "Accounts Receivable",
-        creditAccount: "Cash/Bank",
+        debitAccount: "Accounts Receivable (Trade Debtors)",
+        creditAccount: liquidAcc,
         amount: refundAmt,
         referenceType: "RETURN",
         referenceId: createdRefund.id,
+        partyType: "CUSTOMER",
+        partyName: ret.invoice.clientName,
+        voucherType: isBank ? "BPV" : "CPV",
+        voucherNumber: ret.returnNumber,
+        paymentMethod: method || "CASH",
       });
 
       return createdRefund;

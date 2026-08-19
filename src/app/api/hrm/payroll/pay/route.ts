@@ -47,10 +47,15 @@ export async function POST(req: Request) {
       await recordLedgerEntry(tx, {
         description: `Salary payout for employee ${run.employee.name} for period ${run.month}/${run.year}`,
         debitAccount: "Salary Expense",
-        creditAccount: "Cash/Bank",
+        creditAccount: "Cash in Hand",
         amount: netPayVal,
         referenceType: "PAYROLL",
-        referenceId: record.id,
+        referenceId: `PAY-${run.month}/${run.year}`,
+        partyType: "EMPLOYEE",
+        partyId: run.employeeId,
+        partyName: run.employee.name,
+        voucherType: "EAV",
+        voucherNumber: `PAY-${run.month}/${run.year}`,
       });
 
       return record;

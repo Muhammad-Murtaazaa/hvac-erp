@@ -117,11 +117,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         // Post ledger entries: Debit AR / Credit Revenue
         await recordLedgerEntry(tx, {
           description: `Service billing for Complaint ${ticket.complaintNumber} (${invoiceNumber})`,
-          debitAccount: "Accounts Receivable",
-          creditAccount: "Sales Revenue",
+          debitAccount: "Accounts Receivable (Trade Debtors)",
+          creditAccount: "Service & Maintenance Income",
           amount: finalAmount,
           referenceType: "INVOICE",
           referenceId: inv.id,
+          partyType: "CUSTOMER",
+          partyName: ticket.customerName,
+          voucherType: "INV",
+          voucherNumber: invoiceNumber,
         });
 
         timelineLogs.push({

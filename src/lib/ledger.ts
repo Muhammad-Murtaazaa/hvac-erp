@@ -2,6 +2,18 @@ import { Prisma } from "@prisma/client";
 
 type PrismaTransactionClient = Prisma.TransactionClient;
 
+export async function getNextVoucherNumber(
+  tx: PrismaTransactionClient,
+  prefix: "CRV" | "BRV" | "CPV" | "BPV" | "JV" | "CV" | "EAV" | "VOUCHER"
+): Promise<string> {
+  const count = await tx.ledgerEntry.count({
+    where: {
+      voucherType: prefix,
+    },
+  });
+  return `${prefix}-${10001 + count}`;
+}
+
 export async function recordLedgerEntry(
   tx: PrismaTransactionClient,
   data: {
@@ -9,9 +21,17 @@ export async function recordLedgerEntry(
     debitAccount: string;
     creditAccount: string;
     amount: number | Prisma.Decimal;
-    referenceType: string; // "PO_RECEIPT", "INVOICE", "RETURN", "VENDOR_RETURN", "STOCK_ADJUSTMENT", "PAYROLL"
+    referenceType: string; // "PO_RECEIPT", "INVOICE", "RETURN", "VENDOR_RETURN", "STOCK_ADJUSTMENT", "PAYROLL", "VOUCHER", "ADVANCE"
     referenceId: string;
     entryDate?: Date;
+    partyType?: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "GENERAL" | string;
+    partyId?: string | null;
+    partyName?: string | null;
+    voucherType?: "CRV" | "BRV" | "CPV" | "BPV" | "JV" | "CV" | "EAV" | string | null;
+    voucherNumber?: string | null;
+    paymentMethod?: "CASH" | "BANK_TRANSFER" | "CHEQUE" | "ONLINE" | string | null;
+    chequeNumber?: string | null;
+    notes?: string | null;
   }
 ) {
   return await tx.ledgerEntry.create({
@@ -23,6 +43,14 @@ export async function recordLedgerEntry(
       amount: data.amount,
       referenceType: data.referenceType,
       referenceId: data.referenceId,
+      partyType: data.partyType || null,
+      partyId: data.partyId || null,
+      partyName: data.partyName || null,
+      voucherType: data.voucherType || null,
+      voucherNumber: data.voucherNumber || null,
+      paymentMethod: data.paymentMethod || null,
+      chequeNumber: data.chequeNumber || null,
+      notes: data.notes || null,
     },
   });
 }

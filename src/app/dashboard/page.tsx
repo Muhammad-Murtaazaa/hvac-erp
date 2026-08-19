@@ -36,6 +36,7 @@ import {
   RefreshCw,
   TrendingDown,
   Bell,
+  CreditCard,
 } from "lucide-react";
 import {
   AreaChart,
@@ -189,11 +190,11 @@ export default function DashboardPage() {
       onClick: () => router.push("/reports?type=ledger"),
     },
     {
-      label: "Automations",
-      desc: "Email Reports",
-      icon: Zap,
+      label: "Record Dr / Cr",
+      desc: "Post Debit / Credit",
+      icon: CreditCard,
       color: "bg-violet-50/90 hover:bg-violet-100/90 text-violet-700 dark:bg-violet-950/40 dark:hover:bg-violet-900/50 dark:text-violet-300 border-violet-200/70 dark:border-violet-800/60 shadow-xs",
-      onClick: () => router.push("/automations"),
+      onClick: () => router.push("/financials?tab=record"),
     },
   ];
 

@@ -449,6 +449,147 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
     }
 
     // ----------------------------------------------------
+    // 11. SALES RETURN ROLLBACK
+    // ----------------------------------------------------
+    else if (entityName === "Return") {
+      if (action === "CREATE") {
+        const ret = await tx.return.findUnique({
+          where: { id: entityId },
+          include: { lineItems: true, refunds: true },
+        });
+
+        if (ret) {
+          // Revert restocked inventory back out
+          for (const item of ret.lineItems) {
+            if (item.productId) {
+              const product = await tx.product.findUnique({ where: { id: item.productId } });
+              if (product) {
+                const restoredQty = Math.max(0, product.onHandQty - item.quantity);
+                await tx.product.update({
+                  where: { id: item.productId },
+                  data: { onHandQty: restoredQty },
+                });
+                await tx.stockLedger.create({
+                  data: {
+                    productId: item.productId,
+                    type: "MANUAL_ADJUSTMENT",
+                    quantity: -item.quantity,
+                    referenceDoc: `ROLLBACK-${ret.returnNumber}`,
+                    runningBalance: restoredQty,
+                  },
+                });
+              }
+            }
+          }
+
+          // Delete financial ledger entries for return and refunds
+          await tx.ledgerEntry.deleteMany({
+            where: { referenceType: "RETURN", referenceId: entityId },
+          });
+
+          for (const ref of ret.refunds) {
+            await tx.ledgerEntry.deleteMany({
+              where: { referenceType: "RETURN", referenceId: ref.id },
+            });
+          }
+
+          await tx.refund.deleteMany({ where: { returnId: entityId } });
+          await tx.returnLineItem.deleteMany({ where: { returnId: entityId } });
+          await tx.return.delete({ where: { id: entityId } });
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // 12. VENDOR RETURN ROLLBACK
+    // ----------------------------------------------------
+    else if (entityName === "VendorReturn") {
+      if (action === "CREATE") {
+        const vret = await tx.vendorReturn.findUnique({
+          where: { id: entityId },
+          include: { lineItems: true },
+        });
+
+        if (vret) {
+          // Revert stock deduction by putting returned items back on hand
+          for (const item of vret.lineItems) {
+            const product = await tx.product.findUnique({ where: { id: item.productId } });
+            if (product) {
+              const restoredQty = product.onHandQty + item.quantity;
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { onHandQty: restoredQty },
+              });
+              await tx.stockLedger.create({
+                data: {
+                  productId: item.productId,
+                  type: "MANUAL_ADJUSTMENT",
+                  quantity: item.quantity,
+                  referenceDoc: `ROLLBACK-${vret.vendorReturnNumber}`,
+                  runningBalance: restoredQty,
+                },
+              });
+            }
+          }
+
+          // Delete financial ledger entries
+          await tx.ledgerEntry.deleteMany({
+            where: { referenceType: "VENDOR_RETURN", referenceId: entityId },
+          });
+
+          await tx.vendorReturnLineItem.deleteMany({ where: { vendorReturnId: entityId } });
+          await tx.vendorReturn.delete({ where: { id: entityId } });
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // 13. PAYMENT ROLLBACK
+    // ----------------------------------------------------
+    else if (entityName === "Payment") {
+      if (action === "CREATE") {
+        const payment = await tx.payment.findUnique({
+          where: { id: entityId },
+          include: { invoice: true },
+        });
+
+        if (payment && payment.invoice) {
+          const newPaid = Math.max(0, Number(payment.invoice.amountPaid) - Number(payment.amountPaid));
+          const total = Number(payment.invoice.totalAmount);
+          const newStatus = newPaid <= 0 ? "PENDING" : newPaid < total ? "PARTIAL" : "PAID";
+
+          await tx.invoice.update({
+            where: { id: payment.invoiceId },
+            data: {
+              amountPaid: newPaid,
+              status: newStatus,
+            },
+          });
+
+          // Delete corresponding ledger entry
+          await tx.ledgerEntry.deleteMany({
+            where: {
+              referenceType: "INVOICE",
+              referenceId: payment.invoiceId,
+              amount: payment.amountPaid,
+            },
+          });
+
+          await tx.payment.delete({ where: { id: entityId } });
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // 14. FINANCIAL VOUCHER / LEDGER ENTRY ROLLBACK
+    // ----------------------------------------------------
+    else if (entityName === "LedgerEntry") {
+      if (action === "CREATE") {
+        await tx.ledgerEntry.delete({ where: { id: entityId } });
+      }
+    }
+
+    // ----------------------------------------------------
     // GENERIC FALLBACK FOR OTHER MODELS
     // ----------------------------------------------------
     else {

@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       include: {
         lineItems: true,
         pendingItems: true,
+        vendor: true,
       },
     });
 
@@ -169,10 +170,15 @@ export async function POST(req: Request) {
         await recordLedgerEntry(tx, {
           description: `Received ${qtyReceived} units of ${product.sku} against ${po.poNumber} (${grnNumber})`,
           debitAccount: "Inventory Asset",
-          creditAccount: "Accounts Payable",
+          creditAccount: "Accounts Payable (Trade Creditors)",
           amount: lineTotalAmount,
           referenceType: "PO_RECEIPT",
           referenceId: createdGRN.id,
+          partyType: "VENDOR",
+          partyId: po.vendorId,
+          partyName: po.vendor?.name || "Vendor",
+          voucherType: "GRN",
+          voucherNumber: grnNumber,
         });
 
         // f. Write GRN Line Item

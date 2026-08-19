@@ -199,21 +199,29 @@ export async function POST(req: Request) {
       // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
       await recordLedgerEntry(tx, {
         description: `Revenue for Invoice ${invoiceNumber} issued to ${clientName}`,
-        debitAccount: "Accounts Receivable",
+        debitAccount: "Accounts Receivable (Trade Debtors)",
         creditAccount: "Sales Revenue",
         amount: subtotalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
+        partyType: "CUSTOMER",
+        partyName: clientName,
+        voucherType: "INV",
+        voucherNumber: invoiceNumber,
       });
 
       if (taxAmount > 0) {
         await recordLedgerEntry(tx, {
           description: `Sales Tax for Invoice ${invoiceNumber}`,
-          debitAccount: "Accounts Receivable",
+          debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: "Sales Tax Payable",
           amount: taxAmount,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
+          partyType: "CUSTOMER",
+          partyName: clientName,
+          voucherType: "INV",
+          voucherNumber: invoiceNumber,
         });
       }
 
@@ -226,6 +234,10 @@ export async function POST(req: Request) {
           amount: totalCogs,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
+          partyType: "CUSTOMER",
+          partyName: clientName,
+          voucherType: "COGS",
+          voucherNumber: invoiceNumber,
         });
       }
 
@@ -234,6 +246,8 @@ export async function POST(req: Request) {
         for (const payment of payments) {
           const pAmount = Number(payment.amountPaid);
           const pMethod = payment.method || "CASH";
+          const isBank = pMethod === "BANK_TRANSFER" || pMethod === "CHEQUE" || pMethod === "ONLINE";
+          const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
 
           await tx.payment.create({
             data: {
@@ -246,11 +260,16 @@ export async function POST(req: Request) {
           // Ledger Entry for cash payment (Debit Cash-Bank / Credit Accounts Receivable)
           await recordLedgerEntry(tx, {
             description: `Payment received against Invoice ${invoiceNumber} via ${pMethod}`,
-            debitAccount: "Cash/Bank",
-            creditAccount: "Accounts Receivable",
+            debitAccount: liquidAcc,
+            creditAccount: "Accounts Receivable (Trade Debtors)",
             amount: pAmount,
             referenceType: "INVOICE",
             referenceId: createdInvoice.id,
+            partyType: "CUSTOMER",
+            partyName: clientName,
+            voucherType: isBank ? "BRV" : "CRV",
+            voucherNumber: invoiceNumber,
+            paymentMethod: pMethod,
           });
         }
       }

@@ -129,14 +129,18 @@ export async function POST(req: Request) {
       }
 
       // 5. General Ledger Reversing Journal entries
-      // Debit Sales Revenue / Credit Accounts Receivable
+      // Debit Sales Revenue / Credit Accounts Receivable (Trade Debtors)
       await recordLedgerEntry(tx, {
         description: `Sales revenue reversal for return ${returnNumber} against Invoice ${targetInvoice.invoiceNumber}`,
         debitAccount: "Sales Revenue",
-        creditAccount: "Accounts Receivable",
+        creditAccount: "Accounts Receivable (Trade Debtors)",
         amount: totalReturnAmount,
         referenceType: "RETURN",
         referenceId: createdReturn.id,
+        partyType: "CUSTOMER",
+        partyName: targetInvoice.clientName,
+        voucherType: "CN",
+        voucherNumber: returnNumber,
       });
 
       // Debit Inventory Asset / Credit COGS (reversing COGS for catalog items)
@@ -148,6 +152,10 @@ export async function POST(req: Request) {
           amount: totalCogsToReverse,
           referenceType: "RETURN",
           referenceId: createdReturn.id,
+          partyType: "CUSTOMER",
+          partyName: targetInvoice.clientName,
+          voucherType: "CN",
+          voucherNumber: returnNumber,
         });
       }
 
