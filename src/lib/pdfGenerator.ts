@@ -689,3 +689,232 @@ export function generateEmployeeFormPDF(employee: any): Promise<Buffer> {
   });
 }
 
+export interface BusinessSummaryData {
+  title?: string;
+  period?: string;
+  generatedDate?: string;
+  recipientEmail?: string;
+  financials: {
+    totalRevenue: number;
+    totalPaid: number;
+    accountsReceivable: number;
+    totalProcurement: number;
+    grossProfit: number;
+    invoicesCount: number;
+    paidInvoicesCount: number;
+  };
+  sales: {
+    recentInvoices: Array<{
+      invoiceNumber: string;
+      clientName: string;
+      date: string;
+      totalAmount: number;
+      status: string;
+    }>;
+  };
+  inventory: {
+    totalProducts: number;
+    totalValuation: number;
+    lowStockItems: Array<{
+      sku: string;
+      name: string;
+      onHandQty: number;
+      reorderLevel: number;
+    }>;
+  };
+  complaints: {
+    total: number;
+    open: number;
+    inProgress: number;
+    resolved: number;
+    resolutionRate: number;
+    recentList: Array<{
+      complaintNumber: string;
+      customerName: string;
+      status: string;
+      amount: number;
+    }>;
+  };
+  hrm: {
+    totalEmployees: number;
+    totalPayrollAmount: number;
+  };
+}
+
+export function generateBusinessSummaryPDF(data: BusinessSummaryData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40, size: "A4", font: fontRegularPath });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
+
+      registerAppFonts(doc);
+
+      const title = data.title || "Executive Business Intelligence Dossier";
+      const period = data.period || "Comprehensive Business Performance Report";
+      const dateStr = data.generatedDate || new Date().toLocaleDateString("en-US", { dateStyle: "long" });
+
+      // PAGE 1: Executive Overview & Financials
+      // Header Banner Background
+      doc.rect(0, 0, 595, 90).fill("#0f172a");
+
+      // Logo Left
+      let logoPath = path.resolve("public/logo.png");
+      if (!fs.existsSync(logoPath)) {
+        logoPath = path.resolve("logo.png");
+      }
+      if (fs.existsSync(logoPath)) {
+        try {
+          // White badge behind logo
+          doc.rect(40, 18, 100, 54).fill("#ffffff");
+          doc.image(logoPath, 45, 22, { width: 90 });
+        } catch (e) {}
+      }
+
+      // Header Text
+      doc.font("Roboto-Bold").fontSize(18).fillColor("#ffffff").text("TECHNICOOL ENGINEERING", 160, 24);
+      doc.font("Roboto-Regular").fontSize(10).fillColor("#93c5fd").text("TCE ERP — Executive Business Intelligence Dossier", 160, 46);
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#94a3b8").text(`Generated: ${dateStr}  |  Scope: ${period}`, 160, 60);
+
+      let y = 110;
+
+      // Executive Summary Headline
+      doc.font("Roboto-Bold").fontSize(14).fillColor("#0f172a").text("1. Executive Financial Performance", 40, y);
+      y += 20;
+
+      // 4-Column KPI Metric Cards
+      const cardWidth = 120;
+      const cardHeight = 55;
+      const metrics = [
+        { label: "TOTAL SALES REVENUE", value: `PKR ${Math.round(data.financials.totalRevenue).toLocaleString()}`, color: "#1e3a8a", bg: "#eff6ff" },
+        { label: "COLLECTED PAYMENTS", value: `PKR ${Math.round(data.financials.totalPaid).toLocaleString()}`, color: "#166534", bg: "#f0fdf4" },
+        { label: "RECEIVABLES (UNPAID)", value: `PKR ${Math.round(data.financials.accountsReceivable).toLocaleString()}`, color: "#b45309", bg: "#fffbeb" },
+        { label: "PROCUREMENT SPEND", value: `PKR ${Math.round(data.financials.totalProcurement).toLocaleString()}`, color: "#6b21a8", bg: "#faf5ff" },
+      ];
+
+      metrics.forEach((m, i) => {
+        const x = 40 + i * (cardWidth + 12);
+        doc.rect(x, y, cardWidth, cardHeight).fill(m.bg).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#64748b").text(m.label, x + 8, y + 10, { width: cardWidth - 16 });
+        doc.font("Roboto-Bold").fontSize(10).fillColor(m.color).text(m.value, x + 8, y + 26, { width: cardWidth - 16 });
+      });
+
+      y += cardHeight + 25;
+
+      // Section 2: Recent Sales & Invoices
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#0f172a").text("2. Commercial Sales & Billing Breakdown", 40, y);
+      y += 18;
+
+      // Invoices Table Header
+      doc.rect(40, y, 515, 20).fill("#1e293b");
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#ffffff");
+      doc.text("INVOICE #", 50, y + 6);
+      doc.text("CLIENT / ACCOUNT", 130, y + 6);
+      doc.text("DATE", 310, y + 6);
+      doc.text("STATUS", 390, y + 6);
+      doc.text("AMOUNT (PKR)", 465, y + 6, { width: 80, align: "right" });
+      y += 20;
+
+      const invoices = data.sales.recentInvoices.slice(0, 5);
+      if (invoices.length === 0) {
+        doc.rect(40, y, 515, 22).fill("#f8fafc").strokeColor("#e2e8f0").stroke();
+        doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("No recent commercial invoices recorded.", 50, y + 7);
+        y += 22;
+      } else {
+        invoices.forEach((inv, idx) => {
+          const rowBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+          doc.rect(40, y, 515, 20).fill(rowBg).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+          doc.font("Roboto-Bold").fontSize(8).fillColor("#1e3a8a").text(inv.invoiceNumber, 50, y + 6);
+          doc.font("Roboto-Regular").fontSize(8).fillColor("#1e293b").text(inv.clientName, 130, y + 6, { width: 170 });
+          doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text(inv.date, 310, y + 6);
+          
+          const statusColor = inv.status === "PAID" ? "#166534" : "#b45309";
+          doc.font("Roboto-Bold").fontSize(7.5).fillColor(statusColor).text(inv.status, 390, y + 6);
+          doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a").text(Math.round(inv.totalAmount).toLocaleString(), 465, y + 6, { width: 80, align: "right" });
+          y += 20;
+        });
+      }
+
+      y += 25;
+
+      // Section 3: Service Complaints & Dispatch Queue
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#0f172a").text("3. Service, Repairs & Customer Complaints", 40, y);
+      y += 18;
+
+      // Complaint stats summary line
+      const resRate = data.complaints.total > 0 ? Math.round((data.complaints.resolved / data.complaints.total) * 100) : 100;
+      doc.rect(40, y, 515, 24).fill("#f1f5f9").strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a");
+      doc.text(`Total Logged: ${data.complaints.total}`, 50, y + 8);
+      doc.text(`Open: ${data.complaints.open}`, 160, y + 8);
+      doc.text(`In Progress: ${data.complaints.inProgress}`, 250, y + 8);
+      doc.text(`Resolved: ${data.complaints.resolved}`, 360, y + 8);
+      doc.text(`Resolution Rate: ${resRate}%`, 450, y + 8, { width: 95, align: "right" });
+      y += 24;
+
+      const complaintsList = data.complaints.recentList.slice(0, 4);
+      complaintsList.forEach((c, idx) => {
+        const rowBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+        doc.rect(40, y, 515, 18).fill(rowBg).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0284c7").text(c.complaintNumber, 50, y + 5);
+        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#1e293b").text(c.customerName, 140, y + 5, { width: 200 });
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#475569").text(c.status, 360, y + 5);
+        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#0f172a").text(`PKR ${Math.round(c.amount).toLocaleString()}`, 465, y + 5, { width: 80, align: "right" });
+        y += 18;
+      });
+
+      y += 25;
+
+      // Section 4: Inventory & Warehouse Assets
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#0f172a").text("4. Warehouse Inventory & Physical Assets", 40, y);
+      y += 18;
+
+      doc.rect(40, y, 515, 24).fill("#f8fafc").strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a");
+      doc.text(`Catalog SKUs: ${data.inventory.totalProducts}`, 50, y + 8);
+      doc.text(`Total Stock Valuation: PKR ${Math.round(data.inventory.totalValuation).toLocaleString()}`, 200, y + 8);
+      doc.text(`Low Stock Warnings: ${data.inventory.lowStockItems.length}`, 420, y + 8, { width: 125, align: "right" });
+      y += 24;
+
+      // Low stock table if any
+      if (data.inventory.lowStockItems.length > 0) {
+        data.inventory.lowStockItems.slice(0, 3).forEach((item, idx) => {
+          const rowBg = idx % 2 === 0 ? "#ffffff" : "#fff1f2";
+          doc.rect(40, y, 515, 18).fill(rowBg).strokeColor("#fecdd3").lineWidth(0.5).stroke();
+          doc.font("Roboto-Bold").fontSize(7.5).fillColor("#991b1b").text(`[LOW STOCK] ${item.sku}`, 50, y + 5);
+          doc.font("Roboto-Regular").fontSize(7.5).fillColor("#1e293b").text(item.name, 170, y + 5, { width: 230 });
+          doc.font("Roboto-Bold").fontSize(7.5).fillColor("#991b1b").text(`On Hand: ${item.onHandQty} (Min: ${item.reorderLevel})`, 420, y + 5, { width: 125, align: "right" });
+          y += 18;
+        });
+      }
+
+      y += 25;
+
+      // Section 5: Human Resources & Operational Payroll
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#0f172a").text("5. Human Resources & Active Workforce", 40, y);
+      y += 18;
+
+      doc.rect(40, y, 515, 24).fill("#f8fafc").strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a");
+      doc.text(`Active Workforce: ${data.hrm.totalEmployees} Technical & Staff Members`, 50, y + 8);
+      doc.text(`Monthly Payroll Commitment: PKR ${Math.round(data.hrm.totalPayrollAmount).toLocaleString()}`, 300, y + 8, { width: 245, align: "right" });
+      y += 30;
+
+      // Bottom Universal Footer
+      const footerY = 790;
+      doc.moveTo(40, footerY).lineTo(555, footerY).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b");
+      doc.text("Technicool Engineering Enterprise Operations  |  Multan, Pakistan  |  support@technicool.com.pk", 40, footerY + 6, { align: "left" });
+      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#2563eb");
+      doc.text("Powered by OMNYSYNC (omnysync.com)", 350, footerY + 6, { align: "right", width: 205 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+

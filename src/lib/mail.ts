@@ -17,20 +17,22 @@ export interface SendMailOptions {
 
 /**
  * Send an email via Brevo REST API (v3)
+ * Requires API key starting with "xkeysib-"
  */
-async function sendViaBrevo(options: SendMailOptions): Promise<boolean> {
+async function sendViaBrevoRest(options: SendMailOptions): Promise<boolean> {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return false;
 
   const senderEmail =
     options.senderEmail ||
     process.env.BREVO_SENDER_EMAIL ||
+    process.env.SMTP_USER ||
     process.env.SMTP_FROM ||
-    "noreply@hvacerp.com";
+    "noreply@tce.com";
   const senderName =
     options.senderName ||
     process.env.BREVO_SENDER_NAME ||
-    "HVAC ERP System";
+    "TCE ERP";
 
   const recipients = Array.isArray(options.to) ? options.to : [options.to];
   const toList = recipients
@@ -79,26 +81,78 @@ async function sendViaBrevo(options: SendMailOptions): Promise<boolean> {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Brevo API returned error status ${response.status}: ${errorBody}`);
+    throw new Error(`Brevo REST API returned error ${response.status}: ${errorBody}`);
   }
 
   const data = await response.json();
-  console.log(`[Brevo Mail] Successfully sent messageId: ${data.messageId || "ok"} to ${recipients.join(", ")}`);
+  console.log(`[Brevo REST] Successfully dispatched messageId: ${data.messageId || "ok"} to ${recipients.join(", ")}`);
   return true;
 }
 
 /**
- * Send an email via SMTP (Nodemailer)
+ * Send an email via Brevo SMTP Relay (smtp-relay.brevo.com:587)
+ * Used when using an SMTP Master Key ("xsmtpsib-...")
  */
-async function sendViaSMTP(options: SendMailOptions): Promise<boolean> {
+async function sendViaBrevoSmtpRelay(options: SendMailOptions): Promise<boolean> {
+  const apiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS;
+  if (!apiKey) return false;
+
+  const smtpUser =
+    process.env.BREVO_SMTP_LOGIN ||
+    process.env.SMTP_USER ||
+    process.env.BREVO_SENDER_EMAIL ||
+    "noreply@tce.com";
+
+  const senderEmail =
+    options.senderEmail ||
+    process.env.BREVO_SENDER_EMAIL ||
+    smtpUser;
+
+  const senderName =
+    options.senderName ||
+    process.env.BREVO_SENDER_NAME ||
+    "TCE ERP";
+
+  const transporter = nodemailer.createTransport({
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: smtpUser,
+      pass: apiKey,
+    },
+  });
+
+  const recipients = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+
+  await transporter.sendMail({
+    from: `"${senderName}" <${senderEmail}>`,
+    to: recipients,
+    subject: options.subject,
+    html: options.html,
+    attachments: options.attachments?.map((att) => ({
+      filename: att.filename,
+      content: att.content,
+      contentType: att.contentType,
+    })),
+  });
+
+  console.log(`[Brevo SMTP Relay] Successfully sent email to ${recipients}`);
+  return true;
+}
+
+/**
+ * Send an email via Generic SMTP (Nodemailer)
+ */
+async function sendViaGenericSMTP(options: SendMailOptions): Promise<boolean> {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : 587;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const from =
     options.senderEmail
-      ? `"${options.senderName || "HVAC ERP"}" <${options.senderEmail}>`
-      : process.env.SMTP_FROM || `"${options.senderName || "HVAC ERP"}" <noreply@hvacerp.com>`;
+      ? `"${options.senderName || "TCE ERP"}" <${options.senderEmail}>`
+      : process.env.SMTP_FROM || `"${options.senderName || "TCE ERP"}" <noreply@tce.com>`;
 
   const isConfigured = !!(host && user && pass);
   if (!isConfigured) return false;
@@ -122,19 +176,19 @@ async function sendViaSMTP(options: SendMailOptions): Promise<boolean> {
     })),
   });
 
-  console.log(`[SMTP Mail] Successfully sent to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
+  console.log(`[Generic SMTP] Successfully sent to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
   return true;
 }
 
 /**
  * Universal email dispatcher
- * Prioritizes Brevo API -> Nodemailer SMTP -> Console fallback
+ * Prioritizes Brevo REST API -> Brevo SMTP Relay -> Generic SMTP -> Console fallback
  */
 export async function sendMail(
   toOrOptions: string | SendMailOptions,
   subject?: string,
   html?: string
-) {
+): Promise<{ success: boolean; method?: string; error?: string }> {
   let options: SendMailOptions;
   if (typeof toOrOptions === "string") {
     options = {
@@ -146,29 +200,45 @@ export async function sendMail(
     options = toOrOptions;
   }
 
-  // 1. Try Brevo API if key is present
-  if (process.env.BREVO_API_KEY) {
+  const brevoKey = process.env.BREVO_API_KEY || "";
+
+  // 1. If Brevo REST API key is provided (starts with xkeysib-)
+  if (brevoKey.startsWith("xkeysib-") || (!brevoKey.startsWith("xsmtpsib-") && brevoKey.length > 20)) {
     try {
-      const sent = await sendViaBrevo(options);
-      if (sent) return;
-    } catch (error) {
-      console.error("[Mail Service] Failed to send via Brevo API, attempting SMTP fallback:", error);
+      const sent = await sendViaBrevoRest(options);
+      if (sent) return { success: true, method: "Brevo REST API" };
+    } catch (error: any) {
+      console.error("[Mail Service] Failed to send via Brevo REST API:", error.message);
     }
   }
 
-  // 2. Try SMTP fallback
+  // 2. If Brevo SMTP Master Key is provided (starts with xsmtpsib-)
+  if (brevoKey.startsWith("xsmtpsib-")) {
+    try {
+      const sent = await sendViaBrevoSmtpRelay(options);
+      if (sent) return { success: true, method: "Brevo SMTP Relay" };
+    } catch (error: any) {
+      console.error("[Mail Service] Failed to send via Brevo SMTP Relay:", error.message);
+    }
+  }
+
+  // 3. Try standard custom SMTP fallback
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     try {
-      const sent = await sendViaSMTP(options);
-      if (sent) return;
-    } catch (error) {
-      console.error("[Mail Service] Failed to send via SMTP:", error);
+      const sent = await sendViaGenericSMTP(options);
+      if (sent) return { success: true, method: "Generic SMTP" };
+    } catch (error: any) {
+      console.error("[Mail Service] Failed to send via SMTP:", error.message);
     }
   }
 
-  // 3. Fallback log (dev / unconfigured)
+  // 4. Console log fallback (dev / unconfigured)
   const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
-  console.log(`[Mail Service Log (Unconfigured)] To: ${recipientStr} | Subject: "${options.subject}"`);
+  console.log(`[Mail Service (Unconfigured / Failed)] To: ${recipientStr} | Subject: "${options.subject}"`);
+  return {
+    success: false,
+    error: "No working email transport succeeded. Check your Brevo API key (xkeysib-...) or Brevo SMTP Login in .env.",
+  };
 }
 
 /**
@@ -177,25 +247,28 @@ export async function sendMail(
 export async function sendPasswordResetEmail(email: string, token: string) {
   const resetLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/reset-password?token=${token}`;
 
-  const subject = "HVAC ERP - Password Reset Request";
+  const subject = "TCE ERP - Password Reset Request";
   const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-      <h2 style="color: #2563eb; margin-top: 0;">Password Reset</h2>
-      <p>Hello,</p>
-      <p>We received a request to reset your password for the HVAC ERP system. Click the button below to choose a new password. This link is valid for 1 hour.</p>
-      <div style="margin: 24px 0; text-align: center;">
-        <a href="${resetLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset Password</a>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #1e3a8a; margin: 0; font-size: 24px; font-weight: 800;">TCE ERP</h2>
+        <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Technicool Engineering Enterprise Platform</p>
       </div>
-      <p style="color: #6b7280; font-size: 14px;">If you did not request a password reset, you can safely ignore this email.</p>
-      <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-      <p style="color: #9ca3af; font-size: 12px;">HVAC Service & Trading ERP System</p>
+      <p style="color: #334155; font-size: 15px;">Hello,</p>
+      <p style="color: #334155; font-size: 14px; line-height: 1.6;">We received a request to reset your password for your TCE ERP account. Click the button below to choose a new password. This link is valid for 1 hour.</p>
+      <div style="margin: 28px 0; text-align: center;">
+        <a href="${resetLink}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2);">Reset Password</a>
+      </div>
+      <p style="color: #64748b; font-size: 13px;">If you did not request a password reset, you can safely disregard this email.</p>
+      <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+      <p style="color: #94a3b8; font-size: 11px; text-align: center;">Technicool Engineering • Powered by OMNYSYNC</p>
     </div>
   `;
 
-  await sendMail({
+  return await sendMail({
     to: email,
     subject,
     html: htmlContent,
-    senderName: "HVAC ERP Security",
+    senderName: "TCE Security",
   });
 }

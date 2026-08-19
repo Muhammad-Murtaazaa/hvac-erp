@@ -9,8 +9,14 @@ import {
   Send,
   CheckCircle2,
   Calendar,
+  FileText,
+  Sparkles,
+  ShieldCheck,
+  Zap,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle,
   FileSpreadsheet,
-  Layers,
 } from "lucide-react";
 
 interface Schedule {
@@ -27,24 +33,42 @@ interface Schedule {
 
 export default function ScheduledReportsPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [dispatchLoading, setDispatchLoading] = useState(false);
-  const [dispatchSuccess, setDispatchSuccess] = useState<string | null>(null);
 
-  // New Form State
+  // Quick Setup Form States
+  const [quickEmail, setQuickEmail] = useState("mmurtaza2300@gmail.com");
+  const [enableWeekly, setEnableWeekly] = useState(true);
+  const [enableMonthly, setEnableMonthly] = useState(true);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Advanced Custom Schedule Form State
   const [title, setTitle] = useState("");
   const [frequency, setFrequency] = useState("WEEKLY");
   const [timeOfDay, setTimeOfDay] = useState("08:00");
   const [recipientEmails, setRecipientEmails] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [format, setFormat] = useState("EXCEL");
+  const [format, setFormat] = useState("PDF");
 
   useEffect(() => {
+    fetchQuickSetup();
     fetchSchedules();
-    fetchTemplates();
   }, []);
+
+  const fetchQuickSetup = async () => {
+    try {
+      const res = await fetch("/api/reports/quick-setup");
+      const json = await res.json();
+      if (json.success) {
+        if (json.recipientEmail) setQuickEmail(json.recipientEmail);
+        setEnableWeekly(json.enableWeekly !== undefined ? json.enableWeekly : true);
+        setEnableMonthly(json.enableMonthly !== undefined ? json.enableMonthly : true);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchSchedules = async () => {
     try {
@@ -52,7 +76,7 @@ export default function ScheduledReportsPage() {
       const res = await fetch("/api/reports/schedules");
       const json = await res.json();
       if (json.success) {
-        setSchedules(json.data);
+        setSchedules(json.data || []);
       }
     } catch (e) {
       console.error(e);
@@ -61,50 +85,75 @@ export default function ScheduledReportsPage() {
     }
   };
 
-  const fetchTemplates = async () => {
-    try {
-      const res = await fetch("/api/reports/templates");
-      const json = await res.json();
-      if (json.success) {
-        setTemplates(json.data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const createSchedule = async (e: React.FormEvent) => {
+  const handleSaveQuickSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !recipientEmails) return;
+    if (!quickEmail.trim()) {
+      setBannerMessage({ type: "error", text: "Please provide a valid recipient email address." });
+      return;
+    }
 
     try {
-      const res = await fetch("/api/reports/schedules", {
+      setSaveLoading(true);
+      setBannerMessage(null);
+      const res = await fetch("/api/reports/quick-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          frequency,
-          timeOfDay,
-          recipientEmails,
-          templateId: templateId || null,
-          format,
+          action: "save",
+          recipientEmail: quickEmail.trim(),
+          enableWeekly,
+          enableMonthly,
         }),
       });
-
       const json = await res.json();
       if (json.success) {
-        setShowModal(false);
-        setTitle("");
-        setRecipientEmails("");
+        setBannerMessage({ type: "success", text: "Automated business report schedule saved successfully!" });
         fetchSchedules();
+      } else {
+        setBannerMessage({ type: "error", text: json.error || "Failed to save schedule" });
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setBannerMessage({ type: "error", text: err.message });
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleSendInstantTestPDF = async () => {
+    if (!quickEmail.trim()) {
+      setBannerMessage({ type: "error", text: "Please enter your recipient email." });
+      return;
+    }
+
+    try {
+      setTestLoading(true);
+      setBannerMessage(null);
+      const res = await fetch("/api/reports/quick-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "trigger_test",
+          recipientEmail: quickEmail.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setBannerMessage({
+          type: "success",
+          text: `Success! Complete Business Dossier PDF report dispatched to ${quickEmail}. Please check your inbox.`,
+        });
+      } else {
+        setBannerMessage({ type: "error", text: json.error || "Failed to dispatch test PDF report." });
+      }
+    } catch (err: any) {
+      setBannerMessage({ type: "error", text: err.message });
+    } finally {
+      setTestLoading(false);
     }
   };
 
   const deleteSchedule = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this scheduled report?")) return;
+    if (!confirm("Are you sure you want to remove this scheduled report?")) return;
     try {
       await fetch(`/api/reports/schedules?id=${id}`, { method: "DELETE" });
       fetchSchedules();
@@ -113,234 +162,227 @@ export default function ScheduledReportsPage() {
     }
   };
 
-  const triggerTestDispatch = async () => {
-    try {
-      setDispatchLoading(true);
-      setDispatchSuccess(null);
-      const res = await fetch("/api/cron/dispatch", { method: "POST" });
-      const json = await res.json();
-      if (json.success) {
-        setDispatchSuccess(`Successfully processed ${json.processed} scheduled report(s).`);
-        fetchSchedules();
-      }
-    } catch (err: any) {
-      console.error(err);
-    } finally {
-      setDispatchLoading(false);
-    }
-  };
-
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-xl">
-            <Mail className="w-6 h-6" />
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-8">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800/80 pb-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
+            <Mail className="w-4 h-4" />
+            <span>Automated Email Reports & Intelligence</span>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white">Scheduled Auto-Emailed Reports</h1>
-            <p className="text-xs text-slate-500">Automated business intelligence delivered directly to your inbox without logging in</p>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+            Automated Business Reports
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Auto-generate and email comprehensive executive business PDF dossiers with zero manual work.
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={triggerTestDispatch}
-            disabled={dispatchLoading}
-            className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-xl hover:bg-slate-700 transition-colors shadow-xs"
-          >
-            <Send className="w-3.5 h-3.5" />
-            {dispatchLoading ? "Dispatching..." : "Test Dispatch Now"}
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            New Schedule
-          </button>
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Custom Schedule</span>
+        </button>
       </div>
 
-      {dispatchSuccess && (
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-          {dispatchSuccess}
+      {/* Banner Feedback Alert */}
+      {bannerMessage && (
+        <div
+          className={`p-4 rounded-2xl border text-xs sm:text-sm flex items-center gap-3 animate-fadeIn ${
+            bannerMessage.type === "success"
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+              : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300"
+          }`}
+        >
+          {bannerMessage.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-500" />
+          ) : (
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-500" />
+          )}
+          <p className="font-semibold">{bannerMessage.text}</p>
         </div>
       )}
 
-      {/* Schedules List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {loading ? (
-          <div className="col-span-full text-center py-12 text-slate-400 text-sm">
-            Loading schedules...
-          </div>
-        ) : schedules.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-slate-400 text-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-            No scheduled email deliveries configured yet. Click <strong>"New Schedule"</strong> to create one.
-          </div>
-        ) : (
-          schedules.map((s) => (
-            <div
-              key={s.id}
-              className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-4"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-                    {s.frequency} ({s.timeOfDay})
-                  </span>
-                  <button
-                    onClick={() => deleteSchedule(s.id)}
-                    className="p-1 text-slate-400 hover:text-rose-500 rounded-lg"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+      {/* QUICK 1-STEP AUTOMATION SETUP CARD */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
-                <h3 className="font-bold text-slate-900 dark:text-white text-base mt-3">{s.title}</h3>
-                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5" />
-                  {s.recipientEmails}
-                </p>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs space-y-1 text-slate-600 dark:text-slate-400">
-                  <div>
-                    Template: <span className="font-medium text-slate-800 dark:text-slate-200">{s.template?.title || "Default Revenue Digest"}</span>
-                  </div>
-                  <div>
-                    Format: <span className="font-mono text-[11px] font-bold text-indigo-600">{s.format}</span>
-                  </div>
-                </div>
+        <div className="relative z-10 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>1-Click Auto-Dispatch Setup</span>
               </div>
-
-              <div className="pt-2 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <span>Last run: {s.lastRunAt ? new Date(s.lastRunAt).toLocaleDateString() : "Never"}</span>
-                <span className="text-emerald-500 font-medium">● Active</span>
-              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                Configure Automated Executive PDF Reports
+              </h2>
+              <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
+                Enter your email address below. TCE ERP will automatically compile a <strong>complete business PDF dossier</strong> (covering Sales, Accounts Receivable, Inventory Valuation, Service Tickets, and HRM Payroll) and email it to you on schedule.
+              </p>
             </div>
-          ))
-        )}
-      </div>
+          </div>
 
-      {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <form
-            onSubmit={createSchedule}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="font-bold text-slate-900 dark:text-white text-base">Create Scheduled Email Report</h3>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Report Title</label>
+          <form onSubmit={handleSaveQuickSetup} className="space-y-5 bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 backdrop-blur-md">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                Recipient Email Address
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </span>
                 <input
-                  type="text"
+                  type="email"
                   required
-                  placeholder="e.g. Weekly Revenue & Complaint Digest"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  placeholder="e.g. mmurtaza2300@gmail.com, ceo@technicool.com.pk"
+                  value={quickEmail}
+                  onChange={(e) => setQuickEmail(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Frequency</label>
-                  <select
-                    value={frequency}
-                    onChange={(e) => setFrequency(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  >
-                    <option value="DAILY">Daily (Every Day)</option>
-                    <option value="WEEKLY">Weekly (Mondays)</option>
-                    <option value="MONTHLY">Monthly (1st of month)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Time of Day</label>
-                  <input
-                    type="time"
-                    value={timeOfDay}
-                    onChange={(e) => setTimeOfDay(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Recipient Email(s)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="owner@hvac.com, manager@hvac.com"
-                  value={recipientEmails}
-                  onChange={(e) => setRecipientEmails(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Report Preset (Optional)</label>
-                  <select
-                    value={templateId}
-                    onChange={(e) => setTemplateId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  >
-                    <option value="">Default Revenue Digest</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title} ({t.entity})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Attachment Format</label>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-                  >
-                    <option value="EXCEL">Excel (.xlsx)</option>
-                    <option value="CSV">CSV (.csv)</option>
-                  </select>
-                </div>
-              </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            {/* Checkboxes for Weekly & Monthly Schedules */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={enableWeekly}
+                  onChange={(e) => setEnableWeekly(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-600 bg-slate-800 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="font-bold text-white text-xs block">Weekly Business Digest</span>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Every Monday at 08:00 AM (Complete PDF)</span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors">
+                <input
+                  type="checkbox"
+                  checked={enableMonthly}
+                  onChange={(e) => setEnableMonthly(e.target.checked)}
+                  className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-600 bg-slate-800 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="font-bold text-white text-xs block">Monthly Performance Dossier</span>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">1st of every month at 08:00 AM (Complete PDF)</span>
+                </div>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/10">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs"
+                onClick={handleSendInstantTestPDF}
+                disabled={testLoading}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-white transition-all cursor-pointer disabled:opacity-50"
               >
-                Cancel
+                {testLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Generating & Sending PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5 text-cyan-300" />
+                    <span>Send Instant Test Business PDF to My Email</span>
+                  </>
+                )}
               </button>
+
               <button
                 type="submit"
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold"
+                disabled={saveLoading}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50"
               >
-                Save Schedule
+                {saveLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Save & Activate Auto-Dispatch</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
               </button>
             </div>
           </form>
         </div>
-      )}
+      </div>
+
+      {/* ACTIVE SCHEDULES LIST */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>Active Automated Schedules ({schedules.length})</span>
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {loading ? (
+            <div className="col-span-full text-center py-12 text-slate-400 text-xs">
+              Loading schedules...
+            </div>
+          ) : schedules.length === 0 ? (
+            <div className="col-span-full text-center py-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-500 text-xs">
+              No report schedules configured yet. Use the setup box above to activate.
+            </div>
+          ) : (
+            schedules.map((s) => (
+              <div
+                key={s.id}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-4 hover:border-blue-500/40 transition-all"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-900">
+                      {s.frequency} ({s.timeOfDay})
+                    </span>
+                    <button
+                      onClick={() => deleteSchedule(s.id)}
+                      className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      title="Delete schedule"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <h4 className="font-bold text-slate-900 dark:text-white text-sm mt-3">{s.title}</h4>
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 truncate">
+                    <Mail className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate">{s.recipientEmails}</span>
+                  </p>
+
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between text-slate-600 dark:text-slate-400">
+                    <span>Format:</span>
+                    <span className="inline-flex items-center gap-1 font-bold text-red-600 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded text-[10px]">
+                      <FileText className="w-3 h-3" />
+                      PDF Dossier
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span>Last run: {s.lastRunAt ? new Date(s.lastRunAt).toLocaleDateString() : "Pending"}</span>
+                  <span className="text-emerald-500 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Active
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
