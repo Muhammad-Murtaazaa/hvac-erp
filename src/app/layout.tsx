@@ -4,8 +4,8 @@ import "./globals.css";
 import Shell from "@/components/layout/Shell";
 
 export const metadata: Metadata = {
-  title: "HVAC Service & Trading ERP",
-  description: "Cloud-hosted, ledger-synchronized service and billing management platform.",
+  title: "TCE ERP - Enterprise Operations & Management",
+  description: "Total Cooling & Engineering ledger-synchronized service, inventory, and billing platform.",
 };
 
 export default function RootLayout({
@@ -16,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="h-full antialiased">
-        <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 font-sans">Loading HVAC ERP...</div>}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-sans">Loading TCE ERP...</div>}>
           <Shell>{children}</Shell>
         </Suspense>
       </body>
