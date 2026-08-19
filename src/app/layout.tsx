@@ -5,7 +5,7 @@ import Shell from "@/components/layout/Shell";
 
 export const metadata: Metadata = {
   title: "TCE ERP - Enterprise Operations & Management",
-  description: "Total Cooling & Engineering ledger-synchronized service, inventory, and billing platform.",
+  description: "Technicool Engineering ledger-synchronized service, inventory, and billing platform.",
 };
 
 export default function RootLayout({
