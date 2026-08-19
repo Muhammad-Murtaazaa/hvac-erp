@@ -6,9 +6,11 @@ import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { useToast } from "@/components/shared/ToastProvider";
 
 function ProcurementPageContent() {
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [vendors, setVendors] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
@@ -100,8 +102,9 @@ function ProcurementPageContent() {
         });
         setPendingItems(pLines);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load procurement records");
     } finally {
       setLoading(false);
     }
@@ -115,7 +118,7 @@ function ProcurementPageContent() {
   const handleCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPoVendor || newPoLines.some((l) => !l.productId || !l.quantityOrdered || !l.unitCost)) {
-      alert("Please fill out the vendor and all PO line details.");
+      toast({ title: "Missing Information", message: "Please fill out the vendor and all PO line details.", type: "warning" });
       return;
     }
 
@@ -140,7 +143,7 @@ function ProcurementPageContent() {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Failed to create PO");
       }
-      alert("Purchase Order created and submitted successfully.");
+      toast({ title: "PO Created", message: "Purchase Order created and submitted successfully.", type: "success" });
       setIsCreateOpen(false);
       setNewPoNumber("");
       setNewPoVendor("");
@@ -151,14 +154,14 @@ function ProcurementPageContent() {
       setPoNotes("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "PO Creation Failed", message: err.message, type: "error" });
     }
   };
 
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendorName || !vendorContact || !vendorPhone) {
-      alert("Please fill out required vendor fields (Name, Contact Person, Phone).");
+      toast({ title: "Required Fields Missing", message: "Please fill out Name, Contact Person, and Phone.", type: "warning" });
       return;
     }
 
@@ -182,7 +185,7 @@ function ProcurementPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to register vendor");
 
-      alert("Vendor registered successfully.");
+      toast({ title: "Vendor Registered", message: `Vendor "${vendorName}" onboarded successfully.`, type: "success" });
       setIsVendorOpen(false);
       // Clear fields
       setVendorName("");
@@ -194,7 +197,7 @@ function ProcurementPageContent() {
       setVendorPaymentTerms("Net 30 Days");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Registration Failed", message: err.message, type: "error" });
     } finally {
       setRegistering(false);
     }
@@ -210,11 +213,11 @@ function ProcurementPageContent() {
       });
 
       if (!res.ok) throw new Error("Action failed");
-      alert(`PO successfully ${action === "submit" ? "submitted" : "cancelled"}.`);
+      toast({ title: "PO Updated", message: `PO successfully ${action === "submit" ? "submitted" : "cancelled"}.`, type: "success" });
       setSelectedPO(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Action Failed", message: err.message, type: "error" });
     }
   };
 
@@ -245,7 +248,7 @@ function ProcurementPageContent() {
     const itemsToSubmit = grnLines.filter((l) => Number(l.quantityReceived) > 0);
 
     if (itemsToSubmit.length === 0) {
-      alert("Please enter a received quantity greater than 0 for at least one item.");
+      toast({ title: "Quantity Required", message: "Please enter a received quantity greater than 0 for at least one item.", type: "warning" });
       return;
     }
 
@@ -263,12 +266,12 @@ function ProcurementPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to log GRN");
 
-      alert(`GRN ${data.grn.grnNumber} generated successfully. Stock ledger and accounts updated.`);
+      toast({ title: "GRN Generated", message: `GRN ${data.grn.grnNumber} generated successfully. Stock ledger and accounts updated.`, type: "success" });
       setIsGrnOpen(false);
       setSelectedPO(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "GRN Logging Failed", message: err.message, type: "error" });
     }
   };
 
@@ -281,7 +284,7 @@ function ProcurementPageContent() {
   const handleResolveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isNaN(parseInt(resolveQty)) || parseInt(resolveQty) <= 0) {
-      alert("Please enter a valid resolution quantity.");
+      toast({ title: "Invalid Quantity", message: "Please enter a valid resolution quantity.", type: "warning" });
       return;
     }
 
@@ -290,7 +293,7 @@ function ProcurementPageContent() {
     const outstanding = selectedPendingItem.quantityMissing - selectedPendingItem.quantityResolved;
 
     if (qty > outstanding) {
-      alert(`Cannot resolve more than the outstanding shortfall: ${outstanding} units.`);
+      toast({ title: "Exceeds Shortfall", message: `Cannot resolve more than the outstanding shortfall (${outstanding} units).`, type: "error" });
       return;
     }
 
@@ -315,12 +318,12 @@ function ProcurementPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to log GRN shortage receipt");
 
-      alert(`Shortage resolved successfully in GRN ${data.grn.grnNumber}.`);
+      toast({ title: "Shortfall Resolved", message: `Shortage resolved successfully in GRN ${data.grn.grnNumber}.`, type: "success" });
       setIsResolveOpen(false);
       setSelectedPendingItem(null);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Resolution Failed", message: err.message, type: "error" });
     }
   };
 
@@ -343,94 +346,78 @@ function ProcurementPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Selection Header */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+      {/* Dynamic Focused Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black">Procurement & POs</h2>
-            <p className="text-xs text-slate-500 mt-1">Submit Purchase Orders, log Goods Received Notes, and track stock shortfalls</p>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {activeTab === "pos"
+                ? "Purchase Orders"
+                : activeTab === "arrivals"
+                ? "Goods Received Notes (GRN)"
+                : activeTab === "shortages"
+                ? "Pending Backorders & Shortages"
+                : "Suppliers & Vendors"}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {activeTab === "pos"
+                ? "Issue purchase orders to suppliers, manage vendor bills, and track procurement."
+                : activeTab === "arrivals"
+                ? "Inspect incoming shipments and check-in verified deliveries into warehouse stock."
+                : activeTab === "shortages"
+                ? "Track supplier delivery shortfalls and resolve pending item fulfillments."
+                : "Manage registered supplier accounts, contact persons, NTN, and payment terms."}
+            </p>
           </div>
 
-          {activeTab === "vendors" ? (
-            <button
-              onClick={() => setIsVendorOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10 self-start"
-            >
-              <Plus className="w-4 h-4" />
-              Register Vendor
-            </button>
-          ) : activeTab === "pos" ? (
-            <button
-              onClick={() => {
-                setVendorSearch("");
-                setIsCreateOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10 self-start"
-            >
-              <Plus className="w-4 h-4" />
-              Create Purchase Order
-            </button>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {activeTab === "vendors" ? (
+              <button
+                onClick={() => setIsVendorOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Register Vendor</span>
+              </button>
+            ) : activeTab === "pos" ? (
+              <button
+                onClick={() => {
+                  setVendorSearch("");
+                  setIsCreateOpen(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Purchase Order</span>
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Tab selection */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800/80 gap-1 pt-4">
-          <button
-            onClick={() => {
-              setActiveTab("pos");
-              setSearch("");
-              setStatus("");
-            }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
-              activeTab === "pos"
-                ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                : "border-transparent text-slate-500"
-            }`}
-          >
-            Purchase Orders ({purchaseOrders.length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("arrivals");
-              setSearch("");
-              setStatus("");
-            }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
-              activeTab === "arrivals"
-                ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                : "border-transparent text-slate-500"
-            }`}
-          >
-            1st Delivery Arrival ({purchaseOrders.filter(po => po.status === "SUBMITTED").length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("shortages");
-              setSearch("");
-              setStatus("");
-            }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
-              activeTab === "shortages"
-                ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                : "border-transparent text-slate-500"
-            }`}
-          >
-            Pending Stock ({pendingItems.length})
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("vendors");
-              setSearch("");
-              setStatus("");
-            }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
-              activeTab === "vendors"
-                ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                : "border-transparent text-slate-500"
-            }`}
-          >
-            Supplier Directory ({vendors.length})
-          </button>
+        {/* Clean Pill Tab Navigation */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
+          {[
+            { id: "pos", label: `Purchase Orders (${purchaseOrders.length})` },
+            { id: "arrivals", label: `Arrivals (${purchaseOrders.filter((po) => po.status === "SUBMITTED").length})` },
+            { id: "shortages", label: `Pending Stock (${pendingItems.length})` },
+            { id: "vendors", label: `Vendors (${vendors.length})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSearch("");
+                setStatus("");
+              }}
+              className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1096,7 +1083,7 @@ function ProcurementPageContent() {
                           const updated = [...grnLines];
                           const val = e.target.value === "" ? "" : parseInt(e.target.value) || 0;
                           if (val !== "" && val > line.remaining) {
-                            alert(`Cannot receive more than remaining outstanding quantity (${line.remaining}).`);
+                            toast({ title: "Exceeds Remaining", message: `Cannot receive more than remaining outstanding quantity (${line.remaining}).`, type: "warning" });
                             updated[index].quantityReceived = line.remaining;
                           } else {
                             updated[index].quantityReceived = val;
@@ -1203,7 +1190,7 @@ function ProcurementPageContent() {
                     const maxQty = selectedPendingItem.quantityMissing - selectedPendingItem.quantityResolved;
                     const val = parseInt(e.target.value) || 0;
                     if (val > maxQty) {
-                      alert(`Cannot resolve more than outstanding quantity (${maxQty}).`);
+                      toast({ title: "Exceeds Shortfall", message: `Cannot resolve more than outstanding quantity (${maxQty}).`, type: "warning" });
                       setResolveQty(String(maxQty));
                     } else {
                       setResolveQty(e.target.value);

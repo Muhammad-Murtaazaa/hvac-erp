@@ -5,8 +5,10 @@ import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers,
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import { createPortal } from "react-dom";
+import { useToast } from "@/components/shared/ToastProvider";
 
 export default function HrmPage() {
+  const { toast } = useToast();
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendanceList, setAttendanceList] = useState<any[]>([]);
   const [payrollRuns, setPayrollRuns] = useState<any[]>([]);
@@ -24,8 +26,8 @@ export default function HrmPage() {
   const [empPhone, setEmpPhone] = useState("");
   const [empAddress, setEmpAddress] = useState("");
   const [empDept, setEmpDept] = useState("SERVICE");
-  const [empPos, setEmpPos] = useState("HVAC Technician");
-  const [empJoining, setEmpJoining] = useState("");
+  const [empPos, setEmpPos] = useState("HVAC Senior Tech");
+  const [empJoining, setEmpJoining] = useState(new Date().toISOString().split("T")[0]);
   const [empSalary, setEmpSalary] = useState("");
   const [empBank, setEmpBank] = useState("");
   const [empFatherName, setEmpFatherName] = useState("");
@@ -33,18 +35,19 @@ export default function HrmPage() {
   const [empResponsiblePerson, setEmpResponsiblePerson] = useState("");
   const [empRefPhone, setEmpRefPhone] = useState("");
 
-  // Log Attendance States
+  // Mark Attendance States
   const [isAttOpen, setIsAttOpen] = useState(false);
   const [attEmpId, setAttEmpId] = useState("");
   const [attDate, setAttDate] = useState(new Date().toISOString().split("T")[0]);
   const [attStatus, setAttStatus] = useState("PRESENT");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
+  const [checkIn, setCheckIn] = useState("09:00");
+  const [checkOut, setCheckOut] = useState("18:00");
 
-  // Compile Payroll States
+  // Payroll generation
   const [payMonth, setPayMonth] = useState(String(new Date().getMonth() + 1));
   const [payYear, setPayYear] = useState(String(new Date().getFullYear()));
   const [generating, setGenerating] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -52,29 +55,28 @@ export default function HrmPage() {
     try {
       const eRes = await fetch("/api/hrm/employees", { headers: { Authorization: `Bearer ${token}` } });
       const aRes = await fetch("/api/hrm/attendance", { headers: { Authorization: `Bearer ${token}` } });
-      const pRes = await fetch(`/api/hrm/payroll?month=${payMonth}&year=${payYear}`, { headers: { Authorization: `Bearer ${token}` } });
+      const pRes = await fetch("/api/hrm/payroll", { headers: { Authorization: `Bearer ${token}` } });
 
       if (eRes.ok) setEmployees((await eRes.json()).employees || []);
       if (aRes.ok) setAttendanceList((await aRes.json()).attendance || []);
       if (pRes.ok) setPayrollRuns((await pRes.json()).payrollRuns || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load HR data");
     } finally {
       setLoading(false);
     }
   };
 
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
     fetchData();
     setMounted(true);
-  }, [payMonth, payYear]);
+  }, []);
 
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empName || !empCnic || !empPhone || !empJoining || !empSalary) {
-      alert("Please fill out all required profile fields.");
+      toast({ title: "Required Fields Missing", message: "Please fill out Name, CNIC, Phone, Joining Date, and Salary.", type: "warning" });
       return;
     }
 
@@ -104,7 +106,7 @@ export default function HrmPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add employee");
 
-      alert("Employee profile onboarded successfully.");
+      toast({ title: "Employee Onboarded", message: "Employee profile onboarded successfully.", type: "success" });
       setIsEmpOpen(false);
       // clear fields
       setEmpNo("");
@@ -120,14 +122,14 @@ export default function HrmPage() {
       setEmpRefPhone("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Onboarding Failed", message: err.message, type: "error" });
     }
   };
 
   const handleLogAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!attEmpId || !attDate || !attStatus) {
-      alert("Please select employee, date and status.");
+      toast({ title: "Missing Details", message: "Please select employee, date and status.", type: "warning" });
       return;
     }
 
@@ -148,14 +150,14 @@ export default function HrmPage() {
       });
 
       if (!res.ok) throw new Error("Failed to save attendance");
-      alert("Attendance record updated successfully.");
+      toast({ title: "Attendance Logged", message: "Attendance record updated successfully.", type: "success" });
       setIsAttOpen(false);
       setAttEmpId("");
       setCheckIn("");
       setCheckOut("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Attendance Failed", message: err.message, type: "error" });
     }
   };
 
@@ -172,10 +174,10 @@ export default function HrmPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate monthly payroll runs");
 
-      alert("Monthly payroll runs calculated based on attendance logs.");
+      toast({ title: "Payroll Generated", message: "Monthly payroll runs calculated based on attendance logs.", type: "success" });
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Generation Failed", message: err.message, type: "error" });
     } finally {
       setGenerating(false);
     }
@@ -193,10 +195,10 @@ export default function HrmPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Payment failed");
 
-      alert("Payslip marked PAID. Journal recorded in ledger.");
+      toast({ title: "Salary Paid", message: "Payslip marked PAID. Journal recorded in ledger.", type: "success" });
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Payment Failed", message: err.message, type: "error" });
     }
   };
 
@@ -215,8 +217,9 @@ export default function HrmPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      toast({ title: "Download Started", message: "Payslip PDF downloaded.", type: "info" });
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Download Failed", message: err.message, type: "error" });
     }
   };
 

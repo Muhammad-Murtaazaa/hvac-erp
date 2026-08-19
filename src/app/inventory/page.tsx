@@ -125,7 +125,7 @@ export default function InventoryPage() {
   const handleAuditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProductId || !adjustedQty || parseInt(adjustedQty) === 0) {
-      alert("Please select a product and enter a non-zero quantity.");
+      toast({ title: "Product Required", message: "Please select a product and enter a non-zero quantity.", type: "warning" });
       return;
     }
 
@@ -148,14 +148,14 @@ export default function InventoryPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit adjustment");
 
-      alert("Physical stock audit logged and ledger adjusted successfully.");
+      toast({ title: "Stock Audit Logged", message: "Physical stock audit logged and ledger adjusted successfully.", type: "success" });
       setIsAuditOpen(false);
       setSelectedProductId("");
       setAdjustedQty("");
       setReason("");
       fetchData(); // reload data
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Adjustment Failed", message: err.message, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -164,7 +164,7 @@ export default function InventoryPage() {
   const handleCreateProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSku || !newName || !newCategory || !newUnit || !newReorderLevel) {
-      alert("Please fill in all required fields.");
+      toast({ title: "Missing Fields", message: "Please fill in all required fields.", type: "warning" });
       return;
     }
 
@@ -190,7 +190,7 @@ export default function InventoryPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create product");
 
-      alert("Product onboarded successfully in HVAC catalog.");
+      toast({ title: "Product Onboarded", message: "Product onboarded successfully in HVAC catalog.", type: "success" });
       setIsCreateOpen(false);
       setNewSku("");
       setNewName("");
@@ -200,7 +200,7 @@ export default function InventoryPage() {
       setNewAvgCost("0");
       fetchData(); // reload data
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Creation Failed", message: err.message, type: "error" });
     } finally {
       setSubmitting(false);
     }

@@ -222,10 +222,10 @@ function SalesPageContent() {
         body: JSON.stringify({ salesTaxRate: Number(salesTaxRate) }),
       });
       if (!res.ok) throw new Error("Failed to update sales tax rate");
-      alert("Sales tax percentage updated successfully.");
+      toast({ title: "Tax Rate Updated", message: "Sales tax percentage updated successfully.", type: "success" });
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
     }
   };
 
@@ -238,10 +238,10 @@ function SalesPageContent() {
         body: JSON.stringify({ salesPrice: price }),
       });
       if (!res.ok) throw new Error("Failed to update product sales price");
-      alert("Product sales price updated in catalog.");
+      toast({ title: "Price Updated", message: "Product sales price updated in catalog.", type: "success" });
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Price Update Failed", message: err.message, type: "error" });
     }
   };
 
@@ -266,7 +266,7 @@ function SalesPageContent() {
     });
 
     if (!clientName || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
-      alert("Please enter client details and fill out all item lines.");
+      toast({ title: "Missing Information", message: "Please enter client details and fill out all item lines.", type: "warning" });
       return;
     }
 
@@ -291,7 +291,7 @@ function SalesPageContent() {
       });
 
       if (!res.ok) throw new Error("Failed to create Invoice");
-      alert("Invoice created and ledger balances written successfully.");
+      toast({ title: "Invoice Created", message: "Invoice created and ledger balances written successfully.", type: "success" });
       setIsInvoiceOpen(false);
       setClientName("");
       setClientPhone("");
@@ -303,7 +303,7 @@ function SalesPageContent() {
       setInvLines([{ productId: "", description: "", quantity: "1", salesPrice: "", extraFields: {} }]);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Invoice Creation Failed", message: err.message, type: "error" });
     }
   };
 
@@ -319,7 +319,7 @@ function SalesPageContent() {
       }));
 
     if (!doClientName.trim() || !doClientPhone.trim() || !doAddress.trim() || formattedLines.length === 0) {
-      alert("Please enter client name, phone, delivery address, and at least one valid product line.");
+      toast({ title: "Incomplete Details", message: "Please enter client name, phone, delivery address, and at least one valid product line.", type: "warning" });
       return;
     }
 
@@ -345,7 +345,7 @@ function SalesPageContent() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to create Delivery Order");
       }
-      alert("Delivery Order created and stock dispatched.");
+      toast({ title: "Delivery Order Created", message: "Delivery Order created and stock dispatched.", type: "success" });
       setIsDoOpen(false);
       setDoClientName("");
       setDoClientPhone("");
@@ -357,14 +357,14 @@ function SalesPageContent() {
       setDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "" }]);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "DO Creation Failed", message: err.message, type: "error" });
     }
   };
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isNaN(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
-      alert("Please enter a valid payment amount.");
+      toast({ title: "Invalid Amount", message: "Please enter a valid payment amount.", type: "warning" });
       return;
     }
 
@@ -382,13 +382,13 @@ function SalesPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to log payment");
 
-      alert("Payment transaction logged. Client balance updated.");
+      toast({ title: "Payment Recorded", message: "Payment transaction logged. Client balance updated.", type: "success" });
       setIsPaymentOpen(false);
       setSelectedInvoice(null);
       setPaymentAmount("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Payment Failed", message: err.message, type: "error" });
     }
   };
 
@@ -428,7 +428,7 @@ function SalesPageContent() {
     const activeLines = returnLines.filter((l) => l.quantityToReturn > 0);
 
     if (activeLines.length === 0) {
-      alert("Enter return quantity greater than 0 for at least one item.");
+      toast({ title: "Invalid Quantity", message: "Enter return quantity greater than 0 for at least one item.", type: "warning" });
       return;
     }
 
@@ -450,21 +450,21 @@ function SalesPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit customer return");
 
-      alert(`Customer Return logged successfully. Ledger reversed.`);
+      toast({ title: "Customer Return Logged", message: "Customer Return logged successfully. Ledger reversed.", type: "success" });
       setIsReturnOpen(false);
       setReturnInvoiceId("");
       setReturnLines([]);
       setReturnReason("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Return Failed", message: err.message, type: "error" });
     }
   };
 
   const handleRefundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isNaN(Number(refundAmount)) || Number(refundAmount) <= 0) {
-      alert("Enter a valid refund amount.");
+      toast({ title: "Invalid Amount", message: "Enter a valid refund amount.", type: "warning" });
       return;
     }
 
@@ -483,13 +483,13 @@ function SalesPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Refund failed");
 
-      alert("Cash refund payout registered successfully.");
+      toast({ title: "Refund Processed", message: "Cash refund payout registered successfully.", type: "success" });
       setIsRefundOpen(false);
       setSelectedReturn(null);
       setRefundAmount("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Refund Failed", message: err.message, type: "error" });
     }
   };
 
@@ -499,7 +499,7 @@ function SalesPageContent() {
     const activeLines = vReturnLines.filter((l) => l.quantity > 0);
 
     if (activeLines.length === 0) {
-      alert("Enter return quantity greater than 0.");
+      toast({ title: "Invalid Quantity", message: "Enter return quantity greater than 0.", type: "warning" });
       return;
     }
 
@@ -517,7 +517,7 @@ function SalesPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to process vendor return");
 
-      alert(`Vendor Return ${data.vendorReturn.vendorReturnNumber} logged. Defective stock returned.`);
+      toast({ title: "Vendor Return Logged", message: `Vendor Return ${data.vendorReturn.vendorReturnNumber} logged. Defective stock returned.`, type: "success" });
       setIsVendorReturnOpen(false);
       setSelectedVendorId("");
       setGrnLineItems([]);
@@ -525,7 +525,7 @@ function SalesPageContent() {
       setVReturnReason("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Vendor Return Failed", message: err.message, type: "error" });
     }
   };
 
@@ -542,48 +542,80 @@ function SalesPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Selection Header */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+      {/* Dynamic Focused Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black">Sales & Returns Hub</h2>
-            <p className="text-xs text-slate-500 mt-1">Issue dispatches, generate billing invoices, and log stock returns</p>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {activeTab === "invoices"
+                ? "Commercial Invoices"
+                : activeTab === "dos"
+                ? "Delivery Orders & Dispatches"
+                : activeTab === "customer_returns"
+                ? "Customer Returns"
+                : activeTab === "vendor_returns"
+                ? "Vendor Returns"
+                : "Sales & Tax Configuration"}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {activeTab === "invoices"
+                ? "Generate customer billing invoices, record payments, and track tax ledgers."
+                : activeTab === "dos"
+                ? "Issue warehouse dispatch orders, carrier logistics, and delivery notes."
+                : activeTab === "customer_returns"
+                ? "Log products returned by customers into warehouse stock."
+                : activeTab === "vendor_returns"
+                ? "Return defective components or warranty RMA back to suppliers."
+                : "Configure sales tax rates, billing terms, and ledger settings."}
+            </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setIsInvoiceOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10"
-            >
-              <Plus className="w-4 h-4" />
-              New Invoice
-            </button>
-            <button
-              onClick={() => setIsDoOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
-            >
-              <Plus className="w-4 h-4" />
-              New Delivery Order
-            </button>
-            <button
-              onClick={() => setIsReturnOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-rose-500/10"
-            >
-              <Undo2 className="w-4 h-4" />
-              Customer Return
-            </button>
-            <button
-              onClick={() => setIsVendorReturnOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-slate-700/10"
-            >
-              <Undo2 className="w-4 h-4" />
-              Vendor Return
-            </button>
+          {/* Context-Specific Action Button (Only show what belongs to current view) */}
+          <div className="flex items-center gap-2">
+            {activeTab === "invoices" && (
+              <button
+                onClick={() => setIsInvoiceOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Invoice</span>
+              </button>
+            )}
+
+            {activeTab === "dos" && (
+              <button
+                onClick={() => setIsDoOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Delivery Order</span>
+              </button>
+            )}
+
+            {activeTab === "customer_returns" && (
+              <button
+                onClick={() => setIsReturnOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-500/20 active:scale-95"
+              >
+                <Undo2 className="w-4 h-4" />
+                <span>Log Customer Return</span>
+              </button>
+            )}
+
+            {activeTab === "vendor_returns" && (
+              <button
+                onClick={() => setIsVendorReturnOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-slate-900/20 active:scale-95"
+              >
+                <Undo2 className="w-4 h-4" />
+                <span>Log Vendor Return</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Tab Selector */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800/80 gap-1 pt-4 overflow-x-auto no-scrollbar">
+        {/* Clean Pill Tab Navigation */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
           {[
             { id: "invoices", label: `Invoices (${invoices.length})` },
             { id: "dos", label: `Delivery Orders (${deliveryOrders.length})` },
@@ -593,11 +625,15 @@ function SalesPageContent() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSearch("");
+                setStatus("");
+              }}
+              className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === tab.id
-                  ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                  : "border-transparent text-slate-500"
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
               {tab.label}
@@ -933,7 +969,7 @@ function SalesPageContent() {
                                     if (inputVal && !isNaN(Number(inputVal))) {
                                       handleUpdateSalesPrice(prod.id, Number(inputVal));
                                     } else {
-                                      alert("Please enter a valid price");
+                                      toast({ title: "Invalid Price", message: "Please enter a valid price number.", type: "warning" });
                                     }
                                   }}
                                   className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold"
@@ -1773,7 +1809,7 @@ function SalesPageContent() {
                     const maxAmount = Math.round(Number(selectedInvoice.totalAmount) - Number(selectedInvoice.amountPaid));
                     const val = Math.round(Number(e.target.value)) || 0;
                     if (val > maxAmount) {
-                      alert(`Payment amount cannot exceed outstanding balance (${maxAmount.toLocaleString("en-US")} PKR).`);
+                      toast({ title: "Exceeds Balance", message: `Payment amount cannot exceed outstanding balance (${maxAmount.toLocaleString("en-US")} PKR).`, type: "warning" });
                       setPaymentAmount(String(maxAmount));
                     } else {
                       setPaymentAmount(e.target.value);

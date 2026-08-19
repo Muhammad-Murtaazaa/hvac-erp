@@ -48,29 +48,86 @@ interface MenuItem {
   roles?: string[]; // Allowed roles. If undefined, visible to all
 }
 
-const MENU_ITEMS: MenuItem[] = [
+interface NavigationGroup {
+  id: string;
+  title: string;
+  defaultOpen?: boolean;
+  items: MenuItem[];
+}
+
+const PINNED_ITEMS: MenuItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement"] },
-  { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales"] },
-  { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"] },
-  { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement"] },
-  { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },
-  { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
-  { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"] },
-  { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
-  { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales"] },
-  { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"] },
-  { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"] },
-  { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"] },
-  { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"] },
-  { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement"] },
-  { name: "Technicians", href: "/support?tab=technicians", icon: UserCheck, roles: ["Admin", "Support", "Technician", "Sales"] },
-  { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"] },
-  { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"] },
-  { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"] },
-  { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"] },
   { name: "Settings", href: "/settings", icon: Settings, roles: ["Admin"] },
-  { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"] },
+];
+
+const NAVIGATION_GROUPS: NavigationGroup[] = [
+  {
+    id: "business-pulse",
+    title: "Business Pulse",
+    defaultOpen: true,
+    items: [
+      { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"] },
+      { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"] },
+      { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"] },
+      { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"] },
+      { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement"] },
+    ],
+  },
+  {
+    id: "sales-customers",
+    title: "Sales & Customers",
+    defaultOpen: true,
+    items: [
+      { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
+      { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
+      { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },
+      { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"] },
+      { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales"] },
+      { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"] },
+    ],
+  },
+  {
+    id: "field-operations",
+    title: "Field Operations",
+    defaultOpen: true,
+    items: [
+      { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales"] },
+      { name: "Technicians", href: "/support?tab=technicians", icon: UserCheck, roles: ["Admin", "Support", "Technician", "Sales"] },
+    ],
+  },
+  {
+    id: "warehouse-procurement",
+    title: "Warehouse & Procurement",
+    defaultOpen: true,
+    items: [
+      { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement"] },
+      { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"] },
+      { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement"] },
+    ],
+  },
+  {
+    id: "finance-people",
+    title: "Finance & People",
+    defaultOpen: true,
+    items: [
+      { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"] },
+      { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"] },
+    ],
+  },
+  {
+    id: "system",
+    title: "System",
+    defaultOpen: false, // Collapsed by default
+    items: [
+      { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"] },
+      { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"] },
+    ],
+  },
+];
+
+const ALL_MENU_ITEMS: MenuItem[] = [
+  ...PINNED_ITEMS,
+  ...NAVIGATION_GROUPS.flatMap((g) => g.items),
 ];
 
 export default function Shell({ children }: { children: React.ReactNode }) {
@@ -88,6 +145,47 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Collapsible Accordion Groups state
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    "business-pulse": true,
+    "sales-customers": true,
+    "field-operations": true,
+    "warehouse-procurement": true,
+    "finance-people": true,
+    system: false, // Collapsed by default
+  });
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
+
+  const isItemActive = (href: string) => {
+    if (typeof window === "undefined") {
+      return pathname === href || (href !== "/dashboard" && pathname.startsWith(href.split("?")[0]));
+    }
+    const currentFullUrl = pathname + window.location.search;
+    if (href.includes("?")) {
+      return currentFullUrl === href || currentFullUrl.startsWith(href);
+    }
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname === href || (pathname.startsWith(href) && !window.location.search);
+  };
+
+  // Auto-expand group when navigating to an item inside it
+  useEffect(() => {
+    NAVIGATION_GROUPS.forEach((group) => {
+      const hasActiveItem = group.items.some((item) => isItemActive(item.href));
+      if (hasActiveItem) {
+        setOpenGroups((prev) => ({ ...prev, [group.id]: true }));
+      }
+    });
+  }, [pathname]);
 
   useEffect(() => {
     if (!universalSearch.trim() || universalSearch.length < 2) {
@@ -187,7 +285,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         setCurrentUser(data.user);
       } catch (err) {
-        console.error("Session verification failed", err);
+        console.error("Auth verification failed", err);
+        localStorage.removeItem("token");
         router.push("/");
       } finally {
         setLoading(false);
@@ -195,9 +294,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     };
 
     verifySession();
-  }, [pathname, isPublicPage, router]);
+  }, [pathname, router, isPublicPage]);
 
-  // 3. System indicators stats polling
+  // Real-time live counts
   useEffect(() => {
     if (isPublicPage || isPdfPage) return;
     const fetchStats = async () => {
@@ -224,10 +323,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-    } catch (e) {}
-    localStorage.removeItem("token");
-    setCurrentUser(null);
-    router.push("/");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      localStorage.removeItem("token");
+      setCurrentUser(null);
+      router.push("/");
+    }
   };
 
   if (loading) {
@@ -254,7 +356,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   // Filter menu items by user role
   const userRole = currentUser?.role?.name || "";
-  const filteredMenuItems = MENU_ITEMS.filter((item) => {
+  const filteredPinnedItems = PINNED_ITEMS.filter((item) => {
+    if (!item.roles) return true;
+    return item.roles.includes(userRole) || userRole.toLowerCase() === "admin";
+  });
+
+  const filteredMenuItems = ALL_MENU_ITEMS.filter((item) => {
     if (!item.roles) return true;
     return item.roles.includes(userRole) || userRole.toLowerCase() === "admin";
   });
@@ -276,9 +383,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? "lg:w-20" : "lg:w-64"} w-64`}
       >
-        <div>
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Sidebar Brand header */}
-          <div className="h-20 flex items-center justify-center px-4 border-b border-slate-100 dark:border-slate-800/80 relative">
+          <div className="h-20 flex items-center justify-center px-4 border-b border-slate-100 dark:border-slate-800/80 relative flex-shrink-0">
             {!collapsed ? (
               <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
                 <img src="/logo.png" alt="TCE Logo" className="h-14 w-auto object-contain" />
@@ -299,31 +406,104 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* Links navigation list */}
-          <nav className="p-4 space-y-1">
-            {filteredMenuItems.map((item) => {
-              const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
-              const Icon = item.icon;
+          {/* Links navigation list with PINNED & COLLAPSIBLE GROUPS */}
+          <nav className="flex-1 overflow-y-auto p-3 space-y-3 no-scrollbar">
+            {/* PINNED (ALWAYS VISIBLE OUTSIDE GROUPS) */}
+            <div className="space-y-1">
+              {filteredPinnedItems.map((item) => {
+                const active = isItemActive(item.href);
+                const Icon = item.icon;
 
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    router.push(item.href);
-                  }}
-                  title={collapsed ? item.name : undefined}
-                  className={`w-full flex items-center rounded-xl text-sm font-semibold transition-all ${
-                    active
-                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/20"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
-                  } ${collapsed ? "justify-center p-3" : "gap-3 px-4 py-2.5"}`}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  {!collapsed && <span className="truncate">{item.name}</span>}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      router.push(item.href);
+                    }}
+                    title={collapsed ? item.name : undefined}
+                    className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all ${
+                      active
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-bold"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
+                    } ${collapsed ? "justify-center p-3" : "gap-3 px-3 py-2.5"}`}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    {!collapsed && <span className="truncate">{item.name}</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* DIVIDER */}
+            <div className="border-t border-slate-100 dark:border-slate-800/80 my-1" />
+
+            {/* COLLAPSIBLE NAVIGATION GROUPS */}
+            <div className="space-y-2.5">
+              {NAVIGATION_GROUPS.map((group) => {
+                const visibleItems = group.items.filter(
+                  (item) => !item.roles || item.roles.includes(userRole) || userRole.toLowerCase() === "admin"
+                );
+                if (visibleItems.length === 0) return null;
+
+                const isOpen = !!openGroups[group.id];
+                const hasActiveItem = visibleItems.some((item) => isItemActive(item.href));
+
+                return (
+                  <div key={group.id} className="space-y-1">
+                    {/* Group Header Button */}
+                    {!collapsed ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.id)}
+                        className="w-full flex items-center justify-between px-2.5 py-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className={`w-1.5 h-1.5 rounded-full ${hasActiveItem ? "bg-blue-500" : "bg-transparent"}`} />
+                          <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 truncate">
+                            {group.title}
+                          </span>
+                        </div>
+                        <div className="text-slate-400 group-hover:text-slate-600 transition-transform duration-200 flex-shrink-0">
+                          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="w-full border-t border-slate-100 dark:border-slate-800/60 my-1.5" />
+                    )}
+
+                    {/* Group Items (Collapsible with smooth hierarchy line) */}
+                    {(isOpen || collapsed) && (
+                      <div className={`${!collapsed ? "space-y-0.5 ml-2 pl-2 border-l border-slate-200/80 dark:border-slate-800" : "space-y-1"}`}>
+                        {visibleItems.map((item) => {
+                          const active = isItemActive(item.href);
+                          const Icon = item.icon;
+
+                          return (
+                            <button
+                              key={item.href}
+                              onClick={() => {
+                                setSidebarOpen(false);
+                                router.push(item.href);
+                              }}
+                              title={collapsed ? item.name : undefined}
+                              className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all ${
+                                active
+                                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 font-bold"
+                                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
+                              } ${collapsed ? "justify-center p-2.5" : "gap-2.5 px-2.5 py-1.5"}`}
+                            >
+                              <Icon className="w-4 h-4 flex-shrink-0" />
+                              {!collapsed && <span className="truncate">{item.name}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </nav>
         </div>
 

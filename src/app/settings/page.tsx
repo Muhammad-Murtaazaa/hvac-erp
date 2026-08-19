@@ -4,8 +4,10 @@ import React, { useState, useEffect } from "react";
 import { Plus, Users, Shield, Key, Check, AlertTriangle, UserCheck, Activity, Eye, EyeOff } from "lucide-react";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import { createPortal } from "react-dom";
+import { useToast } from "@/components/shared/ToastProvider";
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("users"); // users, rbac
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -112,7 +114,7 @@ export default function SettingsPage() {
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userName || !userEmail || (!selectedUser && !userPassword) || !userRoleId) {
-      alert("Please fill out all required fields.");
+      toast({ title: "Missing Information", message: "Please fill out all required fields.", type: "warning" });
       return;
     }
 
@@ -137,11 +139,11 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save user account");
 
-      alert(selectedUser ? "User account updated successfully." : "New user account created successfully.");
+      toast({ title: "Account Saved", message: selectedUser ? "User account updated successfully." : "New user account created successfully.", type: "success" });
       setIsUserModalOpen(false);
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Save Failed", message: err.message, type: "error" });
     } finally {
       setSavingUser(false);
     }
@@ -150,7 +152,7 @@ export default function SettingsPage() {
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roleName) {
-      alert("Role name is required.");
+      toast({ title: "Role Name Required", message: "Role name is required.", type: "warning" });
       return;
     }
 
@@ -170,13 +172,13 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create role");
 
-      alert("Role created successfully.");
+      toast({ title: "Role Created", message: `Role "${roleName}" created successfully.`, type: "success" });
       setIsRoleModalOpen(false);
       setRoleName("");
       setRoleDesc("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Role Creation Failed", message: err.message, type: "error" });
     } finally {
       setSavingRole(false);
     }
@@ -207,10 +209,10 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update RBAC mappings");
 
-      alert("Role permission mapping updated successfully.");
+      toast({ title: "Permissions Saved", message: "Role permission mapping updated successfully.", type: "success" });
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
     } finally {
       setUpdatingRbac(false);
     }

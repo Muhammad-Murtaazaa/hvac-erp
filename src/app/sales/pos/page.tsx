@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { Search, ShoppingCart, Plus, Minus, Trash2, DollarSign, User, Phone, CheckCircle2, Printer } from "lucide-react";
 import { SkeletonCard } from "@/components/shared/SkeletonTable";
+import { useToast } from "@/components/shared/ToastProvider";
 
 export default function PosPage() {
+  const { toast } = useToast();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -38,14 +40,14 @@ export default function PosPage() {
 
   const addToCart = (product: any) => {
     if (product.onHandQty <= 0) {
-      alert("Product is out of stock!");
+      toast({ title: "Out of Stock", message: "Product is out of stock!", type: "warning" });
       return;
     }
 
     const existing = cart.find((item) => item.productId === product.id);
     if (existing) {
       if (existing.quantity >= product.onHandQty) {
-        alert("Cannot add more units than physical stock on hand!");
+        toast({ title: "Stock Limit", message: "Cannot add more units than physical stock on hand!", type: "warning" });
         return;
       }
       setCart(
@@ -75,7 +77,7 @@ export default function PosPage() {
           if (item.productId === productId) {
             const nextQty = increment ? item.quantity + 1 : item.quantity - 1;
             if (nextQty > item.maxQty) {
-              alert("Insufficient physical stock!");
+              toast({ title: "Insufficient Stock", message: "Insufficient physical stock available.", type: "warning" });
               return item;
             }
             return { ...item, quantity: nextQty };
@@ -93,7 +95,7 @@ export default function PosPage() {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) {
-      alert("Your cart is empty.");
+      toast({ title: "Empty Cart", message: "Your POS cart is empty.", type: "warning" });
       return;
     }
 
@@ -115,13 +117,14 @@ export default function PosPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "POS checkout failed");
 
+      toast({ title: "Checkout Successful", message: "Counter invoice created and payment recorded.", type: "success" });
       // Show receipt modal
       setReceiptData(data.invoice);
       setCart([]);
       setClientName("Walk-in Customer");
       setClientPhone("");
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Checkout Failed", message: err.message, type: "error" });
     } finally {
       setSubmitting(false);
     }

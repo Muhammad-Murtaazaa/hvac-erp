@@ -62,69 +62,103 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast, undoToast }}>
       {children}
-      {/* Toast Render Container */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none print:hidden">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto p-4 rounded-2xl border shadow-2xl flex flex-col gap-2 transform transition-all duration-300 animate-slideUp backdrop-blur-md ${
-              t.type === "undo"
-                ? "bg-slate-950/95 border-amber-500/80 text-white"
-                : t.type === "success"
-                ? "bg-emerald-950/90 border-emerald-800 text-white"
-                : t.type === "error"
-                ? "bg-rose-950/90 border-rose-800 text-white"
-                : t.type === "warning"
-                ? "bg-amber-950/90 border-amber-800 text-white"
-                : "bg-slate-900/90 border-slate-700 text-white"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              {t.type === "undo" && <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />}
-              {t.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />}
-              {t.type === "error" && <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />}
-              {t.type === "warning" && <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />}
-              {t.type === "info" && <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />}
+      {/* Modern High-End Glassmorphic Toast Notification Container */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none print:hidden">
+        {toasts.map((t) => {
+          const isSuccess = t.type === "success";
+          const isError = t.type === "error";
+          const isWarning = t.type === "warning";
+          const isUndo = t.type === "undo";
+          const isInfo = !isSuccess && !isError && !isWarning && !isUndo;
 
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-xs">{t.title}</h4>
-                {t.message && <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">{t.message}</p>}
+          return (
+            <div
+              key={t.id}
+              className="pointer-events-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col gap-2.5 transform transition-all duration-300 animate-slideUp relative overflow-hidden group"
+            >
+              {/* Top subtle accent bar */}
+              <div
+                className={`absolute top-0 left-0 right-0 h-1 ${
+                  isSuccess
+                    ? "bg-emerald-500"
+                    : isError
+                    ? "bg-rose-500"
+                    : isWarning
+                    ? "bg-amber-500"
+                    : isUndo
+                    ? "bg-indigo-500"
+                    : "bg-blue-500"
+                }`}
+              />
+
+              <div className="flex items-start gap-3 pt-0.5">
+                {/* Icon Badge */}
+                <div
+                  className={`p-2 rounded-xl shrink-0 flex items-center justify-center ${
+                    isSuccess
+                      ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                      : isError
+                      ? "bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
+                      : isWarning
+                      ? "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+                      : isUndo
+                      ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400"
+                      : "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                  }`}
+                >
+                  {isUndo && <RotateCcw className="w-4 h-4" />}
+                  {isSuccess && <CheckCircle2 className="w-4 h-4" />}
+                  {isError && <AlertCircle className="w-4 h-4" />}
+                  {isWarning && <AlertCircle className="w-4 h-4" />}
+                  {isInfo && <Info className="w-4 h-4" />}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white">{t.title}</h4>
+                  {t.message && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                      {t.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Undo action button */}
+                {t.onUndo && (
+                  <button
+                    onClick={() => {
+                      t.onUndo?.();
+                      removeToast(t.id);
+                    }}
+                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 shrink-0"
+                  >
+                    Undo
+                  </button>
+                )}
+
+                {t.action && !t.onUndo && (
+                  <button
+                    onClick={() => {
+                      t.action?.onClick();
+                      removeToast(t.id);
+                    }}
+                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all shrink-0"
+                  >
+                    {t.action.label}
+                  </button>
+                )}
+
+                {/* Close X button */}
+                <button
+                  onClick={() => removeToast(t.id)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-
-              {/* Undo action button */}
-              {t.onUndo && (
-                <button
-                  onClick={() => {
-                    t.onUndo?.();
-                    removeToast(t.id);
-                  }}
-                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
-                >
-                  Undo
-                </button>
-              )}
-
-              {t.action && !t.onUndo && (
-                <button
-                  onClick={() => {
-                    t.action?.onClick();
-                    removeToast(t.id);
-                  }}
-                  className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold transition-all"
-                >
-                  {t.action.label}
-                </button>
-              )}
-
-              <button
-                onClick={() => removeToast(t.id)}
-                className="text-slate-400 hover:text-white p-0.5 rounded transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

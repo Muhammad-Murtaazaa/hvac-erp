@@ -16,10 +16,12 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
+import { useToast } from "@/components/shared/ToastProvider";
 
 export default function DeliveryConfirmationPage() {
   const params = useParams();
   const doId = params.id as string;
+  const { toast } = useToast();
 
   const [deliveryOrder, setDeliveryOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,7 @@ export default function DeliveryConfirmationPage() {
   const handleConfirmDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!receiverName.trim()) {
-      alert("Please enter the name of the person receiving this delivery.");
+      toast({ title: "Receiver Required", message: "Please enter the name of the person receiving this delivery.", type: "warning" });
       return;
     }
 
@@ -82,12 +84,13 @@ export default function DeliveryConfirmationPage() {
         throw new Error(data.error || "Failed to confirm delivery.");
       }
 
+      toast({ title: "Delivery Confirmed", message: "Delivery Order marked as DELIVERED successfully.", type: "success" });
       setConfirmedSuccess(true);
       if (data.deliveryOrder) {
         setDeliveryOrder(data.deliveryOrder);
       }
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      toast({ title: "Confirmation Error", message: err.message, type: "error" });
     } finally {
       setSubmitting(false);
     }

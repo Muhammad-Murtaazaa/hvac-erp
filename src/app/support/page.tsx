@@ -54,7 +54,7 @@ function SupportPageContent() {
     if (!selectedTicket) return;
     const url = `${window.location.origin}/support?ticket=${selectedTicket.complaintNumber}`;
     navigator.clipboard.writeText(url);
-    alert(`Shareable ticket link copied to clipboard: ${url}`);
+    toast({ title: "Link Copied", message: `Shareable ticket link copied to clipboard: ${url}`, type: "info" });
   };
 
   // Toggles
@@ -127,7 +127,7 @@ function SupportPageContent() {
     if (!choice) return;
     const selectedIdx = parseInt(choice, 10) - 1;
     if (isNaN(selectedIdx) || !technicians[selectedIdx]) {
-      alert("Invalid technician selection");
+      toast({ title: "Invalid Selection", message: "Invalid technician selection.", type: "warning" });
       return;
     }
 
@@ -220,8 +220,7 @@ function SupportPageContent() {
           console.error("Error fetching user profile", e);
         }
       }
-      await fetchData(role);
-      setMounted(true);
+      fetchData();
     };
     initPage();
   }, []);
@@ -230,7 +229,7 @@ function SupportPageContent() {
     e.preventDefault();
     if (isSubmitting) return;
     if (!customerName || !customerPhone || !customerAddress || !description) {
-      alert("Please fill out all required customer and job details.");
+      toast({ title: "Missing Information", message: "Please fill out all required customer and job details.", type: "warning" });
       return;
     }
 
@@ -251,7 +250,7 @@ function SupportPageContent() {
       });
 
       if (!res.ok) throw new Error("Failed to register ticket");
-      alert("Service complaint ticket registered successfully.");
+      toast({ title: "Complaint Logged", message: "Service complaint ticket registered successfully.", type: "success" });
       setIsCreateOpen(false);
       setCustomerName("");
       setCustomerPhone("");
@@ -261,7 +260,7 @@ function SupportPageContent() {
       setTechId("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Logging Failed", message: err.message, type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -270,7 +269,7 @@ function SupportPageContent() {
   const handleCreateTechnician = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!techName || !techCnic || !techPhone || !techJoining || !techSalary) {
-      alert("Please fill out all required technician fields.");
+      toast({ title: "Missing Fields", message: "Please fill out all required technician fields.", type: "warning" });
       return;
     }
 
@@ -296,7 +295,7 @@ function SupportPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to onboard technician");
 
-      alert("Technician profile onboarded successfully.");
+      toast({ title: "Technician Onboarded", message: "Technician profile onboarded successfully.", type: "success" });
       setIsTechOpen(false);
       // Clear fields
       setTechName("");
@@ -309,7 +308,7 @@ function SupportPageContent() {
       setTechBank("");
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Onboarding Failed", message: err.message, type: "error" });
     } finally {
       setRegistering(false);
     }
@@ -336,12 +335,12 @@ function SupportPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update complaint");
 
-      alert(generateInvoice ? "Service charge invoice generated successfully." : "Ticket updated successfully.");
+      toast({ title: "Ticket Updated", message: generateInvoice ? "Service charge invoice generated successfully." : "Ticket updated successfully.", type: "success" });
       setEditRemarks("");
       setSelectedTicket(data.complaint); // reload modal state
       fetchData();
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
     } finally {
       setUpdating(false);
     }
@@ -370,7 +369,7 @@ function SupportPageContent() {
         throw new Error(data.error || "Failed to upload file");
       }
 
-      alert("File uploaded successfully.");
+      toast({ title: "File Uploaded", message: "File uploaded and attached to ticket.", type: "success" });
       const cRes = await fetch("/api/support/complaints", { headers: { Authorization: `Bearer ${token}` } });
       if (cRes.ok) {
         const data = await cRes.json();
@@ -382,7 +381,7 @@ function SupportPageContent() {
         }
       }
     } catch (err: any) {
-      alert(err.message);
+      toast({ title: "Upload Failed", message: err.message, type: "error" });
     } finally {
       setUploadingFile(false);
     }
@@ -404,57 +403,63 @@ function SupportPageContent() {
     { label: "Done / Completed", value: "DONE" },
     { label: "Resolved", value: "RESOLVED" },
     { label: "Closed / Archived", value: "CLOSED" },
-    { label: "Cancelled", value: "CANCELLED" },
+{ label: "Cancelled", value: "CANCELLED" },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Header Panel */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+      {/* Dynamic Focused Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black">Customer Service Desk</h2>
-            <p className="text-xs text-slate-500 mt-1">Dispatch senior technicians, track repair lifecycles, and issue service billing</p>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              {activeTab === "technicians" ? "Technical Workforce & Technicians" : "Service Complaints & Repairs"}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {activeTab === "technicians"
+                ? "Manage technical staff, job assignments, performance metrics, and salary records."
+                : "Dispatch technicians, track repair lifecycles, and issue service billing."}
+            </p>
           </div>
 
           {currentUser?.role?.name !== "Technician" && (
-            <>
+            <div className="flex items-center gap-2">
               {activeTab === "technicians" ? (
                 <button
                   onClick={() => setIsTechOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10 self-start"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
-                  Onboard Technician
+                  <span>Onboard Technician</span>
                 </button>
               ) : activeTab === "tickets" ? (
                 <button
                   onClick={() => setIsCreateOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10 self-start"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
-                  Log Service Complaint
+                  <span>Log Service Complaint</span>
                 </button>
               ) : null}
-            </>
+            </div>
           )}
         </div>
 
-        {/* Tab selection */}
-        <div className="flex border-b border-slate-100 dark:border-slate-800/80 gap-1 pt-4">
+        {/* Clean Pill Tab Navigation */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
           <button
             onClick={() => {
               setActiveTab("tickets");
               setSearch("");
               setStatus("");
             }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
+            className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
               activeTab === "tickets"
-                ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                : "border-transparent text-slate-500"
+                ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             }`}
           >
-            Service Tickets ({complaints.length})
+            Complaints & Tickets ({complaints.length})
           </button>
           {currentUser?.role?.name !== "Technician" && (
             <button
@@ -463,13 +468,13 @@ function SupportPageContent() {
                 setSearch("");
                 setStatus("");
               }}
-              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
+              className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === "technicians"
-                  ? "border-blue-500 text-blue-500 dark:text-blue-400"
-                  : "border-transparent text-slate-500"
+                  ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-xs"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              Service Technicians ({technicians.length})
+              Technicians ({technicians.length})
             </button>
           )}
         </div>
@@ -702,7 +707,7 @@ function SupportPageContent() {
                               onClick={() => {
                                 const url = `${window.location.origin}/support?ticket=${t.complaintNumber}`;
                                 navigator.clipboard.writeText(url);
-                                alert(`Shareable ticket link copied to clipboard: ${url}`);
+                                toast({ title: "Link Copied", message: `Shareable ticket link copied to clipboard: ${url}`, type: "info" });
                               }}
                               title="Copy Shareable Link"
                               className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-blue-500 transition-all"

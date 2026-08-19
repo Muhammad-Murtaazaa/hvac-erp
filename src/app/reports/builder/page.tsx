@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { convertToCSV } from "@/lib/export";
+import { useToast } from "@/components/shared/ToastProvider";
 
 const ENTITY_CONFIGS: Record<string, { label: string; fields: string[] }> = {
   INVOICE: {
@@ -23,38 +24,28 @@ const ENTITY_CONFIGS: Record<string, { label: string; fields: string[] }> = {
   },
   PRODUCT: {
     label: "Inventory / Stock",
-    fields: ["sku", "name", "category", "unit", "onHandQty", "reorderLevel", "averageCost", "salesPrice"],
+    fields: ["sku", "name", "category", "unit", "quantity", "averageCost", "salesPrice", "reorderLevel"],
   },
   COMPLAINT: {
-    label: "Customer Complaints / Support",
-    fields: ["complaintNumber", "customerName", "customerPhone", "customerAddress", "description", "remarks", "status", "amount", "amountStatus"],
-  },
-  EMPLOYEE: {
-    label: "Employees / Technicians",
-    fields: ["name", "cnic", "phone", "department", "position", "status", "baseSalary", "joiningDate"],
+    label: "Customer Complaints",
+    fields: ["complaintNumber", "customerName", "customerPhone", "customerAddress", "status", "amount", "amountStatus"],
   },
   PURCHASE_ORDER: {
-    label: "Purchase Orders (Procurement)",
-    fields: ["poNumber", "status", "discount", "totalAmount", "createdAt"],
+    label: "Purchase Orders",
+    fields: ["poNumber", "vendorId", "status", "totalAmount", "poDate", "deliveryDate"],
   },
 };
 
 export default function ReportBuilderPage() {
+  const { toast } = useToast();
   const [selectedEntity, setSelectedEntity] = useState<string>("INVOICE");
   const [selectedFields, setSelectedFields] = useState<string[]>(ENTITY_CONFIGS.INVOICE.fields);
   const [filters, setFilters] = useState<Array<{ field: string; operator: string; value: string }>>([]);
-  const [results, setResults] = useState<any[] | null>(null);
+  const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [templateTitle, setTemplateTitle] = useState("");
-  const [savedTemplates, setSavedTemplates] = useState<any[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  useEffect(() => {
-    // Reset selected fields on entity change
-    setSelectedFields(ENTITY_CONFIGS[selectedEntity]?.fields || []);
-    setFilters([]);
-    setResults(null);
-  }, [selectedEntity]);
 
   useEffect(() => {
     fetchTemplates();
@@ -65,11 +56,18 @@ export default function ReportBuilderPage() {
       const res = await fetch("/api/reports/templates");
       const json = await res.json();
       if (json.success) {
-        setSavedTemplates(json.data);
+        setTemplates(json.data);
       }
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleEntityChange = (entity: string) => {
+    setSelectedEntity(entity);
+    setSelectedFields(ENTITY_CONFIGS[entity]?.fields || []);
+    setFilters([]);
+    setResults([]);
   };
 
   const addFilter = () => {
@@ -117,7 +115,7 @@ export default function ReportBuilderPage() {
 
   const saveTemplate = async () => {
     if (!templateTitle.trim()) {
-      alert("Please enter a template title");
+      toast({ title: "Title Required", message: "Please enter a template title.", type: "warning" });
       return;
     }
 
@@ -137,13 +135,14 @@ export default function ReportBuilderPage() {
 
       const json = await res.json();
       if (json.success) {
+        toast({ title: "Template Saved", message: `Report template "${templateTitle}" saved.`, type: "success" });
         setTemplateTitle("");
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         fetchTemplates();
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      toast({ title: "Save Failed", message: e.message, type: "error" });
     }
   };
 
@@ -378,10 +377,10 @@ export default function ReportBuilderPage() {
             </div>
 
             <div className="space-y-2 mt-4">
-              {savedTemplates.length === 0 ? (
+              {templates.length === 0 ? (
                 <p className="text-xs text-slate-400 py-6 text-center">No saved presets yet.</p>
               ) : (
-                savedTemplates.map((t) => (
+                templates.map((t: any) => (
                   <div
                     key={t.id}
                     onClick={() => loadTemplate(t)}
