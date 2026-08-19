@@ -278,24 +278,15 @@ export default function InvoicePdfPage() {
           </div>
         </div>
 
-        {/* Delivery Terms Note Section at bottom */}
-        <div className="mt-8 text-xs mb-8">
-          <h4 className="font-bold text-slate-900 dark:text-white mb-1">Note.</h4>
-          {invoice.notes && (
-            <div className="mb-2 text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
+        {/* Custom Notes / Terms Section at bottom */}
+        {invoice.notes ? (
+          <div className="mt-8 text-xs mb-8">
+            <h4 className="font-bold text-slate-900 dark:text-white mb-1.5 uppercase tracking-wider">Note.</h4>
+            <div className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-line leading-relaxed">
               {invoice.notes}
             </div>
-          )}
-          <ol className="list-decimal pl-4 space-y-1 text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-            <li>
-              Invoice Date:{" "}
-              {invoice.date 
-                ? new Date(invoice.date).toLocaleDateString("en-GB").replace(/\//g, "-")
-                : "-"}
-            </li>
-            <li>Delivery at site.</li>
-          </ol>
-        </div>
+          </div>
+        ) : null}
 
         {/* Universal TCE Footer */}
         <div className="mt-16 border-t border-black pt-4 text-center font-sans">
