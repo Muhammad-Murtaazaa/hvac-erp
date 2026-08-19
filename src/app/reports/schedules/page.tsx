@@ -37,7 +37,7 @@ export default function ScheduledReportsPage() {
   const [showModal, setShowModal] = useState(false);
 
   // Quick Setup Form States
-  const [quickEmail, setQuickEmail] = useState("mmurtaza2300@gmail.com");
+  const [quickEmail, setQuickEmail] = useState("");
   const [enableWeekly, setEnableWeekly] = useState(true);
   const [enableMonthly, setEnableMonthly] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -207,115 +207,121 @@ export default function ScheduledReportsPage() {
       )}
 
       {/* QUICK 1-STEP AUTOMATION SETUP CARD */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+        <div>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-900 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Automated Email Intelligence</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            Configure Automated Executive PDF Reports
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
+            Enter your email to automatically receive a <strong>complete business performance PDF dossier</strong> (covering Sales, Receivables, Inventory Valuation, Service Tickets, and HRM Payroll).
+          </p>
+        </div>
 
-        <div className="relative z-10 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>1-Click Auto-Dispatch Setup</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
-                Configure Automated Executive PDF Reports
-              </h2>
-              <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
-                Enter your email address below. TCE ERP will automatically compile a <strong>complete business PDF dossier</strong> (covering Sales, Accounts Receivable, Inventory Valuation, Service Tickets, and HRM Payroll) and email it to you on schedule.
-              </p>
+        <form onSubmit={handleSaveQuickSetup} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
+              Recipient Email Address
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                <Mail className="w-4 h-4" />
+              </span>
+              <input
+                type="email"
+                required
+                placeholder="Enter recipient email address (e.g. director@technicool.com.pk)"
+                value={quickEmail}
+                onChange={(e) => setQuickEmail(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 transition-all"
+              />
             </div>
           </div>
 
-          <form onSubmit={handleSaveQuickSetup} className="space-y-5 bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 backdrop-blur-md">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
-                Recipient Email Address
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </span>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. mmurtaza2300@gmail.com, ceo@technicool.com.pk"
-                  value={quickEmail}
-                  onChange={(e) => setQuickEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 transition-all"
-                />
+          {/* Checkboxes for Weekly & Monthly Schedules */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label
+              className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                enableWeekly
+                  ? "bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/60"
+                  : "bg-slate-50/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={enableWeekly}
+                onChange={(e) => setEnableWeekly(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+              />
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white text-xs block">Weekly Business Digest</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 block">Every Monday at 08:00 AM (Complete PDF)</span>
               </div>
-            </div>
+            </label>
 
-            {/* Checkboxes for Weekly & Monthly Schedules */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={enableWeekly}
-                  onChange={(e) => setEnableWeekly(e.target.checked)}
-                  className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-600 bg-slate-800 focus:ring-blue-500"
-                />
-                <div>
-                  <span className="font-bold text-white text-xs block">Weekly Business Digest</span>
-                  <span className="text-[11px] text-slate-400 mt-0.5 block">Every Monday at 08:00 AM (Complete PDF)</span>
-                </div>
-              </label>
+            <label
+              className={`flex items-start gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                enableMonthly
+                  ? "bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/60"
+                  : "bg-slate-50/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={enableMonthly}
+                onChange={(e) => setEnableMonthly(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+              />
+              <div>
+                <span className="font-bold text-slate-900 dark:text-white text-xs block">Monthly Performance Dossier</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 block">1st of every month at 08:00 AM (Complete PDF)</span>
+              </div>
+            </label>
+          </div>
 
-              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 cursor-pointer transition-colors">
-                <input
-                  type="checkbox"
-                  checked={enableMonthly}
-                  onChange={(e) => setEnableMonthly(e.target.checked)}
-                  className="w-4 h-4 mt-0.5 rounded text-blue-600 border-slate-600 bg-slate-800 focus:ring-blue-500"
-                />
-                <div>
-                  <span className="font-bold text-white text-xs block">Monthly Performance Dossier</span>
-                  <span className="text-[11px] text-slate-400 mt-0.5 block">1st of every month at 08:00 AM (Complete PDF)</span>
-                </div>
-              </label>
-            </div>
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleSendInstantTestPDF}
+              disabled={testLoading}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+            >
+              {testLoading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <span>Generating & Sending PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Send Instant Test PDF Report</span>
+                </>
+              )}
+            </button>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-white/10">
-              <button
-                type="button"
-                onClick={handleSendInstantTestPDF}
-                disabled={testLoading}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-white transition-all cursor-pointer disabled:opacity-50"
-              >
-                {testLoading ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Generating & Sending PDF...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5 text-cyan-300" />
-                    <span>Send Instant Test Business PDF to My Email</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="submit"
-                disabled={saveLoading}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/25 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {saveLoading ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Save & Activate Auto-Dispatch</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
+            <button
+              type="submit"
+              disabled={saveLoading}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {saveLoading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <span>Save & Activate Schedule</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* ACTIVE SCHEDULES LIST */}

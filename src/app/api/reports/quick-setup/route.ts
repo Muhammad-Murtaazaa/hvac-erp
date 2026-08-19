@@ -15,7 +15,7 @@ export async function GET() {
     const weekly = schedules.find((s) => s.frequency === "WEEKLY");
     const monthly = schedules.find((s) => s.frequency === "MONTHLY");
 
-    const recipientEmail = weekly?.recipientEmails || monthly?.recipientEmails || "mmurtaza2300@gmail.com";
+    const recipientEmail = weekly?.recipientEmails || monthly?.recipientEmails || "";
 
     return NextResponse.json({
       success: true,

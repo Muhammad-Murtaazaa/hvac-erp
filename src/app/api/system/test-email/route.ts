@@ -4,7 +4,11 @@ import { sendMail } from "@/lib/mail";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const targetEmail = body.to || "mmurtaza2300@gmail.com";
+    const targetEmail = (body.to || "").trim();
+
+    if (!targetEmail) {
+      return NextResponse.json({ success: false, error: "Recipient email address is required" }, { status: 400 });
+    }
 
     const result = await sendMail({
       to: targetEmail,
