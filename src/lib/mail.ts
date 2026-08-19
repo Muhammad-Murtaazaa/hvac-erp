@@ -242,7 +242,44 @@ export async function sendMail(
 }
 
 /**
- * Send password reset email
+ * Send 6-digit OTP password reset email
+ */
+export async function sendOtpResetEmail(email: string, otp: string) {
+  const subject = "TCE ERP - Your Password Reset Verification Code";
+  const htmlContent = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #1e3a8a; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">TECHNICOOL ENGINEERING</h2>
+        <p style="color: #64748b; font-size: 13px; margin-top: 4px;">TCE ERP Enterprise Security</p>
+      </div>
+
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
+        <p style="color: #475569; font-size: 14px; margin: 0 0 16px 0;">Use the verification code below to reset your TCE ERP password:</p>
+        
+        <div style="display: inline-block; background-color: #ffffff; border: 2px solid #3b82f6; border-radius: 12px; padding: 14px 28px; margin: 8px 0;">
+          <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a;">${otp}</span>
+        </div>
+
+        <p style="color: #64748b; font-size: 12px; margin: 16px 0 0 0;">This code is valid for <strong>15 minutes</strong>. Do not share this code with anyone.</p>
+      </div>
+
+      <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; margin: 0 0 20px 0;">If you did not request a password reset, please ignore this email or contact your system administrator.</p>
+
+      <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
+      <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Technicool Engineering • Powered by <a href="https://omnysync.com" style="color: #2563eb; text-decoration: none;">OMNYSYNC</a></p>
+    </div>
+  `;
+
+  return await sendMail({
+    to: email,
+    subject,
+    html: htmlContent,
+    senderName: "TCE Security",
+  });
+}
+
+/**
+ * Send password reset link email (Legacy / Direct Link fallback)
  */
 export async function sendPasswordResetEmail(email: string, token: string) {
   const resetLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/reset-password?token=${token}`;

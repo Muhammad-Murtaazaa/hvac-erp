@@ -1,96 +1,126 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import * as bcrypt from "bcryptjs";
-import crypto from "crypto";
-import { sendPasswordResetEmail } from "@/lib/mail";
+import { sendOtpResetEmail } from "@/lib/mail";
 
-// 1. Request Reset Link (POST)
+// 1. Request Password Reset OTP (POST)
 export async function POST(req: Request) {
   try {
     const { email } = await req.json();
 
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    const normalizedEmail = (email || "").trim().toLowerCase();
+    if (!normalizedEmail) {
+      return NextResponse.json({ error: "Email address is required" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    // To prevent user enumeration, return a generic success message even if email doesn't exist
-    if (user && user.isActive) {
-      // Generate secure token
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 3600000); // 1 hour expiration
-
-      // Save token in DB (upsert/create)
-      await prisma.passwordResetToken.create({
-        data: {
-          email,
-          token,
-          expiresAt,
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: "insensitive",
         },
-      });
-
-      // Dispatch mail asynchronously
-      await sendPasswordResetEmail(email, token);
-    }
-
-    return NextResponse.json({
-      message: "If this email is registered in our system, a password reset link has been dispatched.",
-    });
-  } catch (error) {
-    console.error("[Password Reset POST] Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
-// 2. Perform Reset (PUT)
-export async function PUT(req: Request) {
-  try {
-    const { token, newPassword } = await req.json();
-
-    if (!token || !newPassword) {
-      return NextResponse.json({ error: "Token and new password are required" }, { status: 400 });
-    }
-
-    const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
-    });
-
-    if (!resetToken) {
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });
-    }
-
-    // Check expiration
-    if (new Date() > resetToken.expiresAt) {
-      await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
-      return NextResponse.json({ error: "Token has expired" }, { status: 400 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: resetToken.email },
+      },
     });
 
     if (!user || !user.isActive) {
-      return NextResponse.json({ error: "User no longer active or exists" }, { status: 400 });
+      // Return clear feedback for better UX
+      return NextResponse.json({ error: "No active account found with this email address." }, { status: 404 });
     }
 
-    // Update password
-    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    // Generate secure 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes validity
+
+    // Delete any old pending reset tokens for this user email
+    await prisma.passwordResetToken.deleteMany({
+      where: { email: user.email },
+    });
+
+    // Save fresh 6-digit OTP token in DB
+    await prisma.passwordResetToken.create({
+      data: {
+        email: user.email,
+        token: otp,
+        expiresAt,
+      },
+    });
+
+    // Dispatch verification OTP via Brevo
+    await sendOtpResetEmail(user.email, otp);
+
+    return NextResponse.json({
+      success: true,
+      message: `A 6-digit verification code has been dispatched to ${user.email}. Please check your inbox.`,
+    });
+  } catch (error: any) {
+    console.error("[Password Reset POST] Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to dispatch reset code" }, { status: 500 });
+  }
+}
+
+// 2. Perform Password Reset with OTP or Token (PUT)
+export async function PUT(req: Request) {
+  try {
+    const { email, token, otp, newPassword } = await req.json();
+
+    const verificationCode = (otp || token || "").trim();
+    const password = (newPassword || "").trim();
+    const normalizedEmail = (email || "").trim().toLowerCase();
+
+    if (!verificationCode || !password) {
+      return NextResponse.json({ error: "Verification code and new password are required" }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: "New password must be at least 6 characters long" }, { status: 400 });
+    }
+
+    // Find token matching the code
+    const resetRecord = await prisma.passwordResetToken.findFirst({
+      where: {
+        token: verificationCode,
+        ...(normalizedEmail ? { email: { equals: normalizedEmail, mode: "insensitive" } } : {}),
+      },
+    });
+
+    if (!resetRecord) {
+      return NextResponse.json({ error: "Invalid verification code. Please check and try again." }, { status: 400 });
+    }
+
+    // Check expiration
+    if (new Date() > resetRecord.expiresAt) {
+      await prisma.passwordResetToken.delete({ where: { id: resetRecord.id } });
+      return NextResponse.json({ error: "Verification code has expired. Please request a new code." }, { status: 400 });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: resetRecord.email },
+    });
+
+    if (!user || !user.isActive) {
+      return NextResponse.json({ error: "User account is no longer active" }, { status: 400 });
+    }
+
+    // Hash the new password with bcrypt
+    const passwordHash = bcrypt.hashSync(password, 10);
+
+    // Update password in database
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash },
     });
 
-    // Delete token
+    // Invalidate the reset token
     await prisma.passwordResetToken.delete({
-      where: { id: resetToken.id },
+      where: { id: resetRecord.id },
     });
 
-    return NextResponse.json({ message: "Password reset successfully" });
-  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      message: "Password has been successfully reset! You can now sign in with your new password.",
+    });
+  } catch (error: any) {
     console.error("[Password Reset PUT] Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to reset password" }, { status: 500 });
   }
 }
