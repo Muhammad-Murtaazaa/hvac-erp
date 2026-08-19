@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X } from "lucide-react";
+import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X, Receipt, ExternalLink } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
@@ -726,7 +726,22 @@ function SupportPageContent() {
                             {t.status}
                           </span>
                         </td>
-                        <td className="p-3 font-bold font-mono text-blue-500">{t.invoice ? t.invoice.invoiceNumber : "-"}</td>
+                        <td className="p-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {t.invoice ? (
+                            <a
+                              href={`/api/pdf?type=invoice&id=${t.invoice.id}&inline=true`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold font-mono border border-blue-200 dark:border-blue-800/60 transition-all shadow-xs"
+                              title="Click to view official invoice PDF"
+                            >
+                              <Receipt className="w-3 h-3" />
+                              <span>{t.invoice.invoiceNumber}</span>
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-xs">-</span>
+                          )}
+                        </td>
                         <td className="p-3 text-right font-mono font-bold">{amt.toLocaleString()}</td>
                         <td className="p-3 text-right font-mono text-emerald-500 font-bold">{rec.toLocaleString()}</td>
                         <td className="p-3 text-right font-mono text-rose-500 font-bold">{pend.toLocaleString()}</td>
@@ -1228,6 +1243,70 @@ function SupportPageContent() {
                   )}
                 </div>
               </div>
+
+              {/* Linked Sales Invoice Card if Generated */}
+              {selectedTicket.invoice && (
+                <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200/80 dark:border-blue-800/80 p-5 rounded-2xl space-y-3 shadow-xs">
+                  <div className="flex justify-between items-center border-b border-blue-200/60 dark:border-blue-800/60 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                        <Receipt className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block">
+                          Generated Service Invoice
+                        </span>
+                        <span className="font-bold text-sm text-slate-900 dark:text-white font-mono">
+                          {selectedTicket.invoice.invoiceNumber}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono ${
+                      selectedTicket.invoice.status === "PAID"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60"
+                        : selectedTicket.invoice.status === "PARTIALLY_PAID"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60"
+                        : "bg-amber-100 text-amber-700 dark:bg-amber-950/60"
+                    }`}>
+                      {selectedTicket.invoice.status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Total Billed</span>
+                      <span className="font-bold font-mono text-slate-900 dark:text-white text-sm">
+                        PKR {Number(selectedTicket.invoice.totalAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Amount Paid</span>
+                      <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400 text-sm">
+                        PKR {Number(selectedTicket.invoice.amountPaid || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-blue-200/60 dark:border-blue-800/60">
+                    <a
+                      href={`/api/pdf?type=invoice&id=${selectedTicket.invoice.id}&inline=true`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 text-center flex items-center justify-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Invoice PDF</span>
+                    </a>
+                    <a
+                      href={`/sales?tab=invoices&search=${selectedTicket.invoice.invoiceNumber}`}
+                      className="py-2 px-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open in Sales</span>
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* Attachments & Files Viewer Section */}
               <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-xl space-y-4">

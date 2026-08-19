@@ -44,6 +44,11 @@ export async function GET(req: Request) {
     include: {
       technician: true,
       attachments: true,
+      invoice: {
+        include: {
+          payments: true,
+        },
+      },
       timeline: {
         include: {
           changedBy: true,

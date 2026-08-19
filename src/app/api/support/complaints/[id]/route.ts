@@ -144,6 +144,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         include: {
           technician: true,
           attachments: true,
+          invoice: {
+            include: {
+              payments: true,
+            },
+          },
           timeline: {
             include: {
               changedBy: true,
