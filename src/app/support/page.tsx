@@ -45,7 +45,8 @@ function SupportPageContent() {
   const handleViewPDF = (ticketId?: string) => {
     const id = ticketId || selectedTicket?.id;
     if (!id) return;
-    window.open(`/api/pdf?type=complaint&id=${id}&inline=true`, "_blank");
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+    window.open(`/api/pdf?type=complaint&id=${id}&inline=true&token=${token}`, "_blank");
   };
 
   const handleShareLink = () => {

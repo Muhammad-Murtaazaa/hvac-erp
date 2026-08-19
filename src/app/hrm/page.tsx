@@ -327,7 +327,10 @@ export default function HrmPage() {
                         </td>
                         <td className="p-3 text-center">
                           <button
-                            onClick={() => window.open(`/api/pdf?type=employee-form&id=${emp.id}&inline=true`, "_blank")}
+                            onClick={() => {
+                              const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+                              window.open(`/api/pdf?type=employee-form&id=${emp.id}&inline=true&token=${token}`, "_blank");
+                            }}
                             title="View Employment Form PDF"
                             className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-blue-500 transition-all inline-flex items-center gap-1 font-bold"
                           >

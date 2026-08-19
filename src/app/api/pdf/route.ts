@@ -7,9 +7,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   try {
     const { searchParams } = new URL(req.url);
@@ -18,6 +15,11 @@ export async function GET(req: Request) {
 
     if (!type || !id) {
       return NextResponse.json({ error: "Type and ID are required" }, { status: 400 });
+    }
+
+    // Sensitive HR documents require active authenticated session
+    if (["payslip", "employee-form"].includes(type) && !session) {
+      return NextResponse.json({ error: "Unauthorized: Please log in to view payroll/employee files" }, { status: 401 });
     }
 
     let pdfBuffer: Buffer;
@@ -86,6 +88,6 @@ export async function GET(req: Request) {
     });
   } catch (error: any) {
     console.error("[PDF API] Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

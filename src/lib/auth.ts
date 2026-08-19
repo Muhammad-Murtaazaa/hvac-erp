@@ -34,11 +34,22 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.split(" ")[1];
     } else {
+      // Check query parameter (useful for window.open / PDF / download links)
+      try {
+        const url = new URL(req.url);
+        const queryToken = url.searchParams.get("token");
+        if (queryToken) {
+          token = queryToken;
+        }
+      } catch (_) {}
+
       // Fallback: check cookie (useful for server-side page renders/middleware)
-      const cookieHeader = req.headers.get("cookie") || "";
-      const match = cookieHeader.match(/token=([^;]+)/);
-      if (match) {
-        token = match[1];
+      if (!token) {
+        const cookieHeader = req.headers.get("cookie") || "";
+        const match = cookieHeader.match(/token=([^;]+)/);
+        if (match) {
+          token = match[1];
+        }
       }
     }
 
