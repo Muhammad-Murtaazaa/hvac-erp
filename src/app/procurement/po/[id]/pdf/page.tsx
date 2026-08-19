@@ -88,6 +88,19 @@ export default function POPdfPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @page {
+          size: auto;
+          margin: 0mm !important;
+        }
+        @media print {
+          html, body {
+            margin: 0 !important;
+            padding: 8mm 10mm !important;
+            background: #fff !important;
+          }
+        }
+      `}} />
       {/* Top control bar */}
       <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden">
         <button

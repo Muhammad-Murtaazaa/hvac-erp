@@ -103,18 +103,23 @@
   @apply bg-white/70 dark:bg-slate-900/75 backdrop-blur-md border border-white/20 dark:border-slate-800/60 shadow-lg;
 }
 
-/* Print layouts styling */
+/* Print layouts styling - Suppress browser default header/footer (date, title, URL) */
 @page {
-  margin: 10mm;
   size: auto;
+  margin: 0mm !important;
 }
 
 @media print {
+  @page {
+    size: auto;
+    margin: 0mm !important;
+  }
+
   html, body {
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 8mm 10mm !important;
     font-size: 10pt !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -124,8 +129,8 @@
   .no-print,
   nav,
   aside,
-  header,
-  footer,
+  header:not(.print-header),
+  footer:not(.print-footer),
   button:not(.print-include),
   .search-filter,
   .actions-row,
