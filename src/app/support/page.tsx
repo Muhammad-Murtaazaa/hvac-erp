@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye } from "lucide-react";
+import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
@@ -42,8 +42,6 @@ function SupportPageContent() {
     }
   }, [searchParams, complaints]);
 
-
-
   const handleViewPDF = (ticketId?: string) => {
     const id = ticketId || selectedTicket?.id;
     if (!id) return;
@@ -81,6 +79,7 @@ function SupportPageContent() {
   const [amount, setAmount] = useState("");
   const [techId, setTechId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
 
   // Update State inside Detail
   const [editStatus, setEditStatus] = useState("");
@@ -251,7 +250,31 @@ function SupportPageContent() {
       });
 
       if (!res.ok) throw new Error("Failed to register ticket");
-      toast({ title: "Complaint Logged", message: "Service complaint ticket registered successfully.", type: "success" });
+      const data = await res.json();
+      const created = data.complaint;
+
+      // If user selected pictures/files during registration, upload all of them immediately
+      if (newTicketFiles.length > 0 && created?.id) {
+        try {
+          const formData = new FormData();
+          newTicketFiles.forEach((file) => formData.append("files", file));
+          await fetch(`/api/support/complaints/${created.id}/attachments`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          });
+        } catch (uploadErr) {
+          console.error("Error uploading attachments on creation:", uploadErr);
+        }
+      }
+
+      toast({
+        title: "Complaint Logged",
+        message: newTicketFiles.length > 0
+          ? `Service complaint registered with ${newTicketFiles.length} attached photo(s)/document(s).`
+          : "Service complaint ticket registered successfully.",
+        type: "success",
+      });
       setIsCreateOpen(false);
       setCustomerName("");
       setCustomerPhone("");
@@ -259,6 +282,7 @@ function SupportPageContent() {
       setDescription("");
       setAmount("");
       setTechId("");
+      setNewTicketFiles([]);
       fetchData();
     } catch (err: any) {
       toast({ title: "Logging Failed", message: err.message, type: "error" });
@@ -349,11 +373,11 @@ function SupportPageContent() {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    const file = e.target.files[0];
+    const files = Array.from(e.target.files);
     setUploadingFile(true);
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((file) => formData.append("files", file));
 
     const token = localStorage.getItem("token");
     try {
@@ -367,10 +391,10 @@ function SupportPageContent() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to upload file");
+        throw new Error(data.error || "Failed to upload files");
       }
 
-      toast({ title: "File Uploaded", message: "File uploaded and attached to ticket.", type: "success" });
+      toast({ title: "Files Attached", message: `${files.length} document/picture file(s) uploaded and saved.`, type: "success" });
       const cRes = await fetch("/api/support/complaints", { headers: { Authorization: `Bearer ${token}` } });
       if (cRes.ok) {
         const data = await cRes.json();
@@ -385,6 +409,31 @@ function SupportPageContent() {
       toast({ title: "Upload Failed", message: err.message, type: "error" });
     } finally {
       setUploadingFile(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/support/complaints/${selectedTicket.id}/attachments?attachmentId=${attachmentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete attachment");
+      toast({ title: "File Removed", message: "Attachment deleted successfully.", type: "info" });
+      const cRes = await fetch("/api/support/complaints", { headers: { Authorization: `Bearer ${token}` } });
+      if (cRes.ok) {
+        const data = await cRes.json();
+        const list = data.complaints || [];
+        setComplaints(list);
+        const updated = list.find((c: any) => c.id === selectedTicket.id);
+        if (updated) {
+          setSelectedTicket(updated);
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Delete Failed", message: err.message, type: "error" });
     }
   };
 
@@ -907,6 +956,80 @@ function SupportPageContent() {
                 </div>
               </div>
 
+              {/* Section 3: Pictures & Document Attachments (Multiple) */}
+              <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-4 rounded-xl space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Job Pictures & Document Scans (Multiple Files)
+                  </span>
+                  {newTicketFiles.length > 0 && (
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 font-mono">
+                      {newTicketFiles.length} file(s) selected
+                    </span>
+                  )}
+                </div>
+
+                <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-4 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-all bg-white dark:bg-slate-900">
+                  <input
+                    type="file"
+                    id="new-complaint-files"
+                    multiple
+                    accept="image/*,application/pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        const added = Array.from(e.target.files);
+                        setNewTicketFiles((prev) => [...prev, ...added]);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="new-complaint-files"
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-xl border border-blue-200 dark:border-blue-800/60 transition-all"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Select Pictures & Files (Multiple)</span>
+                  </label>
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    Upload machine photos, invoice scans, warranty cards, or site notes (PNG, JPG, PDF, DOCX)
+                  </p>
+                </div>
+
+                {newTicketFiles.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {newTicketFiles.map((file, idx) => {
+                      const isImg = file.type.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.name);
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between gap-2 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
+                        >
+                          <div className="flex items-center gap-2 truncate min-w-0">
+                            {isImg ? (
+                              <ImageIcon className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            )}
+                            <span className="truncate font-semibold text-slate-700 dark:text-slate-200 text-[11px]" title={file.name}>
+                              {file.name}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNewTicketFiles((prev) => prev.filter((_, i) => i !== idx))}
+                            className="p-1 text-slate-400 hover:text-rose-500 rounded transition-all flex-shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Action Buttons */}
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <button
@@ -1108,19 +1231,25 @@ function SupportPageContent() {
 
               {/* Attachments & Files Viewer Section */}
               <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-xl space-y-4">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block border-b border-slate-100 dark:border-slate-800 pb-1.5">
-                  Complaint Scan Copies & Documents
-                </span>
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Complaint Photos & Document Attachments
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500 font-mono">
+                    {selectedTicket.attachments?.length || 0} Attached
+                  </span>
+                </div>
 
                 {/* Upload Prompt if Status is not RESOLVED or CANCELLED */}
                 {selectedTicket.status !== "RESOLVED" && selectedTicket.status !== "CANCELLED" && (
                   <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 p-4 rounded-xl text-center space-y-2 hover:border-blue-500 transition-all bg-white dark:bg-slate-900">
                     <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
-                      Please upload reference documents, scan copies, or images for the complaint
+                      Upload multiple job photos, scans, warranty slips, or technical reports
                     </p>
                     <input
                       type="file"
                       id="complaint-file-upload"
+                      multiple
                       className="hidden"
                       accept="image/*,application/pdf,.doc,.docx"
                       onChange={handleFileUpload}
@@ -1128,60 +1257,79 @@ function SupportPageContent() {
                     />
                     <label
                       htmlFor="complaint-file-upload"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white text-xs font-bold rounded-lg cursor-pointer transition-all shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-md shadow-blue-500/20"
                     >
-                      {uploadingFile ? "Uploading..." : "Choose File / Capture Scan"}
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingFile ? "Uploading Files..." : "Upload Photos & Documents (Multiple)"}</span>
                     </label>
                   </div>
                 )}
 
-                  {/* View Attachments */}
-                  {selectedTicket.attachments && selectedTicket.attachments.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                      {selectedTicket.attachments.map((file: any) => {
-                        const isImage = file.fileType?.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.fileName);
-                        return (
-                          <div
-                            key={file.id}
-                            className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm hover:shadow-md transition-all"
-                          >
-                            {isImage ? (
-                              <a href={file.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
-                                <img
-                                  src={file.fileUrl}
-                                  alt={file.fileName}
-                                  className="w-full h-full object-cover hover:scale-110 transition-all duration-300"
-                                />
-                              </a>
-                            ) : (
-                              <div className="flex-shrink-0 w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center border border-slate-200 dark:border-slate-800 text-blue-500">
-                                <FileText className="w-6 h-6" />
-                              </div>
-                            )}
-                            <div className="flex-grow min-w-0">
-                              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" title={file.fileName}>
-                                {file.fileName}
-                              </p>
-                              <p className="text-[9px] text-slate-400 font-semibold uppercase mt-0.5">
-                                {file.fileType || "Document"}
-                              </p>
-                            </div>
+                {/* View Attachments Gallery */}
+                {selectedTicket.attachments && selectedTicket.attachments.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {selectedTicket.attachments.map((file: any) => {
+                      const isImage = file.fileType?.startsWith("image/") || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.fileName);
+                      return (
+                        <div
+                          key={file.id}
+                          className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-xs hover:shadow-md transition-all group"
+                        >
+                          {isImage ? (
                             <a
                               href={file.fileUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-500 hover:underline font-bold"
+                              className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 block bg-slate-100 dark:bg-slate-800"
                             >
-                              View
+                              <img
+                                src={file.fileUrl}
+                                alt={file.fileName}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300"
+                              />
                             </a>
+                          ) : (
+                            <div className="flex-shrink-0 w-12 h-12 bg-blue-50 dark:bg-blue-950/40 rounded-lg flex items-center justify-center border border-blue-100 dark:border-blue-900/60 text-blue-500">
+                              <FileText className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="flex-grow min-w-0">
+                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" title={file.fileName}>
+                              {file.fileName}
+                            </p>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase mt-0.5 block">
+                              {file.fileType || (isImage ? "Image" : "Document")}
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-center text-slate-400 py-2">No documents uploaded yet.</p>
-                  )}
-                </div>
+                          <div className="flex items-center gap-1">
+                            <a
+                              href={file.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-all"
+                              title="View full file"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                            {currentUser?.role?.name !== "Technician" && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAttachment(file.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all"
+                                title="Delete file"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-center text-slate-400 py-3">No photos or documents attached yet.</p>
+                )}
+              </div>
 
               {/* Vertical Audit log Timeline history */}
               {selectedTicket.timeline && selectedTicket.timeline.length > 0 && (

@@ -31,40 +31,95 @@ export async function POST(
     }
 
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    
+    // Support multiple files from formData (files or file keys)
+    let files: File[] = [];
+    const filesList = formData.getAll("files") as File[];
+    const fileList = formData.getAll("file") as File[];
+
+    if (filesList && filesList.length > 0) {
+      files = filesList.filter((f) => f && typeof f === "object" && f.name);
+    } else if (fileList && fileList.length > 0) {
+      files = fileList.filter((f) => f && typeof f === "object" && f.name);
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileUrl = await uploadFile(buffer, file.name, file.type);
+    if (files.length === 0) {
+      return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
+    }
 
     const currentStatus = ticket.status || "OPEN";
+    const createdAttachments = [];
 
-    const attachment = await prisma.attachment.create({
-      data: {
-        fileName: file.name,
-        fileUrl,
-        fileType: file.type,
-        complaintId: params.id,
-      },
-    });
+    for (const file of files) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileUrl = await uploadFile(buffer, file.name, file.type);
 
-    // Add to timeline
+      const attachment = await prisma.attachment.create({
+        data: {
+          fileName: file.name,
+          fileUrl,
+          fileType: file.type || "application/octet-stream",
+          complaintId: params.id,
+        },
+      });
+
+      createdAttachments.push(attachment);
+    }
+
+    // Add consolidated timeline log
+    const fileNamesList = files.map((f) => f.name).join(", ");
     await prisma.complaintTimeline.create({
       data: {
         complaintId: params.id,
         changedById: session.id,
         fromStatus: currentStatus,
         toStatus: currentStatus,
-        remarks: `Document scan copy uploaded: ${file.name}`,
+        remarks: `${files.length} document/picture file(s) attached: ${fileNamesList}`,
       },
     });
 
-    // Fetch the updated complaint to return or return attachment
-    return NextResponse.json({ attachment });
+    return NextResponse.json({
+      success: true,
+      message: `${files.length} file(s) uploaded successfully`,
+      attachments: createdAttachments,
+    });
   } catch (error: any) {
     console.error("[Attachment POST] Error:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getCurrentUser(req);
+  if (!session || !hasPermission(session, "MANAGE_SUPPORT")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const attachmentId = searchParams.get("attachmentId");
+    if (!attachmentId) {
+      return NextResponse.json({ error: "Missing attachmentId parameter" }, { status: 400 });
+    }
+
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, complaintId: params.id },
+    });
+
+    if (!attachment) {
+      return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
+    }
+
+    await prisma.attachment.delete({
+      where: { id: attachmentId },
+    });
+
+    return NextResponse.json({ success: true, message: "Attachment deleted successfully" });
+  } catch (error: any) {
+    console.error("[Attachment DELETE] Error:", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
