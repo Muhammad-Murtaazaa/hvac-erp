@@ -654,7 +654,7 @@ function ProcurementPageContent() {
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           po.status === "COMPLETED"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                            : po.status === "APPROVED"
+                            : (po.status === "APPROVED" || po.status === "SUBMITTED")
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                             : po.status === "PARTIALLY_RECEIVED"
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
@@ -662,7 +662,7 @@ function ProcurementPageContent() {
                             ? "bg-slate-100 text-slate-600 dark:bg-slate-800/40 dark:text-slate-400"
                             : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
                         }`}>
-                          {po.status}
+                          {po.status === "SUBMITTED" ? "APPROVED" : (po.status || "APPROVED")}
                         </span>
                       </td>
                       <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
@@ -1658,12 +1658,15 @@ function ProcurementPageContent() {
               </div>
               <div>
                 <p className="text-slate-400 font-semibold">PO Status:</p>
-                <p className="font-bold capitalize">{selectedPO.status || "DRAFT"}</p>
+                <p className="font-bold capitalize">{selectedPO.status === "SUBMITTED" ? "APPROVED" : (selectedPO.status || "APPROVED")}</p>
               </div>
               <div>
                 <p className="text-slate-400 font-semibold">User ID / Created By:</p>
                 <p className="font-bold text-slate-700 dark:text-slate-200">
-                  {(selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO)).createdByName || "Saleem"}
+                  {(() => {
+                    const creator = (selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO)).createdByName;
+                    return creator === "System Admin" || !creator ? "Saleem" : creator;
+                  })()}
                 </p>
               </div>
             </div>

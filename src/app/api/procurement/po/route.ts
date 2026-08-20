@@ -59,6 +59,7 @@ export async function GET(req: Request) {
     const meta = parsePoMetadata(po.notes, po);
     return {
       ...po,
+      status: po.status === "SUBMITTED" ? "APPROVED" : (po.status || "APPROVED"),
       meta,
     };
   });

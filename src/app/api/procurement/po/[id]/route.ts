@@ -46,6 +46,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return NextResponse.json({
     purchaseOrder: {
       ...po,
+      status: po.status === "SUBMITTED" ? "APPROVED" : (po.status || "APPROVED"),
       meta,
     },
   });

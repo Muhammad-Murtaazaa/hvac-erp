@@ -229,12 +229,17 @@ export default function POPdfPage() {
                 </div>
                 <div>
                   <span className="font-bold text-black">User ID:</span>{" "}
-                  <span className="text-black font-normal">{currentUser?.name || meta.createdByName || "Saleem"}</span>
+                  <span className="text-black font-normal">
+                    {(() => {
+                      const name = currentUser?.name || meta.createdByName || "";
+                      return name === "System Admin" || !name ? "Saleem" : name;
+                    })()}
+                  </span>
                 </div>
                 <div>
                   <span className="font-bold text-black">Status:</span>{" "}
                   <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase text-black border border-black">
-                    {po.status || "DRAFT"}
+                    {po.status === "SUBMITTED" ? "APPROVED" : (po.status || "APPROVED")}
                   </span>
                 </div>
               </div>

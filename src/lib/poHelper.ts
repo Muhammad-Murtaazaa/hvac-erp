@@ -39,7 +39,9 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
         if (parsed.discountAmount !== undefined) discountAmount = Number(parsed.discountAmount);
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
-        if (parsed.createdByName) createdByName = String(parsed.createdByName);
+        if (parsed.createdByName) {
+          createdByName = String(parsed.createdByName) === "System Admin" ? "Saleem" : String(parsed.createdByName);
+        }
         if (parsed.deliveryAddress) deliveryAddress = String(parsed.deliveryAddress);
       } catch {
         userNotes = notes;
@@ -108,7 +110,7 @@ export function formatPoNotesPayload(data: {
     discountAmount: Number(data.discountAmount || 0),
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
-    createdByName: data.createdByName || "Saleem",
+    createdByName: (data.createdByName === "System Admin" || !data.createdByName) ? "Saleem" : data.createdByName,
     deliveryAddress: data.deliveryAddress || "",
   });
 }
