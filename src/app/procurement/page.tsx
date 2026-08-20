@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, ListFilter, Clipboard, AlertCircle, FileText, CheckCircle2, RotateCcw, Printer, BookOpen, ArrowRight, Building2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, ListFilter, Clipboard, AlertCircle, FileText, CheckCircle2, RotateCcw, Printer, BookOpen, ArrowRight, Building2, Phone, Mail, MapPin, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/shared/ToastProvider";
+import { parsePoMetadata } from "@/lib/poHelper";
 
 function ProcurementPageContent() {
   const searchParams = useSearchParams();
@@ -29,7 +30,7 @@ function ProcurementPageContent() {
   useEffect(() => {
     let tab = searchParams.get("tab");
     if (tab === "pending_stock") tab = "shortages";
-    if (tab) {
+    if (tab && tab !== activeTab) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -101,8 +102,27 @@ function ProcurementPageContent() {
   const [newPoLines, setNewPoLines] = useState<any[]>([
     { productId: "", quantityOrdered: "", unitCost: "" },
   ]);
-  const [newPoDiscount, setNewPoDiscount] = useState("0");
+  const [newPoDiscountType, setNewPoDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [newPoDiscountValue, setNewPoDiscountValue] = useState("0");
+  const [newPoIsGst, setNewPoIsGst] = useState(false);
+  const [newPoTaxRate, setNewPoTaxRate] = useState(18);
   const [poNotes, setPoNotes] = useState("");
+
+  // Edit PO state
+  const [isEditPoOpen, setIsEditPoOpen] = useState(false);
+  const [editingPoId, setEditingPoId] = useState("");
+  const [editPoNumber, setEditPoNumber] = useState("");
+  const [editPoVendor, setEditPoVendor] = useState("");
+  const [editPoDate, setEditPoDate] = useState("");
+  const [editPoDeliveryDate, setEditPoDeliveryDate] = useState("");
+  const [editPoLines, setEditPoLines] = useState<any[]>([]);
+  const [editPoDiscountType, setEditPoDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [editPoDiscountValue, setEditPoDiscountValue] = useState("0");
+  const [editPoIsGst, setEditPoIsGst] = useState(false);
+  const [editPoTaxRate, setEditPoTaxRate] = useState(18);
+  const [editPoNotes, setEditPoNotes] = useState("");
+  const [editPoStatus, setEditPoStatus] = useState("DRAFT");
+  const [updatingPo, setUpdatingPo] = useState(false);
 
   // GRN states
   const [grnLines, setGrnLines] = useState<any[]>([]);
@@ -168,8 +188,12 @@ function ProcurementPageContent() {
           poNumber: newPoNumber || undefined,
           vendorId: newPoVendor,
           lineItems: newPoLines,
-          status: "SUBMITTED", // Submit directly to trigger incomingQty increment
-          discount: Number(newPoDiscount),
+          status: "SUBMITTED",
+          discountType: newPoDiscountType,
+          discountPercent: newPoDiscountType === "PERCENTAGE" ? Number(newPoDiscountValue) : 0,
+          discount: newPoDiscountType === "FIXED" ? Number(newPoDiscountValue) : 0,
+          isGst: newPoIsGst,
+          taxRate: Number(newPoTaxRate),
           poDate: newPoDate,
           deliveryDate: newPoDeliveryDate,
           notes: poNotes,
@@ -187,11 +211,85 @@ function ProcurementPageContent() {
       setNewPoDate(new Date().toISOString().split("T")[0]);
       setNewPoDeliveryDate(new Date().toISOString().split("T")[0]);
       setNewPoLines([{ productId: "", quantityOrdered: "", unitCost: "" }]);
-      setNewPoDiscount("0");
+      setNewPoDiscountType("FIXED");
+      setNewPoDiscountValue("0");
+      setNewPoIsGst(false);
+      setNewPoTaxRate(18);
       setPoNotes("");
       fetchData();
     } catch (err: any) {
       toast({ title: "PO Creation Failed", message: err.message, type: "error" });
+    }
+  };
+
+  const openEditPo = (po: any) => {
+    const meta = po.meta || parsePoMetadata(po.notes, po);
+    setEditingPoId(po.id);
+    setEditPoNumber(po.poNumber || "");
+    setEditPoVendor(po.vendorId || "");
+    setEditPoDate(po.createdAt ? new Date(po.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+    const dDate = po.lineItems?.[0]?.expectedDeliveryDate
+      ? new Date(po.lineItems[0].expectedDeliveryDate).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0];
+    setEditPoDeliveryDate(dDate);
+    setEditPoLines(
+      (po.lineItems || []).map((l: any) => ({
+        productId: l.productId,
+        quantityOrdered: String(l.quantityOrdered),
+        unitCost: String(l.unitCost),
+      }))
+    );
+    setEditPoIsGst(meta.isGst);
+    setEditPoTaxRate(meta.taxRate || 18);
+    setEditPoDiscountType(meta.discountType);
+    setEditPoDiscountValue(
+      meta.discountType === "PERCENTAGE" ? String(meta.discountPercent) : String(meta.discountAmount)
+    );
+    setEditPoNotes(meta.userNotes || "");
+    setEditPoStatus(po.status || "DRAFT");
+    setIsEditPoOpen(true);
+  };
+
+  const handleUpdatePo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPoVendor || editPoLines.some((l) => !l.productId || !l.quantityOrdered || !l.unitCost)) {
+      toast({ title: "Missing Information", message: "Please fill out the vendor and all PO line details.", type: "warning" });
+      return;
+    }
+
+    setUpdatingPo(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/procurement/po/${editingPoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          vendorId: editPoVendor,
+          lineItems: editPoLines,
+          status: editPoStatus,
+          discountType: editPoDiscountType,
+          discountPercent: editPoDiscountType === "PERCENTAGE" ? Number(editPoDiscountValue) : 0,
+          discount: editPoDiscountType === "FIXED" ? Number(editPoDiscountValue) : 0,
+          isGst: editPoIsGst,
+          taxRate: Number(editPoTaxRate),
+          poDate: editPoDate,
+          deliveryDate: editPoDeliveryDate,
+          notes: editPoNotes,
+        }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to update PO");
+      }
+
+      toast({ title: "PO Updated", message: `Purchase Order ${editPoNumber} updated successfully.`, type: "success" });
+      setIsEditPoOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "PO Update Failed", message: err.message, type: "error" });
+    } finally {
+      setUpdatingPo(false);
     }
   };
 
@@ -562,13 +660,22 @@ function ProcurementPageContent() {
                       <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
                       <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
                       <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => setSelectedPO(po)}
                             className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-bold flex items-center gap-1"
                           >
-                            <FileText className="w-3.5 h-3.5" /> View Details
+                            <FileText className="w-3.5 h-3.5" /> View
                           </button>
+                          {(po.status === "DRAFT" || po.status === "SUBMITTED") && (
+                            <button
+                              onClick={() => openEditPo(po)}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold flex items-center gap-1 transition-all"
+                              title="Edit Purchase Order"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-amber-500" /> Edit
+                            </button>
+                          )}
                           <a
                             href={`/procurement/po/${po.id}/pdf`}
                             target="_blank"
@@ -1028,34 +1135,115 @@ function ProcurementPageContent() {
                   ))}
                 </div>
 
-                {/* Calculations Block */}
+                {/* GST & Discount Settings and Live Calculation Breakdown */}
                 {(() => {
                   const subtotal = newPoLines.reduce((acc, l) => acc + (Number(l.quantityOrdered) || 0) * (Number(l.unitCost) || 0), 0);
-                  const disc = Number(newPoDiscount) || 0;
-                  const total = Math.max(0, subtotal - disc);
+                  let discountAmount = 0;
+                  const discVal = Number(newPoDiscountValue) || 0;
+                  if (newPoDiscountType === "PERCENTAGE") {
+                    discountAmount = Math.round(subtotal * (discVal / 100));
+                  } else {
+                    discountAmount = Math.round(discVal);
+                  }
+                  const taxable = Math.max(0, subtotal - discountAmount);
+                  const tax = newPoIsGst ? Math.round(taxable * (Number(newPoTaxRate || 18) / 100)) : 0;
+                  const grandTotal = Math.max(0, taxable + tax);
 
                   return (
-                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl space-y-3 text-xs border border-slate-100 dark:border-slate-800/60 mt-3">
-                      <div className="flex justify-between items-center text-slate-500 font-semibold">
-                        <span>Subtotal:</span>
-                        <span>{subtotal.toFixed(2)} PKR</span>
+                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80 mt-3">
+                      {/* Configuration Row: Discount & GST Controls */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                        {/* Discount Mode */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Discount Type & Value
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold"
+                              value={newPoDiscountType}
+                              onChange={(e) => setNewPoDiscountType(e.target.value as any)}
+                            >
+                              <option value="FIXED">Fixed (PKR)</option>
+                              <option value="PERCENTAGE">Percentage (%)</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              max={newPoDiscountType === "PERCENTAGE" ? "100" : undefined}
+                              placeholder={newPoDiscountType === "PERCENTAGE" ? "e.g. 10%" : "e.g. 5000"}
+                              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                              value={newPoDiscountValue}
+                              onChange={(e) => setNewPoDiscountValue(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* GST / Sales Tax Mode */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Sales Tax (GST) Option
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold flex-1"
+                              value={newPoIsGst ? "GST" : "NON_GST"}
+                              onChange={(e) => setNewPoIsGst(e.target.value === "GST")}
+                            >
+                              <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                              <option value="GST">GST (With Sales Tax)</option>
+                            </select>
+                            {newPoIsGst && (
+                              <div className="flex items-center gap-1 w-28">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  placeholder="Tax %"
+                                  className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs"
+                                  value={newPoTaxRate}
+                                  onChange={(e) => setNewPoTaxRate(Number(e.target.value) || 0)}
+                                />
+                                <span className="font-bold text-xs text-slate-400">%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="flex justify-between items-center gap-4">
-                        <span className="text-slate-500 font-semibold">Discount Amount (PKR):</span>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="Discount"
-                          className="w-32 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-right font-semibold font-mono"
-                          value={newPoDiscount}
-                          onChange={(e) => setNewPoDiscount(e.target.value)}
-                        />
-                      </div>
+                      {/* Summary Breakdown */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Subtotal:</span>
+                          <span className="font-mono">{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                        </div>
 
-                      <div className="flex justify-between items-center text-slate-800 dark:text-slate-100 font-bold border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
-                        <span>Total Amount:</span>
-                        <span className="text-blue-500 font-mono">{total.toFixed(2)} PKR</span>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between items-center text-rose-500 font-semibold">
+                            <span>
+                              Discount {newPoDiscountType === "PERCENTAGE" ? `(${newPoDiscountValue}%)` : ""}:
+                            </span>
+                            <span className="font-mono">-{discountAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                          </div>
+                        )}
+
+                        {newPoIsGst && (
+                          <>
+                            <div className="flex justify-between items-center text-slate-500 font-semibold">
+                              <span>Taxable Amount:</span>
+                              <span className="font-mono">{taxable.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                            </div>
+                            <div className="flex justify-between items-center text-blue-600 dark:text-blue-400 font-semibold">
+                              <span>Sales Tax (GST @ {newPoTaxRate}%):</span>
+                              <span className="font-mono">+{tax.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex justify-between items-center text-slate-900 dark:text-slate-100 font-black border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
+                          <span>Total Amount:</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-mono text-base">{grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1095,12 +1283,327 @@ function ProcurementPageContent() {
         document.body
       )}
 
+      {/* ==================== EDIT PURCHASE ORDER MODAL ==================== */}
+      {mounted && isEditPoOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest block">Modify Existing Order</span>
+                <h3 className="text-lg font-black text-slate-900 dark:text-slate-100">Edit Purchase Order {editPoNumber}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditPoOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-6">Update vendor, order items, unit rates, discount settings, GST tax, and delivery dates.</p>
+
+            <form onSubmit={handleUpdatePo} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">Select Vendor</label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editPoVendor}
+                    onChange={(e) => setEditPoVendor(e.target.value)}
+                  >
+                    <option value="">Choose a vendor...</option>
+                    {vendors.map((v) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">PO Date</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editPoDate}
+                    onChange={(e) => setEditPoDate(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">Expected Delivery</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editPoDeliveryDate}
+                    onChange={(e) => setEditPoDeliveryDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Order Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">Order Status</label>
+                  <select
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editPoStatus}
+                    onChange={(e) => setEditPoStatus(e.target.value)}
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="SUBMITTED">Submitted (Active for GRN Receiving)</option>
+                    <option value="PARTIALLY_RECEIVED">Partially Received</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Line Items */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Order Line Items</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditPoLines([...editPoLines, { productId: "", quantityOrdered: "", unitCost: "" }])}
+                    className="text-xs text-blue-500 hover:underline font-bold flex items-center gap-1"
+                  >
+                    + Add Product Line
+                  </button>
+                </div>
+
+                <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
+                    <div className="col-span-5">Product / Item</div>
+                    <div className="col-span-3">Quantity</div>
+                    <div className="col-span-3">Unit Cost (PKR)</div>
+                    <div className="col-span-1 text-center">Action</div>
+                  </div>
+
+                  {editPoLines.map((line, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                      <div className="col-span-12 sm:col-span-5">
+                        <select
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-white dark:bg-slate-900"
+                          value={line.productId}
+                          onChange={(e) => {
+                            const updated = [...editPoLines];
+                            updated[index].productId = e.target.value;
+                            const prod = products.find((p) => p.id === e.target.value);
+                            if (prod) updated[index].unitCost = String(prod.averageCost);
+                            setEditPoLines(updated);
+                          }}
+                        >
+                          <option value="">Choose item...</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-12 sm:col-span-3">
+                        <input
+                          type="number"
+                          required
+                          placeholder="Quantity"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-white dark:bg-slate-900"
+                          value={line.quantityOrdered}
+                          onChange={(e) => {
+                            const updated = [...editPoLines];
+                            updated[index].quantityOrdered = e.target.value;
+                            setEditPoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="col-span-12 sm:col-span-3">
+                        <input
+                          type="number"
+                          required
+                          placeholder="Unit Cost (PKR)"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-white dark:bg-slate-900"
+                          value={line.unitCost}
+                          onChange={(e) => {
+                            const updated = [...editPoLines];
+                            updated[index].unitCost = e.target.value;
+                            setEditPoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="col-span-12 sm:col-span-1 text-center">
+                        {editPoLines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPoLines(editPoLines.filter((_, i) => i !== index))}
+                            className="text-xs text-rose-500 font-bold hover:underline"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Edit Calculations Block */}
+                {(() => {
+                  const subtotal = editPoLines.reduce((acc, l) => acc + (Number(l.quantityOrdered) || 0) * (Number(l.unitCost) || 0), 0);
+                  let discountAmount = 0;
+                  const discVal = Number(editPoDiscountValue) || 0;
+                  if (editPoDiscountType === "PERCENTAGE") {
+                    discountAmount = Math.round(subtotal * (discVal / 100));
+                  } else {
+                    discountAmount = Math.round(discVal);
+                  }
+                  const taxable = Math.max(0, subtotal - discountAmount);
+                  const tax = editPoIsGst ? Math.round(taxable * (Number(editPoTaxRate || 18) / 100)) : 0;
+                  const grandTotal = Math.max(0, taxable + tax);
+
+                  return (
+                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80 mt-3">
+                      {/* Configuration Row: Discount & GST Controls */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                        {/* Discount Mode */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Discount Type & Value
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold"
+                              value={editPoDiscountType}
+                              onChange={(e) => setEditPoDiscountType(e.target.value as any)}
+                            >
+                              <option value="FIXED">Fixed (PKR)</option>
+                              <option value="PERCENTAGE">Percentage (%)</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              max={editPoDiscountType === "PERCENTAGE" ? "100" : undefined}
+                              placeholder={editPoDiscountType === "PERCENTAGE" ? "e.g. 10%" : "e.g. 5000"}
+                              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                              value={editPoDiscountValue}
+                              onChange={(e) => setEditPoDiscountValue(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* GST / Sales Tax Mode */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                            Sales Tax (GST) Option
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold flex-1"
+                              value={editPoIsGst ? "GST" : "NON_GST"}
+                              onChange={(e) => setEditPoIsGst(e.target.value === "GST")}
+                            >
+                              <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                              <option value="GST">GST (With Sales Tax)</option>
+                            </select>
+                            {editPoIsGst && (
+                              <div className="flex items-center gap-1 w-28">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  placeholder="Tax %"
+                                  className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs"
+                                  value={editPoTaxRate}
+                                  onChange={(e) => setEditPoTaxRate(Number(e.target.value) || 0)}
+                                />
+                                <span className="font-bold text-xs text-slate-400">%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary Breakdown */}
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Subtotal:</span>
+                          <span className="font-mono">{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                        </div>
+
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between items-center text-rose-500 font-semibold">
+                            <span>
+                              Discount {editPoDiscountType === "PERCENTAGE" ? `(${editPoDiscountValue}%)` : ""}:
+                            </span>
+                            <span className="font-mono">-{discountAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                          </div>
+                        )}
+
+                        {editPoIsGst && (
+                          <>
+                            <div className="flex justify-between items-center text-slate-500 font-semibold">
+                              <span>Taxable Amount:</span>
+                              <span className="font-mono">{taxable.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                            </div>
+                            <div className="flex justify-between items-center text-blue-600 dark:text-blue-400 font-semibold">
+                              <span>Sales Tax (GST @ {editPoTaxRate}%):</span>
+                              <span className="font-mono">+{tax.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex justify-between items-center text-slate-900 dark:text-slate-100 font-black border-t border-slate-200 dark:border-slate-800 pt-2 text-sm">
+                          <span>Total Amount:</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-mono text-base">{grandTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* PO Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Purchase Order Notes / Instructions</label>
+                <textarea
+                  rows={2}
+                  placeholder="Enter purchase terms, delivery instructions, quality expectations etc..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  value={editPoNotes}
+                  onChange={(e) => setEditPoNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditPoOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingPo}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {updatingPo ? "Saving Changes..." : "Save & Update PO"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ==================== PO DETAILS MODAL ==================== */}
       {mounted && selectedPO && !isGrnOpen && createPortal(
         <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-3xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Purchase Order {selectedPO.poNumber || "-"}</h3>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Purchase Order {selectedPO.poNumber || "-"}</h3>
+                <span className="text-[10px] text-slate-400">Created: {selectedPO.createdAt ? new Date(selectedPO.createdAt).toLocaleString() : "-"}</span>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedPO(null)}
@@ -1135,52 +1638,81 @@ function ProcurementPageContent() {
                     <th className="p-2">Name</th>
                     <th className="p-2 text-right">Ordered</th>
                     <th className="p-2 text-right">Received</th>
-                    <th className="p-2 text-right">Unit Cost</th>
+                    <th className="p-2 text-right">Unit Cost (PKR)</th>
+                    <th className="p-2 text-right">Line Total (PKR)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {(selectedPO.lineItems || []).map((line: any, idx: number) => (
-                    <tr key={line.id || idx}>
-                      <td className="p-2 font-bold">{line.product?.sku || "-"}</td>
-                      <td className="p-2">{line.product?.name || "-"}</td>
-                      <td className="p-2 text-right font-semibold">{Number(line.quantityOrdered || 0)}</td>
-                      <td className="p-2 text-right text-emerald-500 font-bold">{Number(line.quantityReceived || 0)}</td>
-                      <td className="p-2 text-right">{Number(line.unitCost || 0).toFixed(2)}</td>
-                    </tr>
-                  ))}
+                  {(selectedPO.lineItems || []).map((line: any, idx: number) => {
+                    const lTotal = (Number(line.quantityOrdered || 0) * Number(line.unitCost || 0));
+                    return (
+                      <tr key={line.id || idx}>
+                        <td className="p-2 font-bold">{line.product?.sku || "-"}</td>
+                        <td className="p-2">{line.product?.name || "-"}</td>
+                        <td className="p-2 text-right font-semibold">{Number(line.quantityOrdered || 0)}</td>
+                        <td className="p-2 text-right text-emerald-500 font-bold">{Number(line.quantityReceived || 0)}</td>
+                        <td className="p-2 text-right font-mono">{Number(line.unitCost || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-2 text-right font-mono font-bold">{lTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    );
+                  })}
                   {(!selectedPO.lineItems || selectedPO.lineItems.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="p-4 text-center text-slate-400">No line items in this purchase order.</td>
+                      <td colSpan={6} className="p-4 text-center text-slate-400">No line items in this purchase order.</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            <div className="border border-slate-100 dark:border-slate-800/85 p-3.5 bg-slate-50 dark:bg-slate-950/40 rounded-xl text-xs space-y-1.5 mb-6">
-              <div className="flex justify-between text-slate-500 font-medium">
-                <span>Subtotal:</span>
-                <span className="font-mono">
-                  {(selectedPO.lineItems || []).reduce((acc: number, line: any) => acc + Number(line.quantityOrdered || 0) * Number(line.unitCost || 0), 0).toFixed(2)} PKR
-                </span>
-              </div>
-              <div className="flex justify-between text-rose-500 font-medium">
-                <span>Discount:</span>
-                <span className="font-mono">-{Number(selectedPO.discount || 0).toFixed(2)} PKR</span>
-              </div>
-              <div className="flex justify-between text-slate-800 dark:text-slate-100 font-bold text-sm border-t border-slate-200 dark:border-slate-850 pt-2">
-                <span>Total Amount:</span>
-                <span className="font-mono text-blue-500">{Number(selectedPO.totalAmount || 0).toFixed(2)} PKR</span>
-              </div>
-            </div>
+            {/* Calculations Breakdown */}
+            {(() => {
+              const meta = selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO);
+              const subtotal = meta.subtotalAmount || (selectedPO.lineItems || []).reduce((acc: number, line: any) => acc + Number(line.quantityOrdered || 0) * Number(line.unitCost || 0), 0);
+              const discount = meta.discountAmount ?? Number(selectedPO.discount || 0);
+              const isGst = meta.isGst;
+              const taxRate = meta.taxRate || 18;
+              const salesTax = meta.taxAmount;
+              const totalAmount = meta.totalAmount || Number(selectedPO.totalAmount || 0);
+
+              return (
+                <div className="border border-slate-100 dark:border-slate-800/85 p-4 bg-slate-50 dark:bg-slate-950/40 rounded-xl text-xs space-y-2 mb-6">
+                  <div className="flex justify-between text-slate-500 font-medium">
+                    <span>Subtotal:</span>
+                    <span className="font-mono">{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-rose-500 font-medium">
+                      <span>
+                        Discount {meta.discountType === "PERCENTAGE" && meta.discountPercent > 0 ? `(${meta.discountPercent}%)` : ""}:
+                      </span>
+                      <span className="font-mono">-{discount.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                    </div>
+                  )}
+                  {isGst && (
+                    <div className="flex justify-between text-blue-600 dark:text-blue-400 font-medium">
+                      <span>Sales Tax (GST @ {taxRate}%):</span>
+                      <span className="font-mono">+{salesTax.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-800 dark:text-slate-100 font-bold text-sm border-t border-slate-200 dark:border-slate-850 pt-2">
+                    <span>Total Amount:</span>
+                    <span className="font-mono text-blue-500 text-base">{totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} PKR</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Notes if present */}
-            {selectedPO.notes && (
-              <div className="mb-6 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-xs">
-                <span className="font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes:</span>
-                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{selectedPO.notes}</p>
-              </div>
-            )}
+            {(() => {
+              const meta = selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO);
+              return meta.userNotes ? (
+                <div className="mb-6 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-xs">
+                  <span className="font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes / Instructions:</span>
+                  <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{meta.userNotes}</p>
+                </div>
+              ) : null;
+            })()}
 
             {/* GRN Logs list if any */}
             {selectedPO.grns && selectedPO.grns.length > 0 && (
@@ -1198,23 +1730,39 @@ function ProcurementPageContent() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              {selectedPO.id && (
-                <a
-                  href={`/procurement/po/${selectedPO.id}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+            <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800">
+              {(selectedPO.status === "DRAFT" || selectedPO.status === "SUBMITTED") ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const poToEdit = selectedPO;
+                    setSelectedPO(null);
+                    openEditPo(poToEdit);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5"
                 >
-                  <Printer className="w-3.5 h-3.5" /> View & Print PDF
-                </a>
-              )}
-              <button
-                onClick={() => setSelectedPO(null)}
-                className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
-              >
-                Close
-              </button>
+                  <Edit2 className="w-3.5 h-3.5" /> Edit this PO
+                </button>
+              ) : <div />}
+
+              <div className="flex items-center gap-2">
+                {selectedPO.id && (
+                  <a
+                    href={`/procurement/po/${selectedPO.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> View & Print PDF
+                  </a>
+                )}
+                <button
+                  onClick={() => setSelectedPO(null)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>,

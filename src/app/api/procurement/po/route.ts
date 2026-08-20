@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { parsePoMetadata, formatPoNotesPayload } from "@/lib/poHelper";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -21,12 +22,12 @@ export async function GET(req: Request) {
 
   if (search) {
     whereClause.OR = [
-      { poNumber: { contains: search } },
-      { vendor: { name: { contains: search } } },
+      { poNumber: { contains: search, mode: "insensitive" } },
+      { vendor: { name: { contains: search, mode: "insensitive" } } },
     ];
   }
 
-  const purchaseOrders = await prisma.purchaseOrder.findMany({
+  const rawPOs = await prisma.purchaseOrder.findMany({
     where: whereClause,
     include: {
       vendor: true,
@@ -54,6 +55,14 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "desc" },
   });
 
+  const purchaseOrders = rawPOs.map((po) => {
+    const meta = parsePoMetadata(po.notes, po);
+    return {
+      ...po,
+      meta,
+    };
+  });
+
   return NextResponse.json({ purchaseOrders });
 }
 
@@ -64,7 +73,20 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { poNumber: customPoNumber, vendorId, lineItems, status, discount, poDate, deliveryDate, notes } = await req.json();
+    const {
+      poNumber: customPoNumber,
+      vendorId,
+      lineItems,
+      status,
+      discount,
+      discountType = "FIXED",
+      discountPercent = 0,
+      isGst = false,
+      taxRate = 18,
+      poDate,
+      deliveryDate,
+      notes,
+    } = await req.json();
 
     if (!vendorId || !lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Vendor and line items are required" }, { status: 400 });
@@ -77,22 +99,45 @@ export async function POST(req: Request) {
     }
     const poStatus = status || "DRAFT";
 
-    const purchaseOrder = await prisma.$transaction(async (tx) => {
-      let subtotal = 0;
+    const purchaseOrder = await prisma.$transaction(async (tx: any) => {
+      let subtotalAmount = 0;
       lineItems.forEach((item: any) => {
-        subtotal += parseInt(item.quantityOrdered) * Number(item.unitCost);
+        subtotalAmount += Math.round(parseInt(item.quantityOrdered) * Number(item.unitCost));
       });
-      const discountVal = Number(discount) || 0;
-      const totalAmount = Math.max(0, subtotal - discountVal);
+
+      let finalDiscountAmount = 0;
+      const dPercent = Number(discountPercent) || 0;
+      if (discountType === "PERCENTAGE") {
+        finalDiscountAmount = Math.round(subtotalAmount * (dPercent / 100));
+      } else {
+        finalDiscountAmount = Math.round(Number(discount) || 0);
+      }
+
+      const taxableAmount = Math.max(0, subtotalAmount - finalDiscountAmount);
+      const tRate = Number(taxRate) || 18;
+      const finalTaxAmount = isGst ? Math.round(taxableAmount * (tRate / 100)) : 0;
+      const finalTotalAmount = Math.max(0, taxableAmount + finalTaxAmount);
+
+      const notesPayload = formatPoNotesPayload({
+        userNotes: notes || "",
+        isGst: Boolean(isGst),
+        taxRate: tRate,
+        taxAmount: finalTaxAmount,
+        discountType: discountType === "PERCENTAGE" ? "PERCENTAGE" : "FIXED",
+        discountPercent: dPercent,
+        discountAmount: finalDiscountAmount,
+        subtotalAmount,
+        totalAmount: finalTotalAmount,
+      });
 
       const po = await tx.purchaseOrder.create({
         data: {
           poNumber,
           vendorId,
           status: poStatus,
-          discount: discountVal,
-          totalAmount,
-          notes: notes || null,
+          discount: finalDiscountAmount,
+          totalAmount: finalTotalAmount,
+          notes: notesPayload,
           createdAt: poDate ? new Date(poDate) : undefined,
           lineItems: {
             create: lineItems.map((item: any) => ({
@@ -105,10 +150,11 @@ export async function POST(req: Request) {
         },
         include: {
           lineItems: true,
+          vendor: true,
         },
       });
 
-      // Update the product's averageCost to the newly entered price in this PO (for future auto-population)
+      // Update product's averageCost to entered unitCost
       for (const item of lineItems) {
         await tx.product.update({
           where: { id: item.productId },
@@ -152,6 +198,6 @@ export async function POST(req: Request) {
     if (error.code === "P2002") {
       return NextResponse.json({ error: "PO Number is already in use" }, { status: 400 });
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

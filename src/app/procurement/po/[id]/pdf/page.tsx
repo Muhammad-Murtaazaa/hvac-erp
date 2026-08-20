@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 
+import { parsePoMetadata } from "@/lib/poHelper";
+
 // Number to Words Helper
 function numberToWords(num: number): string {
   const a = [
@@ -77,15 +79,15 @@ export default function POPdfPage() {
     );
   }
 
-  // Calculate pricing
+  // Calculate pricing from PO metadata
+  const meta = po.meta || parsePoMetadata(po.notes, po);
   const lineItems = po.lineItems || [];
-  const subtotal = lineItems.reduce((acc: number, item: any) => acc + Number(item.quantityOrdered || 0) * Number(item.unitCost || 0), 0);
-  const discount = Number(po.discount || 0);
-  
-  // Calculate 18% sales tax based on the subtotal (after discount is applied)
-  const taxableAmount = Math.max(0, subtotal - discount);
-  const salesTax = Math.round(taxableAmount * 0.18);
-  const totalAmount = taxableAmount + salesTax;
+  const subtotal = meta.subtotalAmount || lineItems.reduce((acc: number, item: any) => acc + Number(item.quantityOrdered || 0) * Number(item.unitCost || 0), 0);
+  const discount = meta.discountAmount ?? Number(po.discount || 0);
+  const isGst = meta.isGst;
+  const taxRate = meta.taxRate || 18;
+  const salesTax = meta.taxAmount;
+  const totalAmount = meta.totalAmount || Number(po.totalAmount || 0);
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
@@ -261,20 +263,26 @@ export default function POPdfPage() {
 
               {discount > 0 && (
                 <div className="flex justify-between font-bold text-black">
-                  <span>Discount:</span>
+                  <span>
+                    Discount {meta.discountType === "PERCENTAGE" && meta.discountPercent > 0 ? `(${meta.discountPercent}%)` : ""}:
+                  </span>
                   <span className="font-mono font-bold">-{discount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
                 </div>
               )}
 
-              <div className="flex justify-between font-bold text-black">
-                <span>Sale Tax (18%):</span>
-                <span className="font-mono font-bold">{salesTax.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-              </div>
+              {isGst && (
+                <>
+                  <div className="flex justify-between font-bold text-black">
+                    <span>Sales Tax ({taxRate}%):</span>
+                    <span className="font-mono font-bold">{salesTax.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  </div>
 
-              <div className="flex justify-between font-bold text-black border-t border-black pt-1">
-                <span>Sub Total Incl Sale Tax:</span>
-                <span className="font-mono font-bold">{totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-              </div>
+                  <div className="flex justify-between font-bold text-black border-t border-black pt-1">
+                    <span>Sub Total Incl Sales Tax:</span>
+                    <span className="font-mono font-bold">{totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-between font-black text-black border-y-2 border-black py-1.5 text-[14px]">
                 <span>Total:</span>
@@ -296,11 +304,11 @@ export default function POPdfPage() {
           </div>
 
           {/* Custom Notes / Terms Section at bottom */}
-          {po.notes ? (
+          {meta.userNotes ? (
             <div className="mt-4 text-[13px] mb-4">
               <h4 className="font-black text-black mb-1 uppercase tracking-wider">Note.</h4>
               <div className="text-black font-bold whitespace-pre-line leading-relaxed">
-                {po.notes}
+                {meta.userNotes}
               </div>
             </div>
           ) : null}
