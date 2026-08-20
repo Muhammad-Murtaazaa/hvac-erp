@@ -18,6 +18,7 @@ export async function GET(req: Request) {
         isActive: true,
         createdAt: true,
         roleId: true,
+        employeeId: true,
         role: {
           select: {
             id: true,
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, email, password, roleId, isActive } = await req.json();
+    const { name, email, password, roleId, isActive, employeeId: inputEmployeeId } = await req.json();
 
     if (!name || !email || !password || !roleId) {
       return NextResponse.json({ error: "Name, email, password, and role are required." }, { status: 400 });
@@ -55,6 +56,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email is already registered." }, { status: 400 });
     }
 
+    // Auto-resolve employeeId if not explicitly provided
+    let employeeId = inputEmployeeId || null;
+    if (!employeeId && name) {
+      const matchedEmployee = await prisma.employee.findFirst({
+        where: {
+          OR: [
+            { name: { equals: name.trim(), mode: "insensitive" } },
+            { name: { contains: name.trim() } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (matchedEmployee) {
+        employeeId = matchedEmployee.id;
+      }
+    }
+
     const passwordHash = bcrypt.hashSync(password, 10);
 
     const user = await prisma.user.create({
@@ -63,6 +81,7 @@ export async function POST(req: Request) {
         email: email.toLowerCase(),
         passwordHash,
         roleId,
+        employeeId,
         isActive: isActive !== undefined ? isActive : true,
       },
       include: {
@@ -77,6 +96,7 @@ export async function POST(req: Request) {
         name: user.name,
         email: user.email,
         isActive: user.isActive,
+        employeeId: user.employeeId,
         role: {
           id: user.role.id,
           name: user.role.name,

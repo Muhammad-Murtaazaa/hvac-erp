@@ -10,7 +10,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 
   try {
-    const { name, email, password, roleId, isActive } = await req.json();
+    const { name, email, password, roleId, isActive, employeeId: inputEmployeeId } = await req.json();
 
     const targetUser = await prisma.user.findUnique({
       where: { id: params.id },
@@ -35,6 +35,24 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     if (email) data.email = email.toLowerCase();
     if (roleId) data.roleId = roleId;
     if (isActive !== undefined) data.isActive = isActive;
+    if (inputEmployeeId !== undefined) data.employeeId = inputEmployeeId;
+
+    // Auto-link employeeId if role is set or name is changed and no employeeId currently set
+    if (!data.employeeId && !targetUser.employeeId && (name || targetUser.name)) {
+      const lookupName = (name || targetUser.name).trim();
+      const matchedEmployee = await prisma.employee.findFirst({
+        where: {
+          OR: [
+            { name: { equals: lookupName, mode: "insensitive" } },
+            { name: { contains: lookupName } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (matchedEmployee) {
+        data.employeeId = matchedEmployee.id;
+      }
+    }
     
     // Hash password if updated
     if (password && password.trim() !== "") {
@@ -56,6 +74,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         name: updated.name,
         email: updated.email,
         isActive: updated.isActive,
+        employeeId: updated.employeeId,
         role: {
           id: updated.role.id,
           name: updated.role.name,
