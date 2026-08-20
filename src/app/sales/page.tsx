@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt } from "lucide-react";
+import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
@@ -36,7 +36,7 @@ function SalesPageContent() {
   const [isCustomerDossierOpen, setIsCustomerDossierOpen] = useState(false);
   const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<any>(null);
   const [dossierLoading, setDossierLoading] = useState(false);
-  const [dossierTab, setDossierTab] = useState<"invoices" | "complaints" | "dos" | "statement">("invoices");
+  const [dossierTab, setDossierTab] = useState<"invoices" | "complaints" | "dos" | "statement" | "ledger">("invoices");
 
   const [custName, setCustName] = useState("");
   const [custPhone, setCustPhone] = useState("");
@@ -45,6 +45,7 @@ function SalesPageContent() {
   const [custNtn, setCustNtn] = useState("");
   const [custCnic, setCustCnic] = useState("");
   const [custNotes, setCustNotes] = useState("");
+  const [custOpeningBalance, setCustOpeningBalance] = useState("");
   const [editingCustomerId, setEditingCustomerId] = useState("");
   const [submittingCustomer, setSubmittingCustomer] = useState(false);
 
@@ -119,6 +120,8 @@ function SalesPageContent() {
   const [isGst, setIsGst] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [selectedComplaintId, setSelectedComplaintId] = useState("");
+  const [complaints, setComplaints] = useState<any[]>([]);
   const [invLines, setInvLines] = useState<any[]>([
     { productId: "", description: "", quantity: "1", salesPrice: "", extraFields: {} },
   ]);
@@ -175,6 +178,7 @@ function SalesPageContent() {
       const vrRes = await fetch("/api/procurement/vendor-return", { headers: { Authorization: `Bearer ${token}` } });
       const vRes = await fetch("/api/procurement/vendors", { headers: { Authorization: `Bearer ${token}` } });
       const cRes = await fetch("/api/sales/customers", { headers: { Authorization: `Bearer ${token}` } });
+      const compRes = await fetch("/api/support/complaints", { headers: { Authorization: `Bearer ${token}` } });
 
       if (invRes.ok) setInvoices((await invRes.json()).invoices || []);
       if (doRes.ok) setDeliveryOrders((await doRes.json()).deliveryOrders || []);
@@ -182,6 +186,8 @@ function SalesPageContent() {
       if (retRes.ok) setCustomerReturns((await retRes.json()).returns || []);
       if (vrRes.ok) setVendorReturns((await vrRes.json()).vendorReturns || []);
       if (vRes.ok) setVendors((await vRes.json()).vendors || []);
+      if (cRes.ok) setCustomers((await cRes.json()).customers || []);
+      if (compRes.ok) setComplaints((await compRes.json()).complaints || []);
       if (cRes.ok) setCustomers((await cRes.json()).customers || []);
 
       const taxRes = await fetch("/api/sales/settings", { headers: { Authorization: `Bearer ${token}` } });
@@ -237,6 +243,7 @@ function SalesPageContent() {
     setCustNtn("");
     setCustCnic("");
     setCustNotes("");
+    setCustOpeningBalance("");
     setIsCreateCustomerOpen(true);
   };
 
@@ -273,13 +280,14 @@ function SalesPageContent() {
           ntn: custNtn.trim() || null,
           cnic: custCnic.trim() || null,
           notes: custNotes.trim() || null,
+          openingBalance: custOpeningBalance ? Number(custOpeningBalance) : 0,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create customer");
 
-      toast({ title: "Customer Registered", message: `Customer "${custName}" added successfully.`, type: "success" });
+      toast({ title: "Customer Registered", message: `Customer "${custName}" added successfully with linked financial ledger.`, type: "success" });
       setIsCreateCustomerOpen(false);
       fetchData();
     } catch (err: any) {
@@ -454,6 +462,7 @@ function SalesPageContent() {
 
     const payload = {
       customerId: selectedCustomerId || null,
+      complaintId: selectedComplaintId || undefined,
       clientName,
       clientPhone,
       clientAddress,
@@ -476,6 +485,7 @@ function SalesPageContent() {
       toast({ title: "Invoice Created", message: "Invoice created and ledger balances written successfully.", type: "success" });
       setIsInvoiceOpen(false);
       setSelectedCustomerId(null);
+      setSelectedComplaintId("");
       setClientName("");
       setClientPhone("");
       setClientAddress("");
@@ -954,110 +964,117 @@ function SalesPageContent() {
                       <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
                         <th className="p-3">Customer / Company Name</th>
                         <th className="p-3">Phone Number</th>
-                        <th className="p-3">Email Address</th>
                         <th className="p-3">Premises Address</th>
                         <th className="p-3 text-center">Invoices</th>
                         <th className="p-3 text-right">Total Billed</th>
-                        <th className="p-3 text-right">Outstanding</th>
+                        <th className="p-3 text-right">Ledger / Net Position</th>
                         <th className="p-3 text-center">Tickets</th>
                         <th className="p-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {filteredCustomers.map((cust) => (
-                        <tr key={cust.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
-                          <td className="p-3">
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{cust.name}</span>
-                              {cust.ntn && (
-                                <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal" title={`NTN: ${cust.ntn}`}>
-                                  NTN: {cust.ntn}
+                      {filteredCustomers.map((cust) => {
+                        const netBal = cust.ledgerBalance !== undefined ? cust.ledgerBalance : cust.outstandingBalance;
+                        return (
+                          <tr key={cust.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
+                            <td className="p-3">
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <span>{cust.name}</span>
+                                {cust.ntn && (
+                                  <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal" title={`NTN: ${cust.ntn}`}>
+                                    NTN: {cust.ntn}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 truncate max-w-xs">{cust.email || cust.notes || "-"}</p>
+                            </td>
+                            <td className="p-3 font-mono font-medium whitespace-nowrap">
+                              <span className="flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-slate-400" />
+                                {cust.phone}
+                              </span>
+                            </td>
+                            <td className="p-3 text-slate-600 dark:text-slate-400 max-w-[180px] truncate" title={cust.address || ""}>
+                              {cust.address ? (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className="truncate">{cust.address}</span>
                                 </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600">-</span>
                               )}
-                            </div>
-                            {cust.notes && <p className="text-[10px] text-slate-400 truncate max-w-xs">{cust.notes}</p>}
-                          </td>
-                          <td className="p-3 font-mono font-medium whitespace-nowrap">
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              {cust.phone}
-                            </span>
-                          </td>
-                          <td className="p-3 text-slate-500 whitespace-nowrap">
-                            {cust.email ? (
-                              <span className="flex items-center gap-1">
-                                <Mail className="w-3 h-3 text-slate-400" />
-                                {cust.email}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded font-bold font-mono text-[11px]">
+                                {cust.totalInvoices ?? 0}
                               </span>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">-</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-slate-600 dark:text-slate-400 max-w-[180px] truncate" title={cust.address || ""}>
-                            {cust.address ? (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{cust.address}</span>
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">-</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-center">
-                            <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded font-bold font-mono text-[11px]">
-                              {cust.totalInvoices ?? 0}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono font-semibold">
-                            PKR {Number(cust.totalSpent || 0).toLocaleString()}
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold">
-                            <span className={Number(cust.outstandingBalance || 0) > 0 ? "text-amber-500" : "text-emerald-500"}>
-                              PKR {Number(cust.outstandingBalance || 0).toLocaleString()}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            {cust.openComplaints > 0 ? (
-                              <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 rounded font-bold font-mono text-[10px]">
-                                {cust.openComplaints} Open
-                              </span>
-                            ) : cust.totalComplaints > 0 ? (
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded font-bold font-mono text-[10px]">
-                                {cust.totalComplaints} Logged
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600 text-xs">0</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => openCustomerDossier(cust)}
-                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
-                                title="View 360° History, Invoices & Complaints"
-                              >
-                                <History className="w-3 h-3" />
-                                <span>360° History</span>
-                              </button>
-                              <button
-                                onClick={() => openEditCustomer(cust)}
-                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1"
-                                title="Edit Customer Profile"
-                              >
-                                <Edit2 className="w-3 h-3 text-slate-500" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                onClick={() => handleDeleteCustomer(cust)}
-                                className="p-1 text-slate-400 hover:text-rose-500 rounded transition-all"
-                                title="Delete Customer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="p-3 text-right font-mono font-semibold">
+                              PKR {Number(cust.totalSpent || 0).toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold">
+                              <div>
+                                <span className={netBal > 0 ? "text-amber-500" : netBal < 0 ? "text-blue-500" : "text-emerald-500"}>
+                                  PKR {Math.abs(netBal).toLocaleString()}
+                                </span>
+                                <span className={`block text-[9px] font-bold uppercase tracking-wider ${
+                                  netBal > 0 ? "text-amber-600" : netBal < 0 ? "text-blue-600" : "text-emerald-600"
+                                }`}>
+                                  {netBal > 0 ? "Receivable" : netBal < 0 ? "Advance Held" : "Settled"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              {cust.openComplaints > 0 ? (
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 rounded font-bold font-mono text-[10px]">
+                                  {cust.openComplaints} Open
+                                </span>
+                              ) : cust.totalComplaints > 0 ? (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded font-bold font-mono text-[10px]">
+                                  {cust.totalComplaints} Logged
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600 text-xs">0</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => openCustomerDossier(cust)}
+                                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm"
+                                  title="View 360° History, Invoices, Complaints & Ledger"
+                                >
+                                  <History className="w-3 h-3" />
+                                  <span>360° History</span>
+                                </button>
+                                <a
+                                  href={`/financials?tab=ledger&partyType=CUSTOMER&partyName=${encodeURIComponent(cust.name)}`}
+                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 rounded-lg text-[10px] font-bold text-emerald-600 dark:text-emerald-400 transition-all flex items-center gap-1"
+                                  title="Open Full Party Ledger in Financials"
+                                >
+                                  <BookOpen className="w-3 h-3" />
+                                  <span>Ledger</span>
+                                </a>
+                                <button
+                                  onClick={() => openEditCustomer(cust)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1"
+                                  title="Edit Customer Profile"
+                                >
+                                  <Edit2 className="w-3 h-3 text-slate-500" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCustomer(cust)}
+                                  className="p-1 text-slate-400 hover:text-rose-500 rounded transition-all"
+                                  title="Delete Customer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {filteredCustomers.length === 0 && (
                         <tr>
                           <td colSpan={9} className="p-8 text-center text-slate-400">
@@ -1454,6 +1471,68 @@ function SalesPageContent() {
             <p className="text-xs text-slate-500 mb-6">Create standalone billing records for walk-in trading clients or custom service scopes.</p>
 
             <form onSubmit={handleInvoiceSubmit} className="space-y-4">
+              {/* Optional Complaint / Repair Ticket Link */}
+              <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 p-3.5 rounded-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                  <label className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Wrench className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Link Support Complaint / Repair Job (Optional)</span>
+                  </label>
+                  {selectedComplaintId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedComplaintId("");
+                      }}
+                      className="text-[10px] text-rose-500 hover:text-rose-600 font-bold self-start sm:self-auto"
+                    >
+                      ✕ Clear Link
+                    </button>
+                  )}
+                </div>
+                <select
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedComplaintId}
+                  onChange={(e) => {
+                    const compId = e.target.value;
+                    setSelectedComplaintId(compId);
+                    if (!compId) return;
+                    const comp = complaints.find((c) => c.id === compId);
+                    if (comp) {
+                      if (comp.customerName) setClientName(comp.customerName);
+                      if (comp.customerPhone) setClientPhone(comp.customerPhone);
+                      if (comp.customerAddress) setClientAddress(comp.customerAddress);
+                      if (comp.customerId) setSelectedCustomerId(comp.customerId);
+                      setSubjectHeading(`Service & Repair Work (${comp.complaintNumber})`);
+                      setSubjectDescription(comp.description || "");
+                      if (Number(comp.amount || 0) > 0) {
+                        setInvLines([
+                          {
+                            productId: "",
+                            description: `Service Charges (Ticket ${comp.complaintNumber}): ${comp.description}`,
+                            quantity: "1",
+                            salesPrice: String(comp.amount),
+                            extraFields: {},
+                          },
+                        ]);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">-- No linked complaint ticket (Standard Sale) --</option>
+                  {complaints
+                    .filter((c) => !c.invoice || c.id === selectedComplaintId)
+                    .map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        {comp.complaintNumber} - {comp.customerName} - {comp.description.slice(0, 40)}... (PKR {Number(comp.amount || 0).toLocaleString()}) [{comp.status}]
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
+                  Selecting a complaint auto-fills customer details, job description, repair cost, and syncs the ledger.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div className="sm:col-span-2">
                   <CustomerSelect
@@ -2475,6 +2554,22 @@ function SalesPageContent() {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Opening Receivable Balance (PKR) (Debit / Receivable - Optional)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 50000 (Initial balance due)"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono font-bold text-amber-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custOpeningBalance}
+                  onChange={(e) => setCustOpeningBalance(e.target.value)}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  If this customer has an existing balance from prior trading, enter it here. An Opening Balance Voucher (OBV) will be automatically created in the ledger.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
                   Customer Notes / Terms (Optional)
                 </label>
                 <textarea
@@ -2741,10 +2836,10 @@ function SalesPageContent() {
                 </div>
 
                 {/* Sub-Navigation Tabs */}
-                <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
+                <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 text-xs font-bold overflow-x-auto">
                   <button
                     onClick={() => setDossierTab("invoices")}
-                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
                       dossierTab === "invoices"
                         ? "border-blue-600 text-blue-600 dark:text-blue-400"
                         : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -2755,8 +2850,20 @@ function SalesPageContent() {
                   </button>
 
                   <button
+                    onClick={() => setDossierTab("ledger")}
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      dossierTab === "ledger"
+                        ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                        : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Financial Ledger & Debit/Credit ({selectedCustomerDossier.ledger?.length || 0})</span>
+                  </button>
+
+                  <button
                     onClick={() => setDossierTab("complaints")}
-                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
                       dossierTab === "complaints"
                         ? "border-blue-600 text-blue-600 dark:text-blue-400"
                         : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -2768,7 +2875,7 @@ function SalesPageContent() {
 
                   <button
                     onClick={() => setDossierTab("dos")}
-                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
                       dossierTab === "dos"
                         ? "border-blue-600 text-blue-600 dark:text-blue-400"
                         : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
@@ -2844,6 +2951,138 @@ function SalesPageContent() {
                           )}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub Tab: Financial Ledger & Debit/Credit */}
+                {dossierTab === "ledger" && (
+                  <div className="space-y-4">
+                    {/* Top Summary Bar & Link to Financials */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-100/70 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60">
+                      <div className="flex items-center gap-4 text-xs">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Debits (Billed)</span>
+                          <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                            PKR {Number(selectedCustomerDossier.ledgerTotals?.totalDebit || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
+                        <div>
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">Total Credits (Paid)</span>
+                          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            PKR {Number(selectedCustomerDossier.ledgerTotals?.totalCredit || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block" />
+                        <div>
+                          <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">Net Ledger Balance</span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-sm font-black font-mono text-amber-500">
+                              PKR {Math.abs(Number(selectedCustomerDossier.ledgerTotals?.closingBalance || 0)).toLocaleString()}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              (selectedCustomerDossier.ledgerTotals?.closingBalance || 0) > 0
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60"
+                                : (selectedCustomerDossier.ledgerTotals?.closingBalance || 0) < 0
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60"
+                            }`}>
+                              {selectedCustomerDossier.ledgerTotals?.status || "SETTLED"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <a
+                        href={`/financials?tab=ledger&partyType=CUSTOMER&partyName=${encodeURIComponent(selectedCustomerDossier.name)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center gap-1.5 whitespace-nowrap self-start sm:self-auto"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Open Full Party Ledger in Financials</span>
+                        <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+                      </a>
+                    </div>
+
+                    {/* Ledger Transactions Table */}
+                    <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-100/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                              <th className="p-3">Date</th>
+                              <th className="p-3">Doc / Voucher Ref</th>
+                              <th className="p-3">Type</th>
+                              <th className="p-3">Particulars / Description</th>
+                              <th className="p-3 text-right">Debit (PKR)</th>
+                              <th className="p-3 text-right">Credit (PKR)</th>
+                              <th className="p-3 text-right">Running Balance (PKR)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                            {selectedCustomerDossier.ledger?.map((tx: any, idx: number) => {
+                              const isDebit = Number(tx.debit) > 0;
+                              const isCredit = Number(tx.credit) > 0;
+                              return (
+                                <tr key={tx.id || idx} className="hover:bg-white dark:hover:bg-slate-900/60 font-sans">
+                                  <td className="p-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                                    {new Date(tx.date).toLocaleDateString()}
+                                  </td>
+                                  <td className="p-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
+                                    {tx.voucherNumber || tx.referenceNumber || "-"}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      tx.docType === "INVOICE"
+                                        ? "bg-purple-100 text-purple-700 dark:bg-purple-950/60"
+                                        : tx.docType === "PAYMENT"
+                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60"
+                                        : tx.docType === "CRV" || tx.docType === "BRV"
+                                        ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60"
+                                        : tx.docType === "OBV"
+                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60"
+                                        : "bg-slate-100 text-slate-700 dark:bg-slate-800"
+                                    }`}>
+                                      {tx.docType}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 max-w-sm truncate text-slate-700 dark:text-slate-300 font-medium" title={tx.description}>
+                                    {tx.description}
+                                  </td>
+                                  <td className="p-3 text-right font-mono font-bold">
+                                    {isDebit ? (
+                                      <span className="text-slate-900 dark:text-white">{Number(tx.debit).toLocaleString()}</span>
+                                    ) : (
+                                      <span className="text-slate-300 dark:text-slate-700">-</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right font-mono font-bold">
+                                    {isCredit ? (
+                                      <span className="text-emerald-500">{Number(tx.credit).toLocaleString()}</span>
+                                    ) : (
+                                      <span className="text-slate-300 dark:text-slate-700">-</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right font-mono font-bold">
+                                    <span className={tx.runningBalance > 0 ? "text-amber-500" : tx.runningBalance < 0 ? "text-blue-500" : "text-slate-400"}>
+                                      {Math.abs(Number(tx.runningBalance)).toLocaleString()} {tx.runningBalance > 0 ? "Dr" : tx.runningBalance < 0 ? "Cr" : ""}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {(!selectedCustomerDossier.ledger || selectedCustomerDossier.ledger.length === 0) && (
+                              <tr>
+                                <td colSpan={7} className="p-8 text-center text-slate-400 font-sans">
+                                  No financial ledger entries or voucher transactions recorded for this customer yet.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 )}

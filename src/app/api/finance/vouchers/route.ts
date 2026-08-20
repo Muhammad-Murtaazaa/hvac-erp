@@ -137,6 +137,35 @@ export async function POST(req: Request) {
       timeout: 30000,
     });
 
+    // Auto-create/upsert customer profile if this voucher was for a CUSTOMER
+    if (voucher.partyType === "CUSTOMER" && voucher.partyName) {
+      try {
+        const pName = voucher.partyName.trim();
+        const existingCust = await prisma.customer.findFirst({
+          where: { name: { equals: pName, mode: "insensitive" } },
+        });
+        if (!existingCust) {
+          // Check if there are other transactions for this party to grab phone/address
+          const sampleInv = await prisma.invoice.findFirst({
+            where: { clientName: { equals: pName, mode: "insensitive" } },
+          });
+          const phone = sampleInv?.clientPhone || `0300-${Math.floor(1000000 + Math.random() * 9000000)}`;
+          const address = sampleInv?.clientAddress || null;
+
+          await prisma.customer.create({
+            data: {
+              name: pName,
+              phone,
+              address,
+              notes: `Auto-registered from financial voucher ${voucher.voucherNumber}`,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Auto customer profile creation error from voucher:", err);
+      }
+    }
+
     // Record audit snapshot
     await recordAuditSnapshot({
       entityName: "Voucher",

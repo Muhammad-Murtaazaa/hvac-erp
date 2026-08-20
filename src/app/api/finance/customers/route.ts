@@ -186,6 +186,26 @@ export async function POST(req: Request) {
       });
     }
 
+    // Also sync/upsert into central Customer table so visible in Customers section
+    await prisma.customer.upsert({
+      where: { phone: trimmedPhone },
+      update: {
+        name: trimmedName,
+        email: email ? email.trim() : undefined,
+        address: address ? address.trim() : undefined,
+        ntn: ntn ? ntn.trim() : undefined,
+        notes: notes ? notes.trim() : undefined,
+      },
+      create: {
+        name: trimmedName,
+        phone: trimmedPhone,
+        email: email ? email.trim() : null,
+        address: address ? address.trim() : null,
+        ntn: ntn ? ntn.trim() : null,
+        notes: notes ? notes.trim() : null,
+      },
+    });
+
     // Record audit log
     await recordAuditSnapshot({
       entityName: "CustomerAccount",
@@ -260,6 +280,21 @@ export async function PUT(req: Request) {
         where: { partyName: { equals: targetName, mode: "insensitive" } },
         data: {
           partyName: newName,
+        },
+      }),
+      prisma.customer.updateMany({
+        where: {
+          OR: [
+            { name: { equals: targetName, mode: "insensitive" } },
+            { phone: newPhone },
+          ],
+        },
+        data: {
+          name: newName,
+          phone: newPhone,
+          email: email || undefined,
+          address: address || undefined,
+          ntn: ntn || undefined,
         },
       }),
     ]);

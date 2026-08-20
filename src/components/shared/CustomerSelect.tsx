@@ -236,33 +236,60 @@ export default function CustomerSelect({
             </span>
           </button>
 
-          {filtered.map((c) => (
-            <button
-              key={c.id || c.phone}
-              type="button"
-              onClick={() => handleSelect(c)}
-              className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-start justify-between gap-2 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="font-bold text-slate-800 dark:text-slate-100">{c.name}</p>
-                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                  <span className="flex items-center gap-1 font-mono">
-                    <Phone className="w-3 h-3 text-slate-400" />
-                    {c.phone}
-                  </span>
-                  {c.address && (
-                    <span className="flex items-center gap-1 truncate max-w-[160px]">
-                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                      {c.address}
+          {filtered.map((c: any) => {
+            const netBal = c.ledgerBalance !== undefined ? c.ledgerBalance : (c.outstandingBalance || 0);
+            const initials = c.name ? c.name.slice(0, 2).toUpperCase() : "CU";
+            return (
+              <button
+                key={c.id || c.phone || c.name}
+                type="button"
+                onClick={() => handleSelect(c)}
+                className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 flex items-center justify-between gap-3 transition-colors"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[10px] shrink-0 border border-emerald-200/50 dark:border-emerald-800/50">
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                      {c.phone && (
+                        <span className="flex items-center gap-1 font-mono">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          {c.phone}
+                        </span>
+                      )}
+                      {c.address && (
+                        <span className="flex items-center gap-1 truncate max-w-[160px]">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          {c.address}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {netBal > 0 ? (
+                    <span className="text-[10px] font-bold font-mono text-rose-600 dark:text-rose-400">
+                      Due: PKR {Math.round(netBal).toLocaleString()}
+                    </span>
+                  ) : netBal < 0 ? (
+                    <span className="text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400">
+                      Adv: PKR {Math.round(Math.abs(netBal)).toLocaleString()}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      Settled
                     </span>
                   )}
+                  {c.name.toLowerCase() === value.toLowerCase() && (
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                  )}
                 </div>
-              </div>
-              {c.name.toLowerCase() === value.toLowerCase() && (
-                <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-1" />
-              )}
-            </button>
-          ))}
+              </button>
+            );
+          })}
 
           {filtered.length === 0 && (
             <div className="p-3 text-center text-slate-400">

@@ -12,13 +12,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, customers: [] });
     }
 
-    // Search across complaints and invoices
-    const [complaints, invoices] = await Promise.all([
+    // Search across Customer records, LedgerEntries, complaints and invoices
+    const [customersDb, ledgerParties, complaints, invoices] = await Promise.all([
+      prisma.customer.findMany({
+        where: {
+          OR: [
+            { phone: { contains: query } },
+            { name: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 15,
+      }),
+      prisma.ledgerEntry.findMany({
+        where: {
+          partyType: "CUSTOMER",
+          partyName: { contains: query, mode: "insensitive" },
+        },
+        select: { partyName: true, partyId: true, description: true },
+        take: 15,
+      }),
       prisma.complaint.findMany({
         where: {
           OR: [
             { customerPhone: { contains: query } },
-            { customerName: { contains: query } },
+            { customerName: { contains: query, mode: "insensitive" } },
           ],
         },
         orderBy: { createdAt: "desc" },
@@ -28,7 +45,7 @@ export async function GET(req: NextRequest) {
         where: {
           OR: [
             { clientPhone: { contains: query } },
-            { clientName: { contains: query } },
+            { clientName: { contains: query, mode: "insensitive" } },
           ],
         },
         orderBy: { createdAt: "desc" },
@@ -41,11 +58,42 @@ export async function GET(req: NextRequest) {
       name: string;
       phone: string;
       address: string;
+      email?: string;
+      ntn?: string;
       totalComplaints: number;
       totalInvoices: number;
-      lastServiceDate: string;
+      lastServiceDate?: string;
       lastNotes?: string;
     }>();
+
+    for (const c of customersDb) {
+      const key = (c.phone || c.name).toLowerCase().trim();
+      customerMap.set(key, {
+        name: c.name,
+        phone: c.phone,
+        address: c.address || "",
+        email: c.email || undefined,
+        ntn: c.ntn || undefined,
+        totalComplaints: 0,
+        totalInvoices: 0,
+        lastNotes: c.notes || undefined,
+      });
+    }
+
+    for (const lp of ledgerParties) {
+      if (!lp.partyName) continue;
+      const key = lp.partyName.toLowerCase().trim();
+      if (!customerMap.has(key)) {
+        customerMap.set(key, {
+          name: lp.partyName,
+          phone: "",
+          address: "",
+          totalComplaints: 0,
+          totalInvoices: 0,
+          lastNotes: lp.description || "Financial Ledger Account",
+        });
+      }
+    }
 
     for (const c of complaints) {
       const key = (c.customerPhone || c.customerName).toLowerCase().trim();

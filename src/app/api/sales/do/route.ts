@@ -50,10 +50,26 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { clientName, clientPhone, deliveryAddress, lineItems, notes, status, through, vehicle, poNumber } = await req.json();
+    const body = await req.json();
+    const {
+      customerId: inputCustomerId,
+      clientName,
+      clientPhone,
+      deliveryAddress,
+      lineItems,
+      notes,
+      status,
+      through,
+      vehicle,
+      poNumber,
+    } = body;
 
-    if (!clientName || !clientPhone || !deliveryAddress || !lineItems || lineItems.length === 0) {
-      return NextResponse.json({ error: "Client details and line items are required" }, { status: 400 });
+    const finalClientName = (clientName || "").trim();
+    const finalClientPhone = (clientPhone || "").trim();
+    const finalAddress = (deliveryAddress || "").trim() || "Standard Delivery";
+
+    if (!finalClientName || !lineItems || lineItems.length === 0) {
+      return NextResponse.json({ error: "Client name and at least one line item are required" }, { status: 400 });
     }
 
     // Filter and sanitize valid line items
@@ -75,12 +91,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Please enter at least one valid line item with product or description." }, { status: 400 });
     }
 
-    const doStatus = status || "DRAFT";
-    const count = await prisma.deliveryOrder.count();
-    const doNumber = `DO-${10001 + count}`;
+    const doStatus = status || "DISPATCHED";
 
-    const deliveryOrder = await prisma.$transaction(async (tx) => {
-      // Pre-fill missing descriptions for catalog products
+    const deliveryOrder = await prisma.$transaction(async (tx: any) => {
+      // 1. Resolve or create customer profile
+      let resolvedCustomerId = inputCustomerId || null;
+      if (!resolvedCustomerId && finalClientName) {
+        const phoneToMatch = finalClientPhone || "0300-0000000";
+        const existingCust = await tx.customer.findFirst({
+          where: {
+            OR: [
+              { phone: phoneToMatch },
+              { name: { equals: finalClientName, mode: "insensitive" } },
+            ],
+          },
+        });
+
+        if (existingCust) {
+          resolvedCustomerId = existingCust.id;
+        } else {
+          try {
+            const newCust = await tx.customer.create({
+              data: {
+                name: finalClientName,
+                phone: finalClientPhone || `0300-${Math.floor(1000000 + Math.random() * 9000000)}`,
+                address: finalAddress !== "Standard Delivery" ? finalAddress : null,
+              },
+            });
+            resolvedCustomerId = newCust.id;
+          } catch {
+            // In case of unique constraint conflict, find by phone
+            const fallbackCust = await tx.customer.findFirst({ where: { phone: phoneToMatch } });
+            if (fallbackCust) resolvedCustomerId = fallbackCust.id;
+          }
+        }
+      }
+
+      // 2. Generate unique collision-proof DO number
+      const lastDO = await tx.deliveryOrder.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { doNumber: true },
+      });
+      let nextNum = 10001;
+      if (lastDO && lastDO.doNumber) {
+        const match = lastDO.doNumber.match(/DO-(\d+)/);
+        if (match) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      let doNumber = `DO-${nextNum}`;
+      while (await tx.deliveryOrder.findUnique({ where: { doNumber } })) {
+        nextNum++;
+        doNumber = `DO-${nextNum}`;
+      }
+
+      // 3. Pre-fill missing descriptions for catalog products
       for (const line of validLines) {
         if (line.productId && !line.description) {
           const p = await tx.product.findUnique({ where: { id: line.productId } });
@@ -88,13 +153,15 @@ export async function POST(req: Request) {
         }
       }
 
+      // 4. Create the Delivery Order record
       const createdDO = await tx.deliveryOrder.create({
         data: {
           doNumber,
           date: new Date(),
-          clientName,
-          clientPhone,
-          deliveryAddress,
+          customerId: resolvedCustomerId,
+          clientName: finalClientName,
+          clientPhone: finalClientPhone || "-",
+          deliveryAddress: finalAddress,
           status: doStatus,
           notes: notes || "",
           through: through || "",
@@ -105,15 +172,21 @@ export async function POST(req: Request) {
           },
         },
         include: {
-          lineItems: true,
+          lineItems: {
+            include: {
+              product: true,
+            },
+          },
+          customer: true,
         },
       });
 
+      // 5. If DISPATCHED or DELIVERED, validate stock and deduct
       if (doStatus === "DISPATCHED" || doStatus === "DELIVERED") {
         for (const item of createdDO.lineItems) {
           if (item.productId) {
             const product = await tx.product.findUnique({ where: { id: item.productId } });
-            if (!product) throw new Error("Catalog product not found");
+            if (!product) throw new Error(`Catalog product not found for line item`);
             if (product.onHandQty < item.quantity) {
               throw new Error(`Insufficient stock for "${product.sku} - ${product.name}". Available in stock: ${product.onHandQty}, Requested: ${item.quantity}.`);
             }
@@ -143,9 +216,9 @@ export async function POST(req: Request) {
       afterState: deliveryOrder,
     });
 
-    return NextResponse.json({ deliveryOrder });
+    return NextResponse.json({ deliveryOrder, success: true });
   } catch (error: any) {
     console.error("[DO POST] Error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to create Delivery Order" }, { status: 500 });
   }
 }

@@ -65,16 +65,81 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { clientName, clientPhone, clientAddress, date, lineItems, doId, payments, notes, subjectHeading, subjectDescription, isGst } = await req.json();
+    const {
+      customerId: inputCustomerId,
+      clientName,
+      clientPhone,
+      clientAddress,
+      date,
+      lineItems,
+      doId,
+      complaintId,
+      payments,
+      notes,
+      subjectHeading,
+      subjectDescription,
+      isGst,
+    } = await req.json();
 
-    if (!clientName || !lineItems || lineItems.length === 0) {
+    const finalClientName = (clientName || "").trim();
+    const finalClientPhone = (clientPhone || "").trim();
+    const finalClientAddress = (clientAddress || "").trim();
+
+    if (!finalClientName || !lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Client details and billing line items are required" }, { status: 400 });
     }
 
-    const count = await prisma.invoice.count();
-    const invoiceNumber = `INV-${10001 + count}`;
+    const invoice = await prisma.$transaction(async (tx: any) => {
+      // 1. Resolve or create Customer profile
+      let resolvedCustomerId = inputCustomerId || null;
+      if (!resolvedCustomerId && finalClientName) {
+        const phoneToMatch = finalClientPhone || "0300-0000000";
+        const existingCust = await tx.customer.findFirst({
+          where: {
+            OR: [
+              { phone: phoneToMatch },
+              { name: { equals: finalClientName, mode: "insensitive" } },
+            ],
+          },
+        });
 
-    const invoice = await prisma.$transaction(async (tx) => {
+        if (existingCust) {
+          resolvedCustomerId = existingCust.id;
+        } else {
+          try {
+            const newCust = await tx.customer.create({
+              data: {
+                name: finalClientName,
+                phone: finalClientPhone || `0300-${Math.floor(1000000 + Math.random() * 9000000)}`,
+                address: finalClientAddress || null,
+              },
+            });
+            resolvedCustomerId = newCust.id;
+          } catch {
+            const fallbackCust = await tx.customer.findFirst({ where: { phone: phoneToMatch } });
+            if (fallbackCust) resolvedCustomerId = fallbackCust.id;
+          }
+        }
+      }
+
+      // 2. Generate unique collision-proof Invoice number
+      const lastInv = await tx.invoice.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { invoiceNumber: true },
+      });
+      let nextNum = 10001;
+      if (lastInv && lastInv.invoiceNumber) {
+        const match = lastInv.invoiceNumber.match(/INV-(\d+)/);
+        if (match) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+      let invoiceNumber = `INV-${nextNum}`;
+      while (await tx.invoice.findUnique({ where: { invoiceNumber } })) {
+        nextNum++;
+        invoiceNumber = `INV-${nextNum}`;
+      }
+
       let subtotalAmount = 0;
       let totalCogs = 0;
 
@@ -148,9 +213,10 @@ export async function POST(req: Request) {
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
-          clientName,
-          clientPhone: clientPhone || null,
-          clientAddress: clientAddress || null,
+          customerId: resolvedCustomerId,
+          clientName: finalClientName,
+          clientPhone: finalClientPhone || null,
+          clientAddress: finalClientAddress || null,
           date: new Date(date || Date.now()),
           status: invoiceStatus,
           totalAmount: finalTotalAmount,
@@ -159,6 +225,7 @@ export async function POST(req: Request) {
           subjectHeading: subjectHeading || null,
           subjectDescription: subjectDescription || null,
           doId: doId || null,
+          complaintId: complaintId || null,
           isGst: isGst !== false,
           lineItems: {
             create: lineItemsWithInfo.map((l) => ({
@@ -172,8 +239,33 @@ export async function POST(req: Request) {
         },
         include: {
           lineItems: true,
+          complaint: true,
         },
       });
+
+      // If complaint was linked, update complaint status & amountStatus
+      if (complaintId) {
+        const complaint = await tx.complaint.findUnique({ where: { id: complaintId } });
+        if (complaint) {
+          await tx.complaint.update({
+            where: { id: complaintId },
+            data: {
+              amountStatus: invoiceStatus === "PAID" ? "PAID" : "INVOICED",
+              customerId: resolvedCustomerId || complaint.customerId,
+            },
+          });
+
+          await tx.complaintTimeline.create({
+            data: {
+              complaintId,
+              changedById: session.id,
+              fromStatus: complaint.status,
+              toStatus: complaint.status,
+              remarks: `Billing Invoice ${invoiceNumber} created (PKR ${finalTotalAmount.toLocaleString()}).`,
+            },
+          });
+        }
+      }
 
       // Handle stock and stock ledger logs
       if (!doId) {
@@ -198,14 +290,14 @@ export async function POST(req: Request) {
 
       // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
       await recordLedgerEntry(tx, {
-        description: `Revenue for Invoice ${invoiceNumber} issued to ${clientName}`,
+        description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}`,
         debitAccount: "Accounts Receivable (Trade Debtors)",
-        creditAccount: "Sales Revenue",
+        creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
         amount: subtotalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
         partyType: "CUSTOMER",
-        partyName: clientName,
+        partyName: finalClientName,
         voucherType: "INV",
         voucherNumber: invoiceNumber,
       });
@@ -219,7 +311,7 @@ export async function POST(req: Request) {
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: "CUSTOMER",
-          partyName: clientName,
+          partyName: finalClientName,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
         });
@@ -235,7 +327,7 @@ export async function POST(req: Request) {
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: "CUSTOMER",
-          partyName: clientName,
+          partyName: finalClientName,
           voucherType: "COGS",
           voucherNumber: invoiceNumber,
         });
@@ -257,7 +349,7 @@ export async function POST(req: Request) {
             },
           });
 
-          // Ledger Entry for cash payment (Debit Cash-Bank / Credit Accounts Receivable)
+          // Ledger Entry for payment receipt (Debit Cash-Bank / Credit Accounts Receivable)
           await recordLedgerEntry(tx, {
             description: `Payment received against Invoice ${invoiceNumber} via ${pMethod}`,
             debitAccount: liquidAcc,
@@ -266,7 +358,7 @@ export async function POST(req: Request) {
             referenceType: "INVOICE",
             referenceId: createdInvoice.id,
             partyType: "CUSTOMER",
-            partyName: clientName,
+            partyName: finalClientName,
             voucherType: isBank ? "BRV" : "CRV",
             voucherNumber: invoiceNumber,
             paymentMethod: pMethod,

@@ -159,13 +159,31 @@ export async function GET(req: Request) {
     });
 
     // 2. Add System Invoices & Payments for Customer if partyName given
-    if (partyType === "CUSTOMER" && partyName) {
-      const invoices = await prisma.invoice.findMany({
-        where: { clientName: { equals: partyName, mode: "insensitive" } },
-        include: { payments: true },
-      });
+    if (partyType === "CUSTOMER" && (partyName || partyId)) {
+      const [invoices, complaints] = await Promise.all([
+        (prisma as any).invoice.findMany({
+          where: {
+            OR: [
+              { customerId: partyId || undefined },
+              { clientName: { equals: partyName, mode: "insensitive" } },
+              { clientPhone: resolvedPartyInfo.phone || undefined },
+            ],
+          },
+          include: { payments: true },
+        }),
+        (prisma as any).complaint.findMany({
+          where: {
+            OR: [
+              { customerId: partyId || undefined },
+              { customerName: { equals: partyName, mode: "insensitive" } },
+              { customerPhone: resolvedPartyInfo.phone || undefined },
+            ],
+          },
+          include: { invoice: true },
+        }),
+      ]);
 
-      invoices.forEach((inv) => {
+      invoices.forEach((inv: any) => {
         // Check if invoice already captured in LedgerEntry
         const isInvCaptured = loggedRefKeys.has(inv.invoiceNumber.toLowerCase()) || loggedRefKeys.has(inv.id.toLowerCase());
         if (!isInvCaptured) {
@@ -179,7 +197,7 @@ export async function GET(req: Request) {
           });
         }
 
-        inv.payments.forEach((p) => {
+        (inv.payments || []).forEach((p: any) => {
           const isPayCaptured = isInvCaptured || loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
           if (!isPayCaptured) {
             rawItems.push({
@@ -192,6 +210,35 @@ export async function GET(req: Request) {
             });
           }
         });
+      });
+
+      // Include Complaints with repair charges if not already invoiced
+      complaints.forEach((comp: any) => {
+        const compAmount = Number(comp.amount || 0);
+        if (compAmount > 0 && comp.amountStatus !== "WAIVED") {
+          const isCaptured = comp.invoice || loggedRefKeys.has(comp.complaintNumber.toLowerCase()) || loggedRefKeys.has(comp.id.toLowerCase());
+          if (!isCaptured) {
+            rawItems.push({
+              date: comp.date || comp.createdAt,
+              docType: "COMPLAINT_REPAIR",
+              referenceNumber: comp.complaintNumber,
+              description: `Service & Repair Work (${comp.complaintNumber}): ${comp.description}`,
+              debit: Math.round(compAmount * 100) / 100,
+              credit: 0,
+            });
+
+            if (comp.amountStatus === "PAID") {
+              rawItems.push({
+                date: comp.date || comp.createdAt,
+                docType: "PAYMENT",
+                referenceNumber: `REC-${comp.complaintNumber}`,
+                description: `Repair Service Payment for ${comp.complaintNumber}`,
+                debit: 0,
+                credit: Math.round(compAmount * 100) / 100,
+              });
+            }
+          }
+        }
       });
     }
 
