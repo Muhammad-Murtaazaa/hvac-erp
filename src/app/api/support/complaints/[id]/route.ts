@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { ensureCustomer } from "@/lib/customerSync";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -48,6 +49,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       }
     }
 
+    const finalCustomerName = customerName ? customerName.trim() : ticket.customerName;
+    const finalCustomerPhone = customerPhone ? customerPhone.trim() : ticket.customerPhone;
+    const finalCustomerAddress = customerAddress !== undefined ? customerAddress.trim() : ticket.customerAddress;
+
+    // Ensure customer account exists in database
+    const customer = await ensureCustomer({
+      name: finalCustomerName,
+      phone: finalCustomerPhone,
+      address: finalCustomerAddress,
+      notes: "Synced via Support Ticket",
+    });
+
+    const finalCustomerId = customer?.id || customerId || ticket.customerId;
+
     const updatedTicket = await prisma.$transaction(async (tx) => {
       const timelineLogs = [];
 
@@ -56,11 +71,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTechId = assignedTechnicianId !== undefined ? assignedTechnicianId : ticket.assignedTechnicianId;
       const finalAmount = amount !== undefined ? Number(amount) : Number(ticket.amount);
       const finalAmountStatus = amountStatus || ticket.amountStatus;
-      const finalCustomerName = customerName ? customerName.trim() : ticket.customerName;
-      const finalCustomerPhone = customerPhone ? customerPhone.trim() : ticket.customerPhone;
-      const finalCustomerAddress = customerAddress !== undefined ? customerAddress.trim() : ticket.customerAddress;
       const finalDescription = description !== undefined ? description.trim() : ticket.description;
-      const finalCustomerId = customerId !== undefined ? customerId : ticket.customerId;
 
       // 1. Status Transition logging
       if (finalStatus !== ticket.status) {

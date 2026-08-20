@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { syncAllCustomers } from "@/lib/customerSync";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
   if (!session || (!hasPermission(session, "MANAGE_SALES") && !hasPermission(session, "MANAGE_SUPPORT") && !hasPermission(session, "VIEW_FINANCIALS") && !hasPermission(session, "ADMIN"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // 1. Automatically synchronize any customer from Complaints, Invoices, DOs, or Ledger
+  await syncAllCustomers();
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { ensureCustomer } from "@/lib/customerSync";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -75,6 +76,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Required fields missing" }, { status: 400 });
     }
 
+    // Automatically ensure customer account exists and get customer ID
+    const customer = await ensureCustomer({
+      name: customerName,
+      phone: customerPhone,
+      address: customerAddress,
+      notes: "Created via Support Ticket",
+    });
+
     const count = await prisma.complaint.count();
     const complaintNumber = `COMP-${10001 + count}`;
 
@@ -83,6 +92,7 @@ export async function POST(req: Request) {
         data: {
           complaintNumber,
           date: new Date(),
+          customerId: customer?.id || null,
           customerName,
           customerPhone,
           customerAddress,
