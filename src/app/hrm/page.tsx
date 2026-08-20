@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, Users, CalendarDays, Receipt, Eye } from "lucide-react";
+import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, Users, CalendarDays, Receipt, Eye, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import { createPortal } from "react-dom";
@@ -18,8 +18,9 @@ export default function HrmPage() {
   const [activeTab, setActiveTab] = useState("employees"); // employees, attendance, payroll
   const [search, setSearch] = useState("");
 
-  // Create Employee States
+  // Employee States (Create & Edit)
   const [isEmpOpen, setIsEmpOpen] = useState(false);
+  const [editingEmpId, setEditingEmpId] = useState<string | null>(null);
   const [empNo, setEmpNo] = useState("");
   const [empName, setEmpName] = useState("");
   const [empCnic, setEmpCnic] = useState("");
@@ -29,6 +30,7 @@ export default function HrmPage() {
   const [empPos, setEmpPos] = useState("HVAC Senior Tech");
   const [empJoining, setEmpJoining] = useState(new Date().toISOString().split("T")[0]);
   const [empSalary, setEmpSalary] = useState("");
+  const [empStatus, setEmpStatus] = useState("ACTIVE");
   const [empBank, setEmpBank] = useState("");
   const [empFatherName, setEmpFatherName] = useState("");
   const [empFatherPhone, setEmpFatherPhone] = useState("");
@@ -73,7 +75,47 @@ export default function HrmPage() {
     setMounted(true);
   }, []);
 
-  const handleCreateEmployee = async (e: React.FormEvent) => {
+  const handleOpenCreateEmployee = () => {
+    setEditingEmpId(null);
+    setEmpNo("");
+    setEmpName("");
+    setEmpCnic("");
+    setEmpPhone("");
+    setEmpAddress("");
+    setEmpDept("SERVICE");
+    setEmpPos("HVAC Senior Tech");
+    setEmpJoining(new Date().toISOString().split("T")[0]);
+    setEmpSalary("");
+    setEmpStatus("ACTIVE");
+    setEmpBank("");
+    setEmpFatherName("");
+    setEmpFatherPhone("");
+    setEmpResponsiblePerson("");
+    setEmpRefPhone("");
+    setIsEmpOpen(true);
+  };
+
+  const handleOpenEditEmployee = (emp: any) => {
+    setEditingEmpId(emp.id);
+    setEmpNo(emp.employeeNo || "");
+    setEmpName(emp.name || "");
+    setEmpCnic(emp.cnic || "");
+    setEmpPhone(emp.phone || "");
+    setEmpAddress(emp.address || "");
+    setEmpDept(emp.department || "SERVICE");
+    setEmpPos(emp.position || "");
+    setEmpJoining(emp.joiningDate ? new Date(emp.joiningDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+    setEmpSalary(String(emp.baseSalary || ""));
+    setEmpStatus(emp.status || "ACTIVE");
+    setEmpBank(emp.bankDetails || "");
+    setEmpFatherName(emp.fatherName || "");
+    setEmpFatherPhone(emp.fatherPhone || "");
+    setEmpResponsiblePerson(emp.responsiblePerson || "");
+    setEmpRefPhone(emp.refPhone || "");
+    setIsEmpOpen(true);
+  };
+
+  const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empName || !empCnic || !empPhone || !empJoining || !empSalary) {
       toast({ title: "Required Fields Missing", message: "Please fill out Name, CNIC, Phone, Joining Date, and Salary.", type: "warning" });
@@ -81,48 +123,56 @@ export default function HrmPage() {
     }
 
     const token = localStorage.getItem("token");
+    const payload = {
+      employeeNo: empNo || undefined,
+      name: empName,
+      cnic: empCnic,
+      phone: empPhone,
+      address: empAddress,
+      department: empDept,
+      position: empPos,
+      joiningDate: empJoining,
+      baseSalary: Number(empSalary),
+      status: empStatus,
+      bankDetails: empBank,
+      fatherName: empFatherName,
+      fatherPhone: empFatherPhone,
+      responsiblePerson: empResponsiblePerson,
+      refPhone: empRefPhone,
+    };
+
     try {
-      const res = await fetch("/api/hrm/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          employeeNo: empNo || undefined,
-          name: empName,
-          cnic: empCnic,
-          phone: empPhone,
-          address: empAddress,
-          department: empDept,
-          position: empPos,
-          joiningDate: empJoining,
-          baseSalary: Number(empSalary),
-          bankDetails: empBank,
-          fatherName: empFatherName,
-          fatherPhone: empFatherPhone,
-          responsiblePerson: empResponsiblePerson,
-          refPhone: empRefPhone,
-        }),
-      });
+      if (editingEmpId) {
+        // Edit existing employee
+        const res = await fetch(`/api/hrm/employees/${editingEmpId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to add employee");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to update employee");
 
-      toast({ title: "Employee Onboarded", message: "Employee profile onboarded successfully.", type: "success" });
+        toast({ title: "Employee Updated", message: "Employee profile updated successfully.", type: "success" });
+      } else {
+        // Onboard new employee
+        const res = await fetch("/api/hrm/employees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to add employee");
+
+        toast({ title: "Employee Onboarded", message: "Employee profile onboarded successfully.", type: "success" });
+      }
+
       setIsEmpOpen(false);
-      // clear fields
-      setEmpNo("");
-      setEmpName("");
-      setEmpCnic("");
-      setEmpPhone("");
-      setEmpAddress("");
-      setEmpSalary("");
-      setEmpBank("");
-      setEmpFatherName("");
-      setEmpFatherPhone("");
-      setEmpResponsiblePerson("");
-      setEmpRefPhone("");
+      setEditingEmpId(null);
       fetchData();
     } catch (err: any) {
-      toast({ title: "Onboarding Failed", message: err.message, type: "error" });
+      toast({ title: editingEmpId ? "Update Failed" : "Onboarding Failed", message: err.message, type: "error" });
     }
   };
 
@@ -244,12 +294,12 @@ export default function HrmPage() {
 
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setIsEmpOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-blue-500/10"
-            >
-              <Plus className="w-4 h-4" />
-              Onboard Employee
-            </button>
+            onClick={handleOpenCreateEmployee}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Onboard Employee</span>
+          </button>
           </div>
         </div>
 
@@ -326,17 +376,27 @@ export default function HrmPage() {
                           </span>
                         </td>
                         <td className="p-3 text-center">
-                          <button
-                            onClick={() => {
-                              const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
-                              window.open(`/api/pdf?type=employee-form&id=${emp.id}&inline=true&token=${token}`, "_blank");
-                            }}
-                            title="View Employment Form PDF"
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-blue-500 transition-all inline-flex items-center gap-1 font-bold"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Form</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleOpenEditEmployee(emp)}
+                              title="Edit Employee Profile"
+                              className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all inline-flex items-center gap-1 text-[11px] font-bold"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+                                window.open(`/api/pdf?type=employee-form&id=${emp.id}&inline=true&token=${token}`, "_blank");
+                              }}
+                              title="View Employment Form PDF"
+                              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-all inline-flex items-center gap-1 text-[11px] font-bold"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Form</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -443,12 +503,14 @@ export default function HrmPage() {
         </div>
       )}
 
-      {/* ==================== CREATE EMPLOYEE MODAL ==================== */}
+      {/* ==================== CREATE / EDIT EMPLOYEE MODAL ==================== */}
       {mounted && isEmpOpen && createPortal(
         <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-2xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Onboard Employee Profile</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                {editingEmpId ? "Edit Employee Profile" : "Onboard Employee Profile"}
+              </h3>
               <button
                 type="button"
                 onClick={() => setIsEmpOpen(false)}
@@ -457,9 +519,13 @@ export default function HrmPage() {
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-6">Create new active employee profiles for daily rosters and monthly payroll calculation runs.</p>
+            <p className="text-xs text-slate-500 mb-6">
+              {editingEmpId
+                ? "Modify employee personal details, department, salary, and employment status."
+                : "Create new active employee profiles for daily rosters and monthly payroll calculation runs."}
+            </p>
 
-            <form onSubmit={handleCreateEmployee} className="space-y-4">
+            <form onSubmit={handleSaveEmployee} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
@@ -497,7 +563,7 @@ export default function HrmPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Phone Number</label>
                   <input
@@ -518,6 +584,18 @@ export default function HrmPage() {
                     value={empJoining}
                     onChange={(e) => setEmpJoining(e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Employment Status</label>
+                  <select
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={empStatus}
+                    onChange={(e) => setEmpStatus(e.target.value)}
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="ON_LEAVE">ON_LEAVE</option>
+                    <option value="TERMINATED">TERMINATED</option>
+                  </select>
                 </div>
               </div>
 
@@ -638,9 +716,9 @@ export default function HrmPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10"
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 cursor-pointer"
                 >
-                  Confirm Onboard
+                  {editingEmpId ? "Save Changes" : "Confirm Onboard"}
                 </button>
               </div>
             </form>

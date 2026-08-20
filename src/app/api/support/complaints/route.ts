@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
+import { sendTechnicianPushNotification } from "@/lib/push-notify";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -142,6 +143,20 @@ export async function POST(req: Request) {
       actor: { id: session.id, email: session.email },
       afterState: complaint,
     });
+
+    // Trigger push notification to assigned technician if applicable
+    if (complaint.assignedTechnicianId) {
+      sendTechnicianPushNotification({
+        technicianEmployeeId: complaint.assignedTechnicianId,
+        title: "New Service Job Assigned",
+        body: `Job ${complaint.complaintNumber}: ${complaint.customerName} - ${complaint.description.slice(0, 60)}`,
+        data: {
+          jobId: complaint.id,
+          complaintNumber: complaint.complaintNumber,
+          type: "JOB_ASSIGNED",
+        },
+      }).catch((err) => console.error("[Complaint Push Trigger] Error:", err));
+    }
 
     return NextResponse.json({ complaint });
   } catch (error: any) {

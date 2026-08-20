@@ -27,6 +27,7 @@
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "firebase-admin": "^14.3.0",
     "iconv-lite": "^0.7.3",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.424.0",

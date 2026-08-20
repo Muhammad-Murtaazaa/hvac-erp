@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
+import { sendTechnicianPushNotification } from "@/lib/push-notify";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -223,6 +224,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       actor: { id: session.id, email: session.email },
       afterState: updatedTicket,
     });
+
+    // If technician was assigned or reassigned, send push notification
+    if (updatedTicket.assignedTechnicianId && updatedTicket.assignedTechnicianId !== ticket.assignedTechnicianId) {
+      sendTechnicianPushNotification({
+        technicianEmployeeId: updatedTicket.assignedTechnicianId,
+        title: "Service Job Assigned to You",
+        body: `Job ${updatedTicket.complaintNumber}: ${updatedTicket.customerName} - ${updatedTicket.description.slice(0, 60)}`,
+        data: {
+          jobId: updatedTicket.id,
+          complaintNumber: updatedTicket.complaintNumber,
+          type: "JOB_ASSIGNED",
+        },
+      }).catch((err) => console.error("[Complaint Update Push Trigger] Error:", err));
+    }
 
     return NextResponse.json({ complaint: updatedTicket });
   } catch (error: any) {
