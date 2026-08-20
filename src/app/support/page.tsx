@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X, Receipt, ExternalLink } from "lucide-react";
+import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X, Receipt, ExternalLink, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
+import CustomerSelect from "@/components/shared/CustomerSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -73,6 +74,7 @@ function SupportPageContent() {
   const [registering, setRegistering] = useState(false);
 
   // New Ticket State
+  const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
@@ -81,6 +83,14 @@ function SupportPageContent() {
   const [techId, setTechId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
+
+  // Edit Ticket Customer & Job Info States
+  const [isEditCustInfoOpen, setIsEditCustInfoOpen] = useState(false);
+  const [editCustName, setEditCustName] = useState("");
+  const [editCustPhone, setEditCustPhone] = useState("");
+  const [editCustAddress, setEditCustAddress] = useState("");
+  const [editCustDescription, setEditCustDescription] = useState("");
+  const [savingCustInfo, setSavingCustInfo] = useState(false);
 
   // Update State inside Detail
   const [editStatus, setEditStatus] = useState("");
@@ -241,6 +251,7 @@ function SupportPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          customerId: customerId || undefined,
           customerName,
           customerPhone,
           customerAddress,
@@ -277,6 +288,7 @@ function SupportPageContent() {
         type: "success",
       });
       setIsCreateOpen(false);
+      setCustomerId("");
       setCustomerName("");
       setCustomerPhone("");
       setCustomerAddress("");
@@ -369,6 +381,41 @@ function SupportPageContent() {
       toast({ title: "Update Failed", message: err.message, type: "error" });
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleSaveCustomerInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCustName.trim() || !editCustPhone.trim() || !editCustAddress.trim() || !editCustDescription.trim()) {
+      toast({ title: "Missing Fields", message: "Please provide customer name, phone, address, and problem description.", type: "warning" });
+      return;
+    }
+
+    setSavingCustInfo(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/support/complaints/${selectedTicket.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          customerName: editCustName.trim(),
+          customerPhone: editCustPhone.trim(),
+          customerAddress: editCustAddress.trim(),
+          description: editCustDescription.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update complaint customer info");
+
+      toast({ title: "Customer Info Updated", message: "Customer and complaint details updated successfully.", type: "success" });
+      setSelectedTicket(data.complaint);
+      setIsEditCustInfoOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Update Failed", message: err.message, type: "error" });
+    } finally {
+      setSavingCustInfo(false);
     }
   };
 
@@ -894,20 +941,23 @@ function SupportPageContent() {
               {/* Section 1: Customer Info */}
               <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-4 rounded-xl space-y-3">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block border-b border-slate-100 dark:border-slate-800 pb-1.5">Client Information</span>
+                <CustomerSelect
+                  label="Customer / Client Name"
+                  value={customerName}
+                  phoneValue={customerPhone}
+                  addressValue={customerAddress}
+                  onChange={(c) => {
+                    setCustomerName(c.name);
+                    if (c.phone) setCustomerPhone(c.phone);
+                    if (c.address) setCustomerAddress(c.address);
+                    setCustomerId(c.id || "");
+                  }}
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Customer Client Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Muhammad Ali"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Customer Phone</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Customer Phone <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="text"
                       required
@@ -917,17 +967,19 @@ function SupportPageContent() {
                       onChange={(e) => setCustomerPhone(e.target.value)}
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Service Address</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. House 4, Street 12, Gulshan-e-Iqbal, Karachi"
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                      Service Address <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. House 4, Street 12, Gulshan-e-Iqbal, Karachi"
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1114,7 +1166,25 @@ function SupportPageContent() {
 
               {/* Customer summary */}
               <div className="bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-5 rounded-xl space-y-3">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block border-b border-slate-100 dark:border-slate-800 pb-1.5">Client Profile & Job Scope</span>
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Client Profile & Job Scope</span>
+                  {currentUser?.role?.name !== "Technician" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditCustName(selectedTicket.customerName || "");
+                        setEditCustPhone(selectedTicket.customerPhone || "");
+                        setEditCustAddress(selectedTicket.customerAddress || "");
+                        setEditCustDescription(selectedTicket.description || "");
+                        setIsEditCustInfoOpen(true);
+                      }}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 shadow-sm"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      <span>Edit Customer & Job</span>
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <p className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
                     <User className="w-4 h-4 text-slate-400" />
@@ -1571,6 +1641,103 @@ function SupportPageContent() {
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl text-xs font-bold transition-all"
                 >
                   {registering ? "Onboarding..." : "Onboard Technician"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT TICKET CUSTOMER & JOB INFO MODAL ==================== */}
+      {mounted && isEditCustInfoOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-lg shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-500" />
+                <span>Edit Customer & Job Details</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditCustInfoOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              Update client contact information, service location address, or problem description for Ticket #{selectedTicket?.complaintNumber}.
+            </p>
+
+            <form onSubmit={handleSaveCustomerInfo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Customer / Client Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editCustName}
+                  onChange={(e) => setEditCustName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Phone Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 0300-1234567"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editCustPhone}
+                  onChange={(e) => setEditCustPhone(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Service / Premises Address <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editCustAddress}
+                  onChange={(e) => setEditCustAddress(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Problem Description / Job Scope <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editCustDescription}
+                  onChange={(e) => setEditCustDescription(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCustInfoOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingCustInfo}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+                >
+                  {savingCustInfo ? "Saving..." : "Update Ticket"}
                 </button>
               </div>
             </form>

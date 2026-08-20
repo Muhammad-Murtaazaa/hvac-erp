@@ -78,6 +78,7 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Sales & Customers",
     defaultOpen: true,
     items: [
+      { name: "Customers", href: "/sales?tab=customers", icon: Users, roles: ["Admin", "Sales", "Accountant", "Support"] },
       { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
       { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
       { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },

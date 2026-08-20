@@ -252,10 +252,28 @@ model StockAdjustment {
   createdAt   DateTime @default(now())
 }
 
+model Customer {
+  id             String          @id @default(uuid())
+  name           String
+  phone          String          @unique
+  email          String?
+  address        String?
+  ntn            String?
+  cnic           String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  invoices       Invoice[]
+  complaints     Complaint[]
+  deliveryOrders DeliveryOrder[]
+}
+
 model DeliveryOrder {
   id              String        @id @default(uuid())
   doNumber        String        @unique
   date            DateTime
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id])
   clientName      String
   clientPhone     String
   deliveryAddress String
@@ -286,6 +304,8 @@ model DOLineItem {
 model Invoice {
   id                 String        @id @default(uuid())
   invoiceNumber      String        @unique
+  customerId         String?
+  customer           Customer?     @relation(fields: [customerId], references: [id])
   clientName         String
   clientPhone        String?
   clientAddress      String?
@@ -415,6 +435,8 @@ model Complaint {
   id                   String           @id @default(uuid())
   complaintNumber      String           @unique
   date                 DateTime
+  customerId           String?
+  customer             Customer?        @relation(fields: [customerId], references: [id])
   customerName         String
   customerPhone        String
   customerAddress      String

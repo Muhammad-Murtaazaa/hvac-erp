@@ -78,7 +78,8 @@ export default function POPdfPage() {
   }
 
   // Calculate pricing
-  const subtotal = po.lineItems.reduce((acc: number, item: any) => acc + Number(item.quantityOrdered) * Number(item.unitCost), 0);
+  const lineItems = po.lineItems || [];
+  const subtotal = lineItems.reduce((acc: number, item: any) => acc + Number(item.quantityOrdered || 0) * Number(item.unitCost || 0), 0);
   const discount = Number(po.discount || 0);
   
   // Calculate 18% sales tax based on the subtotal (after discount is applied)
@@ -181,14 +182,14 @@ export default function POPdfPage() {
           <div className="grid grid-cols-2 gap-8 text-[13px] mb-5 font-bold text-black">
             <div>
               <span className="text-black block font-bold">Vendor / Supplier:</span>
-              <div className="font-extrabold text-black text-sm mb-0.5">{po.vendor.name}</div>
+              <div className="font-extrabold text-black text-sm mb-0.5">{po.vendor?.name || "Unknown Vendor"}</div>
               <div className="text-black font-semibold leading-relaxed whitespace-pre-line">
-                {po.vendor.address || "Supplier Address"}
+                {po.vendor?.address || "Supplier Address"}
               </div>
               <div className="text-black mt-0.5 font-bold">
-                Attn: {po.vendor.contactPerson} ({po.vendor.phone})
+                Attn: {po.vendor?.contactPerson || "-"} ({po.vendor?.phone || "-"})
               </div>
-              {po.vendor.ntn && (
+              {po.vendor?.ntn && (
                 <div className="text-black font-mono font-bold text-xs mt-0.5">
                   NTN: {po.vendor.ntn}
                 </div>
@@ -199,18 +200,18 @@ export default function POPdfPage() {
               <div className="space-y-1">
                 <div>
                   <span className="font-bold text-black">PO Number:</span>{" "}
-                  <span className="font-extrabold text-black font-mono text-sm">{po.poNumber}</span>
+                  <span className="font-extrabold text-black font-mono text-sm">{po.poNumber || "-"}</span>
                 </div>
                 <div>
                   <span className="font-bold text-black">PO Date:</span>{" "}
                   <span className="font-bold text-black">
-                    {new Date(po.createdAt).toLocaleDateString("en-GB")}
+                    {po.createdAt ? new Date(po.createdAt).toLocaleDateString("en-GB") : "-"}
                   </span>
                 </div>
                 <div>
                   <span className="font-bold text-black">Status:</span>{" "}
                   <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase text-black border border-black">
-                    {po.status}
+                    {po.status || "DRAFT"}
                   </span>
                 </div>
               </div>
@@ -232,16 +233,16 @@ export default function POPdfPage() {
                 </tr>
               </thead>
               <tbody className="divide-y-2 divide-black">
-                {po.lineItems.map((item: any, index: number) => {
-                  const lineTotal = Number(item.quantityOrdered) * Number(item.unitCost);
+                {lineItems.map((item: any, index: number) => {
+                  const lineTotal = Number(item.quantityOrdered || 0) * Number(item.unitCost || 0);
                   return (
                     <tr key={item.id} className="text-black font-semibold">
                       <td className="p-2 border-r-2 border-black text-center font-bold">{index + 1}</td>
-                      <td className="p-2 border-r-2 border-black font-mono font-bold">{item.product.sku}</td>
-                      <td className="p-2 border-r-2 border-black font-bold">{item.product.name}</td>
-                      <td className="p-2 border-r-2 border-black text-center font-bold">{item.product.unit || "Nos"}</td>
+                      <td className="p-2 border-r-2 border-black font-mono font-bold">{item.product?.sku || "-"}</td>
+                      <td className="p-2 border-r-2 border-black font-bold">{item.product?.name || "-"}</td>
+                      <td className="p-2 border-r-2 border-black text-center font-bold">{item.product?.unit || "Nos"}</td>
                       <td className="p-2 border-r-2 border-black text-right font-black">{item.quantityOrdered}</td>
-                      <td className="p-2 border-r-2 border-black text-right font-mono font-bold">{Number(item.unitCost).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                      <td className="p-2 border-r-2 border-black text-right font-mono font-bold">{Number(item.unitCost || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                       <td className="p-2 text-right font-black font-mono">{lineTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                     </tr>
                   );

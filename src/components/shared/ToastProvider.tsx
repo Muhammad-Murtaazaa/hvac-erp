@@ -63,7 +63,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ toast, undoToast }}>
       {children}
       {/* Modern High-End Glassmorphic Toast Notification Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none print:hidden">
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none print:hidden">
         {toasts.map((t) => {
           const isSuccess = t.type === "success";
           const isError = t.type === "error";

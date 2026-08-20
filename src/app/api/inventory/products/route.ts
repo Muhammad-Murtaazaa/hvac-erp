@@ -59,3 +59,67 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+export async function PUT(req: Request) {
+  const session = await getCurrentUser(req);
+  if (!session || !hasPermission(session, "MANAGE_INVENTORY")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id, sku, name, category, unit, reorderLevel, averageCost, salesPrice, onHandQty } = await req.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "Product ID is required" }, { status: 400 });
+    }
+
+    if (!sku || !name || !category || !unit) {
+      return NextResponse.json({ error: "Required details missing" }, { status: 400 });
+    }
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+
+    const updateData: any = {
+      sku: sku.trim(),
+      name: name.trim(),
+      category: category.trim(),
+      unit: unit.trim(),
+      reorderLevel: isNaN(parseInt(reorderLevel)) ? existing.reorderLevel : Math.max(0, parseInt(reorderLevel)),
+      averageCost: averageCost !== undefined && !isNaN(Number(averageCost)) ? Math.max(0, Number(averageCost)) : existing.averageCost,
+    };
+
+    if (salesPrice !== undefined && !isNaN(Number(salesPrice))) {
+      updateData.salesPrice = Math.max(0, Number(salesPrice));
+    }
+
+    if (onHandQty !== undefined && !isNaN(parseInt(onHandQty))) {
+      updateData.onHandQty = Math.max(0, parseInt(onHandQty));
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Record audit snapshot
+    await recordAuditSnapshot({
+      entityName: "Product",
+      entityId: updated.id,
+      action: "UPDATE",
+      actor: { id: session.id, email: session.email },
+      beforeState: existing,
+      afterState: updated,
+    });
+
+    return NextResponse.json({ product: updated });
+  } catch (error: any) {
+    console.error("[Products PUT] Error:", error);
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "Product SKU already exists" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

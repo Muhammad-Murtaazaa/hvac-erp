@@ -47,6 +47,7 @@ export async function GET(req: Request) {
               product: true,
             },
           },
+          receivedBy: true,
         },
       },
     },

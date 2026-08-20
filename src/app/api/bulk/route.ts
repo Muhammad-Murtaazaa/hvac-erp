@@ -94,14 +94,65 @@ export async function POST(req: NextRequest) {
 
       // 4. Bulk Delete Stock / Products
       case "DELETE_PRODUCTS": {
-        const deleted = await prisma.product.deleteMany({
-          where: { id: { in: ids } },
+        const deletedCount = await prisma.$transaction(async (tx) => {
+          // 1. Nullify productId in invoiceLineItems, doLineItems, returnLineItems to preserve historical invoices & DOs
+          await tx.invoiceLineItem.updateMany({
+            where: { productId: { in: ids } },
+            data: { productId: null },
+          });
+
+          await tx.dOLineItem.updateMany({
+            where: { productId: { in: ids } },
+            data: { productId: null },
+          });
+
+          await tx.returnLineItem.updateMany({
+            where: { productId: { in: ids } },
+            data: { productId: null },
+          });
+
+          // 2. Delete VendorReturnLineItem referencing the products
+          await tx.vendorReturnLineItem.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 3. Delete GRNLineItem referencing the products
+          await tx.gRNLineItem.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 4. Delete POPendingItem referencing the products
+          await tx.pOPendingItem.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 5. Delete POLineItem referencing the products
+          await tx.pOLineItem.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 6. Delete StockAdjustment referencing the products
+          await tx.stockAdjustment.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 7. Delete StockLedger logs referencing the products
+          await tx.stockLedger.deleteMany({
+            where: { productId: { in: ids } },
+          });
+
+          // 8. Delete Product records
+          const res = await tx.product.deleteMany({
+            where: { id: { in: ids } },
+          });
+
+          return res.count;
         });
 
         return NextResponse.json({
           success: true,
-          message: `Deleted ${deleted.count} product item(s).`,
-          count: deleted.count,
+          message: `Deleted ${deletedCount} product item(s) and cleared associated stock records.`,
+          count: deletedCount,
         });
       }
 

@@ -12,7 +12,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
 
   try {
-    const { status, assignedTechnicianId, remarks, amount, amountStatus, generateInvoice } = await req.json();
+    const { status, assignedTechnicianId, remarks, amount, amountStatus, generateInvoice, customerName, customerPhone, customerAddress, description, customerId } = await req.json();
 
     const ticket = await prisma.complaint.findUnique({
       where: { id: params.id },
@@ -35,9 +35,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         (assignedTechnicianId !== undefined && assignedTechnicianId !== ticket.assignedTechnicianId) ||
         (amount !== undefined && Number(amount) !== Number(ticket.amount)) ||
         (amountStatus !== undefined && amountStatus !== ticket.amountStatus) ||
+        customerName ||
+        customerPhone ||
+        customerAddress ||
         generateInvoice
       ) {
-        return NextResponse.json({ error: "Forbidden: You are not authorized to update assignment or billing details" }, { status: 403 });
+        return NextResponse.json({ error: "Forbidden: You are not authorized to update assignment, customer, or billing details" }, { status: 403 });
       }
 
       if (status && ["RESOLVED", "CANCELLED"].includes(status)) {
@@ -53,6 +56,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTechId = assignedTechnicianId !== undefined ? assignedTechnicianId : ticket.assignedTechnicianId;
       const finalAmount = amount !== undefined ? Number(amount) : Number(ticket.amount);
       const finalAmountStatus = amountStatus || ticket.amountStatus;
+      const finalCustomerName = customerName ? customerName.trim() : ticket.customerName;
+      const finalCustomerPhone = customerPhone ? customerPhone.trim() : ticket.customerPhone;
+      const finalCustomerAddress = customerAddress !== undefined ? customerAddress.trim() : ticket.customerAddress;
+      const finalDescription = description !== undefined ? description.trim() : ticket.description;
+      const finalCustomerId = customerId !== undefined ? customerId : ticket.customerId;
 
       // 1. Status Transition logging
       if (finalStatus !== ticket.status) {
@@ -60,6 +68,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           fromStatus: ticket.status,
           toStatus: finalStatus,
           remarks: remarks || `Status transition from ${ticket.status} to ${finalStatus}`,
+        });
+      }
+
+      // Customer info change logging
+      if (finalCustomerName !== ticket.customerName || finalCustomerPhone !== ticket.customerPhone) {
+        timelineLogs.push({
+          fromStatus: ticket.status,
+          toStatus: finalStatus,
+          remarks: `Customer details updated: ${finalCustomerName} (${finalCustomerPhone})`,
         });
       }
 
@@ -92,9 +109,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         const inv = await tx.invoice.create({
           data: {
             invoiceNumber,
-            clientName: ticket.customerName,
-            clientPhone: ticket.customerPhone,
-            clientAddress: ticket.customerAddress,
+            customerId: finalCustomerId || null,
+            clientName: finalCustomerName,
+            clientPhone: finalCustomerPhone,
+            clientAddress: finalCustomerAddress,
             date: new Date(),
             status: "UNPAID",
             totalAmount: finalAmount,
@@ -103,7 +121,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             lineItems: {
               create: [
                 {
-                  description: `Service Charges for Ticket ${ticket.complaintNumber}: ${ticket.description}`,
+                  description: `Service Charges for Ticket ${ticket.complaintNumber}: ${finalDescription}`,
                   quantity: 1,
                   salesPrice: finalAmount,
                 },
@@ -123,7 +141,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           referenceType: "INVOICE",
           referenceId: inv.id,
           partyType: "CUSTOMER",
-          partyName: ticket.customerName,
+          partyName: finalCustomerName,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
         });
@@ -143,6 +161,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           assignedTechnicianId: finalTechId,
           amount: finalAmount,
           amountStatus: finalAmountStatus,
+          customerName: finalCustomerName,
+          customerPhone: finalCustomerPhone,
+          customerAddress: finalCustomerAddress,
+          description: finalDescription,
+          customerId: finalCustomerId,
           remarks: remarks !== undefined ? remarks : ticket.remarks,
         },
         include: {

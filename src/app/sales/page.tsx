@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode } from "lucide-react";
+import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
+import CustomerSelect from "@/components/shared/CustomerSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -17,15 +18,35 @@ function SalesPageContent() {
   const [vendorReturns, setVendorReturns] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "invoices"); // invoices, dos, customer_returns, vendor_returns, sales_setup
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "invoices"); // invoices, customers, dos, customer_returns, vendor_returns, sales_setup
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
   const { toast } = useToast();
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+
+  // Customer Management States
+  const [isCreateCustomerOpen, setIsCreateCustomerOpen] = useState(false);
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false);
+  const [isCustomerDossierOpen, setIsCustomerDossierOpen] = useState(false);
+  const [selectedCustomerDossier, setSelectedCustomerDossier] = useState<any>(null);
+  const [dossierLoading, setDossierLoading] = useState(false);
+  const [dossierTab, setDossierTab] = useState<"invoices" | "complaints" | "dos" | "statement">("invoices");
+
+  const [custName, setCustName] = useState("");
+  const [custPhone, setCustPhone] = useState("");
+  const [custEmail, setCustEmail] = useState("");
+  const [custAddress, setCustAddress] = useState("");
+  const [custNtn, setCustNtn] = useState("");
+  const [custCnic, setCustCnic] = useState("");
+  const [custNotes, setCustNotes] = useState("");
+  const [editingCustomerId, setEditingCustomerId] = useState("");
+  const [submittingCustomer, setSubmittingCustomer] = useState(false);
 
   const handleBulkInvoiceStatus = async (newStatus: string) => {
     if (selectedInvoiceIds.length === 0) return;
@@ -153,6 +174,7 @@ function SalesPageContent() {
       const retRes = await fetch("/api/sales/returns", { headers: { Authorization: `Bearer ${token}` } });
       const vrRes = await fetch("/api/procurement/vendor-return", { headers: { Authorization: `Bearer ${token}` } });
       const vRes = await fetch("/api/procurement/vendors", { headers: { Authorization: `Bearer ${token}` } });
+      const cRes = await fetch("/api/sales/customers", { headers: { Authorization: `Bearer ${token}` } });
 
       if (invRes.ok) setInvoices((await invRes.json()).invoices || []);
       if (doRes.ok) setDeliveryOrders((await doRes.json()).deliveryOrders || []);
@@ -160,6 +182,7 @@ function SalesPageContent() {
       if (retRes.ok) setCustomerReturns((await retRes.json()).returns || []);
       if (vrRes.ok) setVendorReturns((await vrRes.json()).vendorReturns || []);
       if (vRes.ok) setVendors((await vRes.json()).vendors || []);
+      if (cRes.ok) setCustomers((await cRes.json()).customers || []);
 
       const taxRes = await fetch("/api/sales/settings", { headers: { Authorization: `Bearer ${token}` } });
       if (taxRes.ok) {
@@ -183,6 +206,151 @@ function SalesPageContent() {
     fetchData();
     setMounted(true);
   }, []);
+
+  // Open Full 360 Dossier
+  const openCustomerDossier = async (customer: any) => {
+    setSelectedCustomerDossier(null);
+    setIsCustomerDossierOpen(true);
+    setDossierLoading(true);
+    setDossierTab("invoices");
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/sales/customers/${customer.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load customer profile history");
+      const data = await res.json();
+      setSelectedCustomerDossier(data.customer);
+    } catch (err: any) {
+      toast({ title: "Error", message: err.message, type: "error" });
+    } finally {
+      setDossierLoading(false);
+    }
+  };
+
+  const openCreateCustomer = () => {
+    setCustName("");
+    setCustPhone("");
+    setCustEmail("");
+    setCustAddress("");
+    setCustNtn("");
+    setCustCnic("");
+    setCustNotes("");
+    setIsCreateCustomerOpen(true);
+  };
+
+  const openEditCustomer = (customer: any) => {
+    setEditingCustomerId(customer.id);
+    setCustName(customer.name || "");
+    setCustPhone(customer.phone || "");
+    setCustEmail(customer.email || "");
+    setCustAddress(customer.address || "");
+    setCustNtn(customer.ntn || "");
+    setCustCnic(customer.cnic || "");
+    setCustNotes(customer.notes || "");
+    setIsEditCustomerOpen(true);
+  };
+
+  const handleCreateCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!custName.trim() || !custPhone.trim()) {
+      toast({ title: "Missing Fields", message: "Customer name and phone number are required.", type: "warning" });
+      return;
+    }
+
+    setSubmittingCustomer(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/sales/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: custName.trim(),
+          phone: custPhone.trim(),
+          email: custEmail.trim() || null,
+          address: custAddress.trim() || null,
+          ntn: custNtn.trim() || null,
+          cnic: custCnic.trim() || null,
+          notes: custNotes.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create customer");
+
+      toast({ title: "Customer Registered", message: `Customer "${custName}" added successfully.`, type: "success" });
+      setIsCreateCustomerOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Registration Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingCustomer(false);
+    }
+  };
+
+  const handleEditCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCustomerId || !custName.trim() || !custPhone.trim()) {
+      toast({ title: "Missing Fields", message: "Customer name and phone number are required.", type: "warning" });
+      return;
+    }
+
+    setSubmittingCustomer(true);
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/sales/customers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: editingCustomerId,
+          name: custName.trim(),
+          phone: custPhone.trim(),
+          email: custEmail.trim() || null,
+          address: custAddress.trim() || null,
+          ntn: custNtn.trim() || null,
+          cnic: custCnic.trim() || null,
+          notes: custNotes.trim() || null,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update customer");
+
+      toast({ title: "Customer Updated", message: `Customer "${custName}" updated successfully.`, type: "success" });
+      setIsEditCustomerOpen(false);
+      fetchData();
+      if (selectedCustomerDossier && selectedCustomerDossier.id === editingCustomerId) {
+        openCustomerDossier({ id: editingCustomerId });
+      }
+    } catch (err: any) {
+      toast({ title: "Update Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingCustomer(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (customer: any) => {
+    if (!confirm(`Are you sure you want to delete customer "${customer.name}"? Past invoices and DOs will be preserved.`)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/sales/customers?id=${customer.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete customer");
+
+      toast({ title: "Customer Deleted", message: data.message, type: "success" });
+      if (isCustomerDossierOpen && selectedCustomerDossier?.id === customer.id) {
+        setIsCustomerDossierOpen(false);
+      }
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Delete Failed", message: err.message, type: "error" });
+    }
+  };
 
   // Fetch GRN lines for a vendor return
   const handleVendorSelect = async (vId: string) => {
@@ -285,6 +453,7 @@ function SalesPageContent() {
     }
 
     const payload = {
+      customerId: selectedCustomerId || null,
       clientName,
       clientPhone,
       clientAddress,
@@ -306,6 +475,7 @@ function SalesPageContent() {
       if (!res.ok) throw new Error("Failed to create Invoice");
       toast({ title: "Invoice Created", message: "Invoice created and ledger balances written successfully.", type: "success" });
       setIsInvoiceOpen(false);
+      setSelectedCustomerId(null);
       setClientName("");
       setClientPhone("");
       setClientAddress("");
@@ -320,8 +490,12 @@ function SalesPageContent() {
     }
   };
 
+  const [doError, setDoError] = useState("");
+
   const handleDoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDoError("");
+
     const formattedLines = doLines
       .filter((l) => l.productId || (l.description && l.description.trim()))
       .map((l) => ({
@@ -332,8 +506,23 @@ function SalesPageContent() {
       }));
 
     if (!doClientName.trim() || !doClientPhone.trim() || !doAddress.trim() || formattedLines.length === 0) {
-      toast({ title: "Incomplete Details", message: "Please enter client name, phone, delivery address, and at least one valid product line.", type: "warning" });
+      const msg = "Please enter client name, phone, delivery address, and at least one valid product line.";
+      setDoError(msg);
+      toast({ title: "Incomplete Details", message: msg, type: "warning" });
       return;
+    }
+
+    // Client-side stock validation check
+    for (const line of formattedLines) {
+      if (line.productId) {
+        const prod = products.find((p) => p.id === line.productId);
+        if (prod && Number(prod.onHandQty ?? 0) < Number(line.quantity)) {
+          const msg = `Insufficient stock for "${prod.sku} - ${prod.name}". Available in stock: ${prod.onHandQty ?? 0} ${prod.unit || "Nos"}, Requested: ${line.quantity}.`;
+          setDoError(msg);
+          toast({ title: "Insufficient Stock", message: msg, type: "error" });
+          return;
+        }
+      }
     }
 
     const token = localStorage.getItem("token");
@@ -342,6 +531,7 @@ function SalesPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          customerId: selectedCustomerId || null,
           clientName: doClientName.trim(),
           clientPhone: doClientPhone.trim(),
           deliveryAddress: doAddress.trim(),
@@ -356,10 +546,14 @@ function SalesPageContent() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create Delivery Order");
+        const errMsg = data.error || "Failed to create Delivery Order";
+        setDoError(errMsg);
+        throw new Error(errMsg);
       }
       toast({ title: "Delivery Order Created", message: "Delivery Order created and stock dispatched.", type: "success" });
       setIsDoOpen(false);
+      setSelectedCustomerId(null);
+      setDoError("");
       setDoClientName("");
       setDoClientPhone("");
       setDoAddress("");
@@ -370,6 +564,7 @@ function SalesPageContent() {
       setDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "" }]);
       fetchData();
     } catch (err: any) {
+      setDoError(err.message);
       toast({ title: "DO Creation Failed", message: err.message, type: "error" });
     }
   };
@@ -553,6 +748,11 @@ function SalesPageContent() {
     return text.includes(search.toLowerCase());
   });
 
+  const filteredCustomers = customers.filter((c) => {
+    const text = (c.name || "") + " " + (c.phone || "") + " " + (c.email || "") + " " + (c.address || "") + " " + (c.ntn || "") + " " + (c.cnic || "");
+    return text.toLowerCase().includes(search.toLowerCase());
+  });
+
   return (
     <div className="space-y-6">
       {/* Dynamic Focused Header */}
@@ -562,6 +762,8 @@ function SalesPageContent() {
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               {activeTab === "invoices"
                 ? "Commercial Invoices"
+                : activeTab === "customers"
+                ? "Customer Directory & 360° History"
                 : activeTab === "dos"
                 ? "Delivery Orders & Dispatches"
                 : activeTab === "customer_returns"
@@ -573,6 +775,8 @@ function SalesPageContent() {
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               {activeTab === "invoices"
                 ? "Generate customer billing invoices, record payments, and track tax ledgers."
+                : activeTab === "customers"
+                ? "Manage customer accounts, view 360° track records (invoices, service tickets, DOs), and edit contact profiles."
                 : activeTab === "dos"
                 ? "Issue warehouse dispatch orders, carrier logistics, and delivery notes."
                 : activeTab === "customer_returns"
@@ -592,6 +796,16 @@ function SalesPageContent() {
               >
                 <Plus className="w-4 h-4" />
                 <span>New Invoice</span>
+              </button>
+            )}
+
+            {activeTab === "customers" && (
+              <button
+                onClick={openCreateCustomer}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add New Customer</span>
               </button>
             )}
 
@@ -631,6 +845,7 @@ function SalesPageContent() {
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
           {[
             { id: "invoices", label: `Invoices (${invoices.length})` },
+            { id: "customers", label: `Customers (${customers.length})` },
             { id: "dos", label: `Delivery Orders (${deliveryOrders.length})` },
             { id: "customer_returns", label: `Customer Returns (${customerReturns.length})` },
             { id: "vendor_returns", label: `Vendor Returns (${vendorReturns.length})` },
@@ -662,9 +877,200 @@ function SalesPageContent() {
       ) : (
         /* ==================== LIST RENDERERS ==================== */
         <div className="space-y-4">
-          <SearchFilter placeholder="Search lists by code or client name..." search={search} onSearchChange={setSearch} />
+          <SearchFilter placeholder="Search lists by customer name, phone, invoice code..." search={search} onSearchChange={setSearch} />
 
-          {/* 1. INVOICES LIST */}
+          {/* 0. CUSTOMERS DIRECTORY LIST */}
+          {activeTab === "customers" && (
+            <div className="space-y-6">
+              {/* Customer Stats Cards */}
+              {(() => {
+                const totalCustomers = customers.length;
+                const totalActive = customers.filter((c) => c.totalInvoices > 0).length;
+                const totalReceivables = customers.reduce((acc, c) => acc + (c.outstandingBalance || 0), 0);
+                const totalOpenTickets = customers.reduce((acc, c) => acc + (c.openComplaints || 0), 0);
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Registered Customers</span>
+                          <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">{totalCustomers}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center">
+                          <Users className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">{totalActive} clients with commercial invoices</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">Active Billed Clients</span>
+                          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{totalActive}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">{totalCustomers > 0 ? Math.round((totalActive / totalCustomers) * 100) : 0}% client conversion</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">Outstanding Receivables</span>
+                          <span className="text-2xl font-black font-mono text-amber-500 mt-1 block">PKR {totalReceivables.toLocaleString()}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center">
+                          <DollarSign className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">Total unpaid customer balance</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Open Service Tickets</span>
+                          <span className="text-2xl font-black text-rose-500 mt-1 block">{totalOpenTickets}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center">
+                          <Wrench className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">Complaints requiring field resolution</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Customer Directory Table */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
+                        <th className="p-3">Customer / Company Name</th>
+                        <th className="p-3">Phone Number</th>
+                        <th className="p-3">Email Address</th>
+                        <th className="p-3">Premises Address</th>
+                        <th className="p-3 text-center">Invoices</th>
+                        <th className="p-3 text-right">Total Billed</th>
+                        <th className="p-3 text-right">Outstanding</th>
+                        <th className="p-3 text-center">Tickets</th>
+                        <th className="p-3 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {filteredCustomers.map((cust) => (
+                        <tr key={cust.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{cust.name}</span>
+                              {cust.ntn && (
+                                <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal" title={`NTN: ${cust.ntn}`}>
+                                  NTN: {cust.ntn}
+                                </span>
+                              )}
+                            </div>
+                            {cust.notes && <p className="text-[10px] text-slate-400 truncate max-w-xs">{cust.notes}</p>}
+                          </td>
+                          <td className="p-3 font-mono font-medium whitespace-nowrap">
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {cust.phone}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-500 whitespace-nowrap">
+                            {cust.email ? (
+                              <span className="flex items-center gap-1">
+                                <Mail className="w-3 h-3 text-slate-400" />
+                                {cust.email}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-600">-</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-600 dark:text-slate-400 max-w-[180px] truncate" title={cust.address || ""}>
+                            {cust.address ? (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span className="truncate">{cust.address}</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-600">-</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded font-bold font-mono text-[11px]">
+                              {cust.totalInvoices ?? 0}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-mono font-semibold">
+                            PKR {Number(cust.totalSpent || 0).toLocaleString()}
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold">
+                            <span className={Number(cust.outstandingBalance || 0) > 0 ? "text-amber-500" : "text-emerald-500"}>
+                              PKR {Number(cust.outstandingBalance || 0).toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {cust.openComplaints > 0 ? (
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 rounded font-bold font-mono text-[10px]">
+                                {cust.openComplaints} Open
+                              </span>
+                            ) : cust.totalComplaints > 0 ? (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded font-bold font-mono text-[10px]">
+                                {cust.totalComplaints} Logged
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 dark:text-slate-600 text-xs">0</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => openCustomerDossier(cust)}
+                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1"
+                                title="View 360° History, Invoices & Complaints"
+                              >
+                                <History className="w-3 h-3" />
+                                <span>360° History</span>
+                              </button>
+                              <button
+                                onClick={() => openEditCustomer(cust)}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex items-center gap-1"
+                                title="Edit Customer Profile"
+                              >
+                                <Edit2 className="w-3 h-3 text-slate-500" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCustomer(cust)}
+                                className="p-1 text-slate-400 hover:text-rose-500 rounded transition-all"
+                                title="Delete Customer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredCustomers.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-slate-400">
+                            No customers found matching the search criteria. Click &quot;Add New Customer&quot; above to create one.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
           {activeTab === "invoices" && (
             <div className="space-y-4">
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -1048,40 +1454,36 @@ function SalesPageContent() {
             <p className="text-xs text-slate-500 mb-6">Create standalone billing records for walk-in trading clients or custom service scopes.</p>
 
             <form onSubmit={handleInvoiceSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Client Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. John Smith"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <CustomerSelect
+                    label="Customer / Client"
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
+                    phoneValue={clientPhone}
+                    addressValue={clientAddress}
+                    onChange={(c) => {
+                      setClientName(c.name);
+                      if (c.phone) setClientPhone(c.phone);
+                      if (c.address) setClientAddress(c.address);
+                      setSelectedCustomerId(c.id || null);
+                    }}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Client Phone</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g. +923331234567"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    required
+                    placeholder="e.g. 0300-1234567"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Client Address</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Phase 6 DHA, Karachi"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
-                    value={clientAddress}
-                    onChange={(e) => setClientAddress(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Invoice Type</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
                   <select
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
                     value={isGst ? "GST" : "NON_GST"}
@@ -1091,6 +1493,17 @@ function SalesPageContent() {
                     <option value="NON_GST">Non-GST (No Sales Tax)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Phase 6 DHA, Karachi"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                  value={clientAddress}
+                  onChange={(e) => setClientAddress(e.target.value)}
+                />
               </div>
 
               {/* Subject Heading & Description */}
@@ -1343,55 +1756,61 @@ function SalesPageContent() {
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Create Delivery Order Challan</h3>
               <button
                 type="button"
-                onClick={() => setIsDoOpen(false)}
+                onClick={() => {
+                  setIsDoOpen(false);
+                  setDoError("");
+                }}
                 className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
               >
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-6">Create delivery orders. Catalog items deduct stock immediately on dispatch.</p>
+            <p className="text-xs text-slate-500 mb-4">Create delivery orders. Catalog items deduct stock immediately on dispatch.</p>
+
+            {/* Prominent Inline Error Alert Banner */}
+            {doError && (
+              <div className="bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-200 p-4 rounded-xl flex items-start gap-3 text-xs mb-5 shadow-sm">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-extrabold text-sm text-rose-900 dark:text-rose-100">Insufficient Stock / Dispatch Warning</p>
+                  <p className="mt-1 font-semibold leading-relaxed">{doError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDoError("")}
+                  className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-base font-black px-1"
+                  title="Dismiss error"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleDoSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
-                <div>
-                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Recipient (Client / Vendor)</label>
-                  <input
-                    type="text"
-                    required
-                    list="party-do-list"
-                    placeholder="e.g. Acme Corp or Haier Vendor"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+              <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <CustomerSelect
+                    label="Recipient Customer / Client"
                     value={doClientName}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDoClientName(val);
-                      const matchingClient = invoices.find((inv) => inv.clientName.toLowerCase() === val.toLowerCase());
-                      if (matchingClient && matchingClient.clientPhone && !doClientPhone) {
-                        setDoClientPhone(matchingClient.clientPhone);
-                      }
-                      const matchingVendor = vendors.find((v: any) => v.name.toLowerCase() === val.toLowerCase());
-                      if (matchingVendor) {
-                        if (matchingVendor.phone && !doClientPhone) setDoClientPhone(matchingVendor.phone);
-                        if (matchingVendor.address && !doAddress) setDoAddress(matchingVendor.address);
-                      }
+                    phoneValue={doClientPhone}
+                    addressValue={doAddress}
+                    onChange={(c) => {
+                      setDoClientName(c.name);
+                      if (c.phone) setDoClientPhone(c.phone);
+                      if (c.address) setDoAddress(c.address);
+                      setSelectedCustomerId(c.id || null);
                     }}
                   />
-                  <datalist id="party-do-list">
-                    {Array.from(new Set(invoices.map((i) => i.clientName))).map((cName) => (
-                      <option key={cName} value={cName}>{cName} (Client)</option>
-                    ))}
-                    {vendors.map((v: any) => (
-                      <option key={v.id} value={v.name}>{v.name} (Vendor / Supplier)</option>
-                    ))}
-                  </datalist>
                 </div>
                 <div>
-                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Client Phone</label>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. +923331112222"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
                     value={doClientPhone}
                     onChange={(e) => setDoClientPhone(e.target.value)}
                   />
@@ -1461,62 +1880,90 @@ function SalesPageContent() {
                 </div>
 
                 <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
-                  {doLines.map((line, index) => (
-                    <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
-                      <select
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                        value={line.productId}
-                        onChange={(e) => {
-                          const updated = [...doLines];
-                          updated[index].productId = e.target.value;
-                          const p = products.find((pr) => pr.id === e.target.value);
-                          if (p) updated[index].description = p.name;
-                          setDoLines(updated);
-                        }}
-                      >
-                        <option value="">Choose Catalog Product...</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
-                        ))}
-                      </select>
+                  {doLines.map((line, index) => {
+                    const selectedProd = products.find((pr) => pr.id === line.productId);
+                    const isOverStock = selectedProd && Number(line.quantity || 0) > Number(selectedProd.onHandQty || 0);
 
-                      <input
-                        type="text"
-                        placeholder="Manual Description"
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                        value={line.description}
-                        onChange={(e) => {
-                          const updated = [...doLines];
-                          updated[index].description = e.target.value;
-                          setDoLines(updated);
-                        }}
-                      />
+                    return (
+                      <div key={index} className={`grid grid-cols-1 sm:grid-cols-3 gap-2 items-start p-3 rounded-xl transition-all ${isOverStock ? "bg-rose-50/70 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800" : "bg-slate-50 dark:bg-slate-950"}`}>
+                        <div>
+                          <select
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                            value={line.productId}
+                            onChange={(e) => {
+                              const updated = [...doLines];
+                              updated[index].productId = e.target.value;
+                              const p = products.find((pr) => pr.id === e.target.value);
+                              if (p) updated[index].description = p.name;
+                              setDoLines(updated);
+                            }}
+                          >
+                            <option value="">Choose Catalog Product...</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>{p.sku} - {p.name} (Stock: {p.onHandQty})</option>
+                            ))}
+                          </select>
 
-                      <div className="flex items-center justify-between gap-2">
+                          {selectedProd && (
+                            <div className="mt-1 flex items-center justify-between text-[11px] px-1">
+                              <span className="text-slate-500">
+                                In Stock:{" "}
+                                <strong className={isOverStock ? "text-rose-600 dark:text-rose-400 font-extrabold" : "text-emerald-600 dark:text-emerald-400 font-bold"}>
+                                  {selectedProd.onHandQty ?? 0} {selectedProd.unit || "Nos"}
+                                </strong>
+                              </span>
+                              {isOverStock && (
+                                <span className="text-rose-600 dark:text-rose-400 font-bold text-[10px] bg-rose-100 dark:bg-rose-900/60 px-1.5 py-0.5 rounded">
+                                  ⚠️ Exceeds Available Stock
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
                         <input
-                          type="number"
-                          placeholder="Qty"
-                          required
+                          type="text"
+                          placeholder="Manual Description"
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                          value={line.quantity}
+                          value={line.description}
                           onChange={(e) => {
                             const updated = [...doLines];
-                            updated[index].quantity = e.target.value;
+                            updated[index].description = e.target.value;
                             setDoLines(updated);
                           }}
                         />
-                        {doLines.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setDoLines(doLines.filter((_, i) => i !== index))}
-                            className="text-xs text-rose-500 font-bold hover:underline"
-                          >
-                            Remove
-                          </button>
-                        )}
+
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            required
+                            min="1"
+                            className={`w-full px-3 py-2 border rounded-lg text-xs font-mono font-bold ${
+                              isOverStock
+                                ? "border-rose-500 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 focus:ring-rose-500"
+                                : "border-slate-200 dark:border-slate-800"
+                            }`}
+                            value={line.quantity}
+                            onChange={(e) => {
+                              const updated = [...doLines];
+                              updated[index].quantity = e.target.value;
+                              setDoLines(updated);
+                            }}
+                          />
+                          {doLines.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setDoLines(doLines.filter((_, i) => i !== index))}
+                              className="text-xs text-rose-500 font-bold hover:underline shrink-0"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1534,7 +1981,10 @@ function SalesPageContent() {
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setIsDoOpen(false)}
+                  onClick={() => {
+                    setIsDoOpen(false);
+                    setDoError("");
+                  }}
                   className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
                 >
                   Cancel
@@ -1914,6 +2364,621 @@ function SalesPageContent() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== CREATE CUSTOMER MODAL ==================== */}
+      {mounted && isCreateCustomerOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-500" />
+                <span>Add New Customer</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateCustomerOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              Register customer in the central directory. Customer Name and Phone Number are required; other fields are optional.
+            </p>
+
+            <form onSubmit={handleCreateCustomerSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Customer / Company Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Master Textile Mill or Ali Ahmed"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custName}
+                  onChange={(e) => setCustName(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Phone Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0300-1234567"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custPhone}
+                    onChange={(e) => setCustPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Email Address (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="client@domain.com"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custEmail}
+                    onChange={(e) => setCustEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Premises / Delivery Address (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Plot 45, Industrial Estate, Multan"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custAddress}
+                  onChange={(e) => setCustAddress(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    NTN / STRN (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1234567-8"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custNtn}
+                    onChange={(e) => setCustNtn(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    CNIC / National ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 35202-1234567-1"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custCnic}
+                    onChange={(e) => setCustCnic(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Customer Notes / Terms (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Preferred client, Net 15 billing, specialized cooling contract..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custNotes}
+                  onChange={(e) => setCustNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateCustomerOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingCustomer}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+                >
+                  {submittingCustomer ? "Saving..." : "Add Customer"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT CUSTOMER MODAL ==================== */}
+      {mounted && isEditCustomerOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-blue-500" />
+                <span>Edit Customer Details</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditCustomerOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              Update contact info, billing address, tax identification, or remarks for this customer.
+            </p>
+
+            <form onSubmit={handleEditCustomerSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Customer / Company Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custName}
+                  onChange={(e) => setCustName(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Phone Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custPhone}
+                    onChange={(e) => setCustPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Email Address (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custEmail}
+                    onChange={(e) => setCustEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Premises / Delivery Address (Optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custAddress}
+                  onChange={(e) => setCustAddress(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    NTN / STRN (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custNtn}
+                    onChange={(e) => setCustNtn(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    CNIC / National ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={custCnic}
+                    onChange={(e) => setCustCnic(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Customer Notes / Terms (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={custNotes}
+                  onChange={(e) => setCustNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCustomerOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingCustomer}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+                >
+                  {submittingCustomer ? "Updating..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== CUSTOMER 360° HISTORY DOSSIER MODAL ==================== */}
+      {mounted && isCustomerDossierOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl w-full max-w-5xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[92vh] space-y-5">
+            {/* Modal Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                      {selectedCustomerDossier?.name || "Customer Profile"}
+                    </h3>
+                    <p className="text-xs text-slate-500 flex items-center gap-3 mt-0.5">
+                      <span className="flex items-center gap-1 font-mono">
+                        <Phone className="w-3 h-3 text-slate-400" />
+                        {selectedCustomerDossier?.phone}
+                      </span>
+                      {selectedCustomerDossier?.email && (
+                        <span className="flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-slate-400" />
+                          {selectedCustomerDossier?.email}
+                        </span>
+                      )}
+                      {selectedCustomerDossier?.address && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          {selectedCustomerDossier?.address}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedCustomerDossier && (
+                  <button
+                    onClick={() => openEditCustomer(selectedCustomerDossier)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-blue-500" />
+                    <span>Edit Profile</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerDossierOpen(false)}
+                  className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold p-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {dossierLoading ? (
+              <div className="p-12 text-center text-slate-400">Loading customer history dossier...</div>
+            ) : selectedCustomerDossier ? (
+              <>
+                {/* Metrics Banner */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 p-3.5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Billed Invoices</span>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white block mt-1">
+                      {selectedCustomerDossier.invoices?.length || 0} Invoices
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      PKR {Number(selectedCustomerDossier.stats?.totalSpent || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 p-3.5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">Total Paid Collected</span>
+                    <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1 font-mono">
+                      PKR {Number(selectedCustomerDossier.stats?.totalPaid || 0).toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-emerald-600">Settled payments</span>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 p-3.5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">Outstanding Balance</span>
+                    <span className="text-lg font-extrabold text-amber-500 block mt-1 font-mono">
+                      PKR {Number(selectedCustomerDossier.stats?.outstandingBalance || 0).toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-amber-600">Pending receivables</span>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 p-3.5 rounded-2xl">
+                    <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">Complaints & Tickets</span>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white block mt-1">
+                      {selectedCustomerDossier.complaints?.length || 0} Logged
+                    </span>
+                    <span className="text-[10px] text-rose-500 font-bold">
+                      {selectedCustomerDossier.stats?.openComplaints || 0} Active / Open
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-Navigation Tabs */}
+                <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
+                  <button
+                    onClick={() => setDossierTab("invoices")}
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                      dossierTab === "invoices"
+                        ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                        : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Invoices ({selectedCustomerDossier.invoices?.length || 0})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setDossierTab("complaints")}
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                      dossierTab === "complaints"
+                        ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                        : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>Complaints / Service ({selectedCustomerDossier.complaints?.length || 0})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setDossierTab("dos")}
+                    className={`pb-2.5 px-3 border-b-2 transition-all flex items-center gap-1.5 ${
+                      dossierTab === "dos"
+                        ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                        : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Delivery Orders ({selectedCustomerDossier.deliveryOrders?.length || 0})</span>
+                  </button>
+                </div>
+
+                {/* Sub Tab: Invoices */}
+                {dossierTab === "invoices" && (
+                  <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                            <th className="p-3">Invoice Number</th>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">Total Amount (PKR)</th>
+                            <th className="p-3 text-right">Amount Paid</th>
+                            <th className="p-3 text-right">Balance Due</th>
+                            <th className="p-3 text-center">PDF</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                          {selectedCustomerDossier.invoices?.map((inv: any) => {
+                            const isFullyPaid = Math.round(Number(inv.amountPaid)) >= Math.round(Number(inv.totalAmount));
+                            const balanceDue = Math.max(0, Math.round(Number(inv.totalAmount) - Number(inv.amountPaid)));
+                            return (
+                              <tr key={inv.id} className="hover:bg-white dark:hover:bg-slate-900/60">
+                                <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{inv.invoiceNumber}</td>
+                                <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
+                                <td className="p-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isFullyPaid
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60"
+                                      : inv.status === "PARTIALLY_PAID"
+                                      ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60"
+                                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/60"
+                                  }`}>
+                                    {isFullyPaid ? "PAID" : inv.status}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right font-mono font-bold">{Math.round(Number(inv.totalAmount)).toLocaleString()}</td>
+                                <td className="p-3 text-right font-mono text-emerald-500 font-bold">{Math.round(Number(inv.amountPaid)).toLocaleString()}</td>
+                                <td className="p-3 text-right font-mono font-bold">
+                                  <span className={balanceDue > 0 ? "text-amber-500" : "text-slate-400"}>
+                                    {balanceDue.toLocaleString()}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  <a
+                                    href={`/api/pdf?type=invoice&id=${inv.id}&inline=true`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </a>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {(!selectedCustomerDossier.invoices || selectedCustomerDossier.invoices.length === 0) && (
+                            <tr>
+                              <td colSpan={7} className="p-6 text-center text-slate-400">
+                                No commercial invoices issued for this customer yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub Tab: Complaints */}
+                {dossierTab === "complaints" && (
+                  <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                            <th className="p-3">Ticket #</th>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Problem Description</th>
+                            <th className="p-3">Technician</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">Service Charges</th>
+                            <th className="p-3 text-center">Billing</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                          {selectedCustomerDossier.complaints?.map((comp: any) => (
+                            <tr key={comp.id} className="hover:bg-white dark:hover:bg-slate-900/60">
+                              <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{comp.complaintNumber}</td>
+                              <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(comp.date || comp.createdAt).toLocaleDateString()}</td>
+                              <td className="p-3 max-w-xs truncate" title={comp.description}>{comp.description}</td>
+                              <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">
+                                {comp.technician?.name || <span className="text-slate-400 italic">Unassigned</span>}
+                              </td>
+                              <td className="p-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  comp.status === "RESOLVED"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40"
+                                    : comp.status === "IN_PROGRESS"
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40"
+                                    : "bg-amber-100 text-amber-700 dark:bg-amber-950/40"
+                                }`}>
+                                  {comp.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right font-mono font-bold">
+                                PKR {Number(comp.amount || 0).toLocaleString()}
+                              </td>
+                              <td className="p-3 text-center">
+                                {comp.invoice ? (
+                                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-mono font-bold">
+                                    {comp.invoice.invoiceNumber}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-[10px]">{comp.amountStatus || "UNPAID"}</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {(!selectedCustomerDossier.complaints || selectedCustomerDossier.complaints.length === 0) && (
+                            <tr>
+                              <td colSpan={7} className="p-6 text-center text-slate-400">
+                                No service tickets or complaints logged for this customer.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub Tab: Delivery Orders */}
+                {dossierTab === "dos" && (
+                  <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-100/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                            <th className="p-3">DO Number</th>
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Items Dispatched</th>
+                            <th className="p-3">Destination / Address</th>
+                            <th className="p-3 text-center">PDF</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                          {selectedCustomerDossier.deliveryOrders?.map((d: any) => (
+                            <tr key={d.id} className="hover:bg-white dark:hover:bg-slate-900/60">
+                              <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{d.doNumber}</td>
+                              <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(d.date || d.createdAt).toLocaleDateString()}</td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950/40 rounded-full text-[10px] font-bold">
+                                  {d.status}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                  {d.lineItems?.length || 0} product line(s)
+                                </span>
+                              </td>
+                              <td className="p-3 text-slate-500 truncate max-w-xs">{d.deliveryAddress}</td>
+                              <td className="p-3 text-center">
+                                <a
+                                  href={`/api/pdf?type=do&id=${d.id}&inline=true`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View</span>
+                                </a>
+                              </td>
+                            </tr>
+                          ))}
+                          {(!selectedCustomerDossier.deliveryOrders || selectedCustomerDossier.deliveryOrders.length === 0) && (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-slate-400">
+                                No warehouse delivery orders dispatched for this customer yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsCustomerDossierOpen(false)}
+                className="px-5 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-bold"
+              >
+                Close History
+              </button>
+            </div>
           </div>
         </div>,
         document.body

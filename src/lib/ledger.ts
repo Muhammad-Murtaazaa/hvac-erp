@@ -72,7 +72,14 @@ export async function recordStockMovement(
     throw new Error(`Product not found: ${data.productId}`);
   }
 
-  const runningBalance = product.onHandQty + data.quantity;
+  // Strictly prevent stock from ever going negative
+  if (data.quantity < 0 && (product.onHandQty + data.quantity < 0)) {
+    throw new Error(
+      `Insufficient stock for "${product.sku} - ${product.name}". Available in stock: ${Math.max(0, product.onHandQty)}, Attempted reduction: ${Math.abs(data.quantity)}.`
+    );
+  }
+
+  const runningBalance = Math.max(0, product.onHandQty + data.quantity);
 
   await tx.product.update({
     where: { id: data.productId },

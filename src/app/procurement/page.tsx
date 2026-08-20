@@ -105,10 +105,10 @@ function ProcurementPageContent() {
 
         // Filter out unresolved pending items for shortages list
         const pLines: any[] = [];
-        poData.purchaseOrders.forEach((po: any) => {
-          po.pendingItems.forEach((pi: any) => {
+        (poData.purchaseOrders || []).forEach((po: any) => {
+          (po.pendingItems || []).forEach((pi: any) => {
             if (!pi.isResolved) {
-              pLines.push({ ...pi, poNumber: po.poNumber, vendorName: po.vendor.name });
+              pLines.push({ ...pi, poNumber: po.poNumber || "-", vendorName: po.vendor?.name || "Unknown Vendor" });
             }
           });
         });
@@ -287,15 +287,17 @@ function ProcurementPageContent() {
     setSelectedPO(po);
     setGrnNotes("");
     setGrnLines(
-      po.lineItems.map((line: any) => {
+      (po.lineItems || []).map((line: any) => {
+        const qOrdered = Number(line.quantityOrdered) || 0;
+        const qReceived = Number(line.quantityReceived) || 0;
         return {
           productId: line.productId,
-          sku: line.product.sku,
-          name: line.product.name,
-          quantityOrdered: line.quantityOrdered,
+          sku: line.product?.sku || "-",
+          name: line.product?.name || "-",
+          quantityOrdered: qOrdered,
           quantityReceived: "", // Start blank so user must manually enter verified count
-          remaining: line.quantityOrdered - line.quantityReceived,
-          unitCost: line.unitCost,
+          remaining: Math.max(0, qOrdered - qReceived),
+          unitCost: line.unitCost || "0",
         };
       })
     );
@@ -390,10 +392,12 @@ function ProcurementPageContent() {
   };
 
   // Filters
-  const filteredPOs = purchaseOrders.filter((po) => {
+  const filteredPOs = (purchaseOrders || []).filter((po) => {
+    const poNum = po.poNumber || "";
+    const vName = po.vendor?.name || "";
     const matchesText =
-      po.poNumber.toLowerCase().includes(search.toLowerCase()) ||
-      po.vendor.name.toLowerCase().includes(search.toLowerCase());
+      poNum.toLowerCase().includes((search || "").toLowerCase()) ||
+      vName.toLowerCase().includes((search || "").toLowerCase());
     const matchesStatus = status === "" || po.status === status;
     return matchesText && matchesStatus;
   });
@@ -515,8 +519,8 @@ function ProcurementPageContent() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredPOs.map((po) => (
                     <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                      <td className="p-3 font-bold whitespace-nowrap">{po.poNumber}</td>
-                      <td className="p-3 font-semibold">{po.vendor.name}</td>
+                      <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
+                      <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           po.status === "COMPLETED"
@@ -530,8 +534,8 @@ function ProcurementPageContent() {
                           {po.status}
                         </span>
                       </td>
-                      <td className="p-3 text-right font-bold">{Number(po.totalAmount).toFixed(2)}</td>
-                      <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(po.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -589,15 +593,15 @@ function ProcurementPageContent() {
                     .filter((po) => po.status === "SUBMITTED")
                     .map((po) => (
                       <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                        <td className="p-3 font-bold whitespace-nowrap">{po.poNumber}</td>
-                        <td className="p-3 font-semibold">{po.vendor.name}</td>
+                        <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
+                        <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
                         <td className="p-3">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
                             Dispatched / Pending
                           </span>
                         </td>
-                        <td className="p-3 text-right font-bold">{Number(po.totalAmount).toFixed(2)}</td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(po.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
+                        <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
                         <td className="p-3 text-center">
                           <button
                             onClick={() => openGrnForm(po)}
@@ -637,15 +641,17 @@ function ProcurementPageContent() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {pendingItems.map((item) => {
-                  const outstanding = item.quantityMissing - item.quantityResolved;
+                  const missing = item.quantityMissing || 0;
+                  const resolved = item.quantityResolved || 0;
+                  const outstanding = missing - resolved;
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                      <td className="p-3 font-bold">{item.poNumber}</td>
-                      <td className="p-3 font-semibold">{item.vendorName}</td>
-                      <td className="p-3 font-bold">{item.product.sku}</td>
-                      <td className="p-3">{item.product.name}</td>
-                      <td className="p-3 text-right text-slate-400 font-semibold">{item.quantityMissing}</td>
-                      <td className="p-3 text-right text-emerald-500 font-semibold">{item.quantityResolved}</td>
+                      <td className="p-3 font-bold">{item.poNumber || "-"}</td>
+                      <td className="p-3 font-semibold">{item.vendorName || "Unknown Vendor"}</td>
+                      <td className="p-3 font-bold">{item.product?.sku || "-"}</td>
+                      <td className="p-3">{item.product?.name || "-"}</td>
+                      <td className="p-3 text-right text-slate-400 font-semibold">{missing}</td>
+                      <td className="p-3 text-right text-emerald-500 font-semibold">{resolved}</td>
                       <td className="p-3 text-right font-black text-rose-500 text-sm">{outstanding}</td>
                       <td className="p-3 text-center">
                         <button
@@ -694,8 +700,12 @@ function ProcurementPageContent() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {vendors
                     .filter((v) => {
-                      const text = v.name.toLowerCase() + (v.email || "").toLowerCase() + (v.ntn || "").toLowerCase() + v.contactPerson.toLowerCase();
-                      return text.includes(search.toLowerCase());
+                      const name = v?.name || "";
+                      const email = v?.email || "";
+                      const ntn = v?.ntn || "";
+                      const contactPerson = v?.contactPerson || "";
+                      const text = `${name} ${email} ${ntn} ${contactPerson}`.toLowerCase();
+                      return text.includes((search || "").toLowerCase());
                     })
                     .map((vendor) => (
                       <tr key={vendor.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
@@ -705,7 +715,7 @@ function ProcurementPageContent() {
                         <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">{vendor.ntn || "-"}</td>
                         <td className="p-3 font-medium">{vendor.phone}</td>
                         <td className="p-3 text-slate-500 max-w-xs truncate" title={vendor.address}>{vendor.address || "-"}</td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(vendor.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3 text-slate-500 whitespace-nowrap">{vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : "-"}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
@@ -730,8 +740,12 @@ function ProcurementPageContent() {
                       </tr>
                     ))}
                   {vendors.filter((v) => {
-                    const text = v.name.toLowerCase() + (v.email || "").toLowerCase() + (v.ntn || "").toLowerCase() + v.contactPerson.toLowerCase();
-                    return text.includes(search.toLowerCase());
+                    const name = v?.name || "";
+                    const email = v?.email || "";
+                    const ntn = v?.ntn || "";
+                    const contactPerson = v?.contactPerson || "";
+                    const text = `${name} ${email} ${ntn} ${contactPerson}`.toLowerCase();
+                    return text.includes((search || "").toLowerCase());
                   }).length === 0 && (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">No vendors registered yet.</td>
@@ -784,8 +798,12 @@ function ProcurementPageContent() {
                     <div className="absolute z-[9999] w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-60 overflow-y-auto">
                       {vendors
                         .filter((v) => {
-                          const text = (v.name + " " + v.contactPerson + " " + (v.phone || "") + " " + (v.email || "")).toLowerCase();
-                          return text.includes(vendorSearch.toLowerCase());
+                          const name = v?.name || "";
+                          const contact = v?.contactPerson || "";
+                          const phone = v?.phone || "";
+                          const email = v?.email || "";
+                          const text = `${name} ${contact} ${phone} ${email}`.toLowerCase();
+                          return text.includes((vendorSearch || "").toLowerCase());
                         })
                         .map((v) => (
                           <button
@@ -794,17 +812,21 @@ function ProcurementPageContent() {
                             className="w-full px-4 py-2.5 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800/60 last:border-b-0 flex flex-col gap-0.5"
                             onClick={() => {
                               setNewPoVendor(v.id);
-                              setVendorSearch(v.name);
+                              setVendorSearch(v.name || "");
                               setShowVendorSuggestions(false);
                             }}
                           >
-                            <span className="font-bold text-slate-800 dark:text-slate-100">{v.name}</span>
-                            <span className="text-slate-400 text-[10px]">{v.contactPerson} • {v.phone || "No phone"}</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100">{v.name || "Unnamed Vendor"}</span>
+                            <span className="text-slate-400 text-[10px]">{v.contactPerson || "No contact"} • {v.phone || "No phone"}</span>
                           </button>
                         ))}
                       {vendors.filter((v) => {
-                        const text = (v.name + " " + v.contactPerson + " " + (v.phone || "") + " " + (v.email || "")).toLowerCase();
-                        return text.includes(vendorSearch.toLowerCase());
+                        const name = v?.name || "";
+                        const contact = v?.contactPerson || "";
+                        const phone = v?.phone || "";
+                        const email = v?.email || "";
+                        const text = `${name} ${contact} ${phone} ${email}`.toLowerCase();
+                        return text.includes((vendorSearch || "").toLowerCase());
                       }).length === 0 && (
                         <div className="p-4 text-center text-xs text-slate-400">No matching vendors found</div>
                       )}
@@ -1006,9 +1028,9 @@ function ProcurementPageContent() {
       {/* ==================== PO DETAILS MODAL ==================== */}
       {mounted && selectedPO && !isGrnOpen && createPortal(
         <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-3xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-3xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Purchase Order {selectedPO.poNumber}</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Purchase Order {selectedPO.poNumber || "-"}</h3>
               <button
                 type="button"
                 onClick={() => setSelectedPO(null)}
@@ -1021,16 +1043,16 @@ function ProcurementPageContent() {
             <div className="grid grid-cols-2 gap-4 text-xs mb-6 border-b border-slate-100 dark:border-slate-800/80 pb-4">
               <div>
                 <p className="text-slate-400 font-semibold">Supplier Vendor:</p>
-                <p className="font-bold text-slate-700 dark:text-slate-200">{selectedPO.vendor.name}</p>
+                <p className="font-bold text-slate-700 dark:text-slate-200">{selectedPO.vendor?.name || "Unknown Vendor"}</p>
                 <p className="text-[10px] text-slate-500">
-                  {selectedPO.vendor.phone}
-                  {selectedPO.vendor.email ? ` | ${selectedPO.vendor.email}` : ""}
-                  {selectedPO.vendor.ntn ? ` | NTN: ${selectedPO.vendor.ntn}` : ""}
+                  {selectedPO.vendor?.phone || "-"}
+                  {selectedPO.vendor?.email ? ` | ${selectedPO.vendor.email}` : ""}
+                  {selectedPO.vendor?.ntn ? ` | NTN: ${selectedPO.vendor.ntn}` : ""}
                 </p>
               </div>
               <div>
                 <p className="text-slate-400 font-semibold">PO Status:</p>
-                <p className="font-bold capitalize">{selectedPO.status}</p>
+                <p className="font-bold capitalize">{selectedPO.status || "DRAFT"}</p>
               </div>
             </div>
 
@@ -1047,15 +1069,20 @@ function ProcurementPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {selectedPO.lineItems.map((line: any) => (
-                    <tr key={line.id}>
-                      <td className="p-2 font-bold">{line.product.sku}</td>
-                      <td className="p-2">{line.product.name}</td>
-                      <td className="p-2 text-right font-semibold">{line.quantityOrdered}</td>
-                      <td className="p-2 text-right text-emerald-500 font-bold">{line.quantityReceived}</td>
-                      <td className="p-2 text-right">{Number(line.unitCost).toFixed(2)}</td>
+                  {(selectedPO.lineItems || []).map((line: any, idx: number) => (
+                    <tr key={line.id || idx}>
+                      <td className="p-2 font-bold">{line.product?.sku || "-"}</td>
+                      <td className="p-2">{line.product?.name || "-"}</td>
+                      <td className="p-2 text-right font-semibold">{Number(line.quantityOrdered || 0)}</td>
+                      <td className="p-2 text-right text-emerald-500 font-bold">{Number(line.quantityReceived || 0)}</td>
+                      <td className="p-2 text-right">{Number(line.unitCost || 0).toFixed(2)}</td>
                     </tr>
                   ))}
+                  {(!selectedPO.lineItems || selectedPO.lineItems.length === 0) && (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-slate-400">No line items in this purchase order.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1064,7 +1091,7 @@ function ProcurementPageContent() {
               <div className="flex justify-between text-slate-500 font-medium">
                 <span>Subtotal:</span>
                 <span className="font-mono">
-                  {selectedPO.lineItems.reduce((acc: number, line: any) => acc + Number(line.quantityOrdered) * Number(line.unitCost), 0).toFixed(2)} PKR
+                  {(selectedPO.lineItems || []).reduce((acc: number, line: any) => acc + Number(line.quantityOrdered || 0) * Number(line.unitCost || 0), 0).toFixed(2)} PKR
                 </span>
               </div>
               <div className="flex justify-between text-rose-500 font-medium">
@@ -1073,20 +1100,28 @@ function ProcurementPageContent() {
               </div>
               <div className="flex justify-between text-slate-800 dark:text-slate-100 font-bold text-sm border-t border-slate-200 dark:border-slate-850 pt-2">
                 <span>Total Amount:</span>
-                <span className="font-mono text-blue-500">{Number(selectedPO.totalAmount).toFixed(2)} PKR</span>
+                <span className="font-mono text-blue-500">{Number(selectedPO.totalAmount || 0).toFixed(2)} PKR</span>
               </div>
             </div>
+
+            {/* Notes if present */}
+            {selectedPO.notes && (
+              <div className="mb-6 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl text-xs">
+                <span className="font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes:</span>
+                <p className="text-slate-700 dark:text-slate-300 whitespace-pre-line">{selectedPO.notes}</p>
+              </div>
+            )}
 
             {/* GRN Logs list if any */}
             {selectedPO.grns && selectedPO.grns.length > 0 && (
               <div className="mb-6">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Linked Goods Receipts (GRNs)</h4>
                 <div className="space-y-1.5">
-                  {selectedPO.grns.map((grn: any) => (
-                    <div key={grn.id} className="p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[10px] flex justify-between items-center">
-                      <span className="font-bold">{grn.grnNumber}</span>
-                      <span className="text-slate-400">Date: {new Date(grn.receivedAt).toLocaleDateString()}</span>
-                      <span className="text-slate-400">By: {grn.receivedBy.name}</span>
+                  {selectedPO.grns.map((grn: any, idx: number) => (
+                    <div key={grn.id || idx} className="p-2 bg-slate-50 dark:bg-slate-950 rounded-lg text-[10px] flex justify-between items-center">
+                      <span className="font-bold">{grn.grnNumber || "-"}</span>
+                      <span className="text-slate-400">Date: {grn.receivedAt ? new Date(grn.receivedAt).toLocaleDateString() : "-"}</span>
+                      <span className="text-slate-400">By: {grn.receivedBy?.name || "Staff"}</span>
                     </div>
                   ))}
                 </div>
@@ -1094,14 +1129,16 @@ function ProcurementPageContent() {
             )}
 
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <a
-                href={`/procurement/po/${selectedPO.id}/pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
-              >
-                <Printer className="w-3.5 h-3.5" /> View & Print PDF
-              </a>
+              {selectedPO.id && (
+                <a
+                  href={`/procurement/po/${selectedPO.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" /> View & Print PDF
+                </a>
+              )}
               <button
                 onClick={() => setSelectedPO(null)}
                 className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
@@ -1128,7 +1165,7 @@ function ProcurementPageContent() {
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-6">Receive stock items against PO {selectedPO.poNumber}. shortfalls are automatically tracked.</p>
+            <p className="text-xs text-slate-500 mb-6">Receive stock items against PO {selectedPO.poNumber || "-"}. shortfalls are automatically tracked.</p>
 
             <form onSubmit={handleGrnSubmit} className="space-y-4">
               <div className="space-y-3">
@@ -1227,25 +1264,25 @@ function ProcurementPageContent() {
                 ✕
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-6">Log the arrival of previously shortfall items for PO {selectedPendingItem.poNumber}.</p>
+            <p className="text-xs text-slate-500 mb-6">Log the arrival of previously shortfall items for PO {selectedPendingItem.poNumber || "-"}.</p>
 
             <form onSubmit={handleResolveSubmit} className="space-y-4">
               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl text-xs space-y-2 mb-4">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Product SKU:</span>
-                  <span className="font-bold">{selectedPendingItem.product.sku}</span>
+                  <span className="font-bold">{selectedPendingItem.product?.sku || "-"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Missing Qty:</span>
-                  <span className="font-bold">{selectedPendingItem.quantityMissing}</span>
+                  <span className="font-bold">{selectedPendingItem.quantityMissing || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Resolved Qty:</span>
-                  <span className="font-bold text-emerald-500">{selectedPendingItem.quantityResolved}</span>
+                  <span className="font-bold text-emerald-500">{selectedPendingItem.quantityResolved || 0}</span>
                 </div>
                 <div className="flex justify-between text-rose-500 font-bold border-t border-slate-100 dark:border-slate-800 pt-2">
                   <span>Outstanding:</span>
-                  <span>{selectedPendingItem.quantityMissing - selectedPendingItem.quantityResolved}</span>
+                  <span>{(selectedPendingItem.quantityMissing || 0) - (selectedPendingItem.quantityResolved || 0)}</span>
                 </div>
               </div>
 
@@ -1256,9 +1293,9 @@ function ProcurementPageContent() {
                   required
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-emerald-500 font-mono"
                   value={resolveQty}
-                  max={selectedPendingItem.quantityMissing - selectedPendingItem.quantityResolved}
+                  max={(selectedPendingItem.quantityMissing || 0) - (selectedPendingItem.quantityResolved || 0)}
                   onChange={(e) => {
-                    const maxQty = selectedPendingItem.quantityMissing - selectedPendingItem.quantityResolved;
+                    const maxQty = (selectedPendingItem.quantityMissing || 0) - (selectedPendingItem.quantityResolved || 0);
                     const val = parseInt(e.target.value) || 0;
                     if (val > maxQty) {
                       toast({ title: "Exceeds Shortfall", message: `Cannot resolve more than outstanding quantity (${maxQty}).`, type: "warning" });
@@ -1517,23 +1554,23 @@ function ProcurementPageContent() {
       {mounted && isLedgerOpen && selectedVendor && createPortal(
         (() => {
           // Calculations
-          const vendorPOs = purchaseOrders.filter((po) => po.vendorId === selectedVendor.id);
+          const vendorPOs = (purchaseOrders || []).filter((po) => po.vendorId === selectedVendor.id);
           
           const productMap: { [productId: string]: { sku: string; name: string; ordered: number; received: number; cost: number } } = {};
           vendorPOs.forEach((po) => {
-            po.lineItems.forEach((li: any) => {
+            (po.lineItems || []).forEach((li: any) => {
               if (!productMap[li.productId]) {
                 productMap[li.productId] = {
-                  sku: li.product.sku,
-                  name: li.product.name,
+                  sku: li.product?.sku || "-",
+                  name: li.product?.name || "-",
                   ordered: 0,
                   received: 0,
-                  cost: Number(li.unitCost),
+                  cost: Number(li.unitCost || 0),
                 };
               }
-              productMap[li.productId].ordered += li.quantityOrdered;
-              productMap[li.productId].received += li.quantityReceived;
-              productMap[li.productId].cost = Number(li.unitCost);
+              productMap[li.productId].ordered += Number(li.quantityOrdered || 0);
+              productMap[li.productId].received += Number(li.quantityReceived || 0);
+              productMap[li.productId].cost = Number(li.unitCost || 0);
             });
           });
           const productSummaryList = Object.values(productMap);
@@ -1547,14 +1584,14 @@ function ProcurementPageContent() {
           vendorPOs.forEach((po) => {
             if (po.grns) {
               po.grns.forEach((grn: any) => {
-                grn.lineItems.forEach((li: any) => {
+                (grn.lineItems || []).forEach((li: any) => {
                   vendorGRNs.push({
                     grnNumber: grn.grnNumber,
                     receivedAt: grn.receivedAt,
-                    sku: li.product.sku,
-                    name: li.product.name,
-                    quantity: li.quantityReceived,
-                    cost: Number(li.unitCost),
+                    sku: li.product?.sku || "-",
+                    name: li.product?.name || "-",
+                    quantity: Number(li.quantityReceived || 0),
+                    cost: Number(li.unitCost || 0),
                   });
                 });
               });
@@ -1567,7 +1604,7 @@ function ProcurementPageContent() {
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
                 <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-4 mb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{selectedVendor.name} - Procurement Statement</h3>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{selectedVendor.name || "Vendor"} - Procurement Statement</h3>
                     <p className="text-xs text-slate-500 mt-1">Full purchase order tracking, shipment receipts, and pending balances ledger.</p>
                   </div>
                   <button
@@ -1639,12 +1676,12 @@ function ProcurementPageContent() {
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                         {vendorPOs.map((po) => {
-                          const oQty = po.lineItems.reduce((acc: number, l: any) => acc + l.quantityOrdered, 0);
-                          const rQty = po.lineItems.reduce((acc: number, l: any) => acc + l.quantityReceived, 0);
+                          const oQty = (po.lineItems || []).reduce((acc: number, l: any) => acc + Number(l.quantityOrdered || 0), 0);
+                          const rQty = (po.lineItems || []).reduce((acc: number, l: any) => acc + Number(l.quantityReceived || 0), 0);
                           return (
                             <tr key={po.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
-                              <td className="p-2.5 font-bold font-mono">{po.poNumber}</td>
-                              <td className="p-2.5 text-slate-500">{new Date(po.createdAt).toLocaleDateString()}</td>
+                              <td className="p-2.5 font-bold font-mono">{po.poNumber || "-"}</td>
+                              <td className="p-2.5 text-slate-500">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
                               <td className="p-2.5">
                                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
                                   po.status === "COMPLETED"
@@ -1656,7 +1693,7 @@ function ProcurementPageContent() {
                                   {po.status}
                                 </span>
                               </td>
-                              <td className="p-2.5 text-right font-bold font-mono">{Number(po.totalAmount).toFixed(2)}</td>
+                              <td className="p-2.5 text-right font-bold font-mono">{Number(po.totalAmount || 0).toFixed(2)}</td>
                               <td className="p-2.5 text-center font-mono">{oQty}</td>
                               <td className="p-2.5 text-center font-mono">{rQty}</td>
                             </tr>
@@ -1731,7 +1768,7 @@ function ProcurementPageContent() {
                         {vendorGRNs.map((grn, index) => (
                           <tr key={index} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20">
                             <td className="p-2.5 font-bold font-mono text-blue-500">{grn.grnNumber}</td>
-                            <td className="p-2.5 text-slate-500">{new Date(grn.receivedAt).toLocaleDateString()}</td>
+                            <td className="p-2.5 text-slate-500">{grn.receivedAt ? new Date(grn.receivedAt).toLocaleDateString() : "-"}</td>
                             <td className="p-2.5 font-bold font-mono">{grn.sku}</td>
                             <td className="p-2.5 text-slate-700 dark:text-slate-300">{grn.name}</td>
                             <td className="p-2.5 text-right font-bold text-emerald-500 font-mono">{grn.quantity}</td>
