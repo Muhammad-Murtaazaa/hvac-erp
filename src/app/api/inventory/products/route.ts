@@ -9,10 +9,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Auto-heal any legacy negative onHandQty in database
+  try {
+    await prisma.product.updateMany({
+      where: { onHandQty: { lt: 0 } },
+      data: { onHandQty: 0 },
+    });
+  } catch (err) {
+    console.error("[Products GET] Error auto-healing negative onHandQty:", err);
+  }
+
   const products = await prisma.product.findMany({
     orderBy: { sku: "asc" },
   });
-  return NextResponse.json({ products });
+
+  const sanitized = products.map((p) => ({
+    ...p,
+    onHandQty: Math.max(0, p.onHandQty ?? 0),
+    incomingQty: Math.max(0, p.incomingQty ?? 0),
+  }));
+
+  return NextResponse.json({ products: sanitized });
 }
 
 export async function POST(req: Request) {

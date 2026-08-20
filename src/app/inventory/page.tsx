@@ -260,7 +260,7 @@ export default function InventoryPage() {
     value: c,
   }));
 
-  const lowStockProducts = products.filter((p) => Number(p.onHandQty || 0) <= Number(p.reorderLevel || 0));
+  const lowStockProducts = products.filter((p) => Math.max(0, Number(p.onHandQty || 0)) <= Number(p.reorderLevel || 0));
 
   return (
     <div className="space-y-6">
@@ -272,7 +272,7 @@ export default function InventoryPage() {
             <h4 className="font-bold text-sm">Low Stock Alert!</h4>
             <p className="text-xs mt-0.5">
               The following catalog items are running below reorder limits:{" "}
-              {lowStockProducts.map((p) => `${p.sku} (${p.onHandQty} left)`).join(", ")}.
+              {lowStockProducts.map((p) => `${p.sku} (${Math.max(0, Number(p.onHandQty || 0))} left)`).join(", ")}.
             </p>
           </div>
         </div>
@@ -377,7 +377,7 @@ export default function InventoryPage() {
                         <td className="p-3">{p.category || "-"}</td>
                         <td className="p-3 text-slate-500">{p.unit || "Nos"}</td>
                         <td className={`p-3 text-right font-black text-sm font-mono ${isLow ? "text-amber-500" : ""}`}>
-                          {p.onHandQty ?? 0}
+                          {Math.max(0, Number(p.onHandQty || 0))}
                           {isLow && (
                             <span className="inline-block ml-1 text-[10px] bg-amber-500/10 text-amber-500 px-1 py-0.5 rounded font-bold uppercase">
                               Low
