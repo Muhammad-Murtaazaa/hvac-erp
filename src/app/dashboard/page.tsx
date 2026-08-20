@@ -422,12 +422,16 @@ export default function DashboardPage() {
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#0f172a",
-                    borderRadius: "16px",
-                    border: "1px solid #1e293b",
+                    borderRadius: "14px",
+                    border: "1px solid #334155",
                     color: "#ffffff",
                     fontSize: "12px",
                     fontWeight: "bold",
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                   }}
+                  itemStyle={{ color: "#ffffff" }}
+                  labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                  formatter={(value: any) => [`Rs. ${Number(value).toLocaleString()}`, "Revenue"]}
                 />
                 <Area
                   type="monotone"
@@ -475,11 +479,16 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#0f172a",
-                      borderRadius: "12px",
-                      border: "none",
+                      borderRadius: "14px",
+                      border: "1px solid #334155",
                       color: "#ffffff",
                       fontSize: "12px",
+                      fontWeight: "bold",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                     }}
+                    itemStyle={{ color: "#ffffff" }}
+                    labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                    formatter={(value: any) => [`Rs. ${Number(value).toLocaleString()}`, "Spend"]}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
                 </PieChart>
@@ -525,10 +534,16 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#0f172a",
-                      borderRadius: "12px",
-                      color: "#fff",
+                      borderRadius: "14px",
+                      border: "1px solid #334155",
+                      color: "#ffffff",
                       fontSize: "12px",
+                      fontWeight: "bold",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                     }}
+                    itemStyle={{ color: "#ffffff" }}
+                    labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                    formatter={(value: any) => [`${value} units`, "Dispatched"]}
                   />
                   <Bar
                     dataKey="quantity"
@@ -571,10 +586,16 @@ export default function DashboardPage() {
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#0f172a",
-                      borderRadius: "12px",
-                      color: "#fff",
+                      borderRadius: "14px",
+                      border: "1px solid #334155",
+                      color: "#ffffff",
                       fontSize: "12px",
+                      fontWeight: "bold",
+                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                     }}
+                    itemStyle={{ color: "#ffffff" }}
+                    labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                    formatter={(value: any) => [`${value} complaints`, "Active Workload"]}
                   />
                   <Bar
                     dataKey="complaints"

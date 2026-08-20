@@ -2853,7 +2853,20 @@ function FinancialsPageContent() {
                           <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: any) => [`PKR ${Number(value).toLocaleString()}`, "Amount"]} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0f172a",
+                          borderRadius: "14px",
+                          border: "1px solid #334155",
+                          color: "#ffffff",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
+                        }}
+                        itemStyle={{ color: "#ffffff" }}
+                        labelStyle={{ color: "#94a3b8", marginBottom: "4px" }}
+                        formatter={(value: any) => [`PKR ${Number(value).toLocaleString()}`, "Amount"]}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
