@@ -188,7 +188,6 @@ function SalesPageContent() {
       if (vRes.ok) setVendors((await vRes.json()).vendors || []);
       if (cRes.ok) setCustomers((await cRes.json()).customers || []);
       if (compRes.ok) setComplaints((await compRes.json()).complaints || []);
-      if (cRes.ok) setCustomers((await cRes.json()).customers || []);
 
       const taxRes = await fetch("/api/sales/settings", { headers: { Authorization: `Bearer ${token}` } });
       if (taxRes.ok) {
