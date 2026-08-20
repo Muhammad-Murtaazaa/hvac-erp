@@ -45,7 +45,8 @@ interface MenuItem {
   name: string;
   href: string;
   icon: any;
-  roles?: string[]; // Allowed roles. If undefined, visible to all
+  roles?: string[]; // Allowed roles fallback
+  permissions?: string[]; // Allowed RBAC permissions
 }
 
 interface NavigationGroup {
@@ -56,8 +57,8 @@ interface NavigationGroup {
 }
 
 const PINNED_ITEMS: MenuItem[] = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Settings", href: "/settings", icon: Settings, roles: ["Admin"] },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, permissions: ["VIEW_DASHBOARD"] },
+  { name: "Settings", href: "/settings", icon: Settings, roles: ["Admin"], permissions: ["MANAGE_USERS", "MANAGE_ROLES"] },
 ];
 
 const NAVIGATION_GROUPS: NavigationGroup[] = [
@@ -66,11 +67,11 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Business Pulse",
     defaultOpen: true,
     items: [
-      { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"] },
-      { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"] },
-      { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"] },
-      { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"] },
-      { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement"] },
+      { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
+      { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_REPORTS"] },
+      { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
+      { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
+      { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement", "Support", "Technician", "Investor"], permissions: ["VIEW_DASHBOARD", "VIEW_FINANCIALS", "MANAGE_SALES", "MANAGE_SUPPORT", "MANAGE_PROCUREMENT"] },
     ],
   },
   {
@@ -78,13 +79,13 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Sales & Customers",
     defaultOpen: true,
     items: [
-      { name: "Customers", href: "/sales?tab=customers", icon: Users, roles: ["Admin", "Sales", "Accountant", "Support"] },
-      { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"] },
-      { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"] },
-      { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"] },
-      { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"] },
-      { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales"] },
-      { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"] },
+      { name: "Customers", href: "/sales?tab=customers", icon: Users, roles: ["Admin", "Sales", "Accountant", "Support"], permissions: ["MANAGE_SALES", "MANAGE_SUPPORT", "VIEW_FINANCIALS"] },
+      { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "VIEW_FINANCIALS"] },
+      { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES"] },
+      { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "MANAGE_INVENTORY"] },
+      { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES"] },
+      { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales", "Accountant"], permissions: ["MANAGE_SUPPORT", "MANAGE_SALES"] },
+      { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "MANAGE_SUPPORT"] },
     ],
   },
   {
@@ -92,8 +93,8 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Field Operations",
     defaultOpen: true,
     items: [
-      { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales"] },
-      { name: "Technicians", href: "/support?tab=technicians", icon: UserCheck, roles: ["Admin", "Support", "Technician", "Sales"] },
+      { name: "Complaints", href: "/support", icon: Wrench, roles: ["Admin", "Support", "Technician", "Sales", "Accountant"], permissions: ["MANAGE_SUPPORT"] },
+      { name: "Technicians", href: "/support?tab=technicians", icon: UserCheck, roles: ["Admin", "Support", "Technician", "Sales", "Accountant"], permissions: ["MANAGE_SUPPORT", "MANAGE_HRM"] },
     ],
   },
   {
@@ -101,9 +102,9 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Warehouse & Procurement",
     defaultOpen: true,
     items: [
-      { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement"] },
-      { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"] },
-      { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement"] },
+      { name: "Purchase Order", href: "/procurement?tab=pos", icon: Truck, roles: ["Admin", "Inventory/Procurement", "Accountant"], permissions: ["MANAGE_PROCUREMENT"] },
+      { name: "Stock", href: "/inventory", icon: Box, roles: ["Admin", "Inventory/Procurement", "Accountant"], permissions: ["MANAGE_INVENTORY"] },
+      { name: "Vendors", href: "/procurement?tab=vendors", icon: Store, roles: ["Admin", "Inventory/Procurement", "Accountant"], permissions: ["MANAGE_PROCUREMENT", "VIEW_FINANCIALS"] },
     ],
   },
   {
@@ -111,8 +112,8 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Finance & People",
     defaultOpen: true,
     items: [
-      { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"] },
-      { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"] },
+      { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"], permissions: ["MANAGE_HRM"] },
     ],
   },
   {
@@ -120,8 +121,8 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "System",
     defaultOpen: false, // Collapsed by default
     items: [
-      { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"] },
-      { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"] },
+      { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"], permissions: ["MANAGE_ROLES", "MANAGE_USERS"] },
+      { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"], permissions: ["VIEW_DASHBOARD"] },
     ],
   },
 ];
@@ -355,17 +356,30 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Filter menu items by user role
+  // Filter menu items by dynamic RBAC permissions and user role
   const userRole = currentUser?.role?.name || "";
-  const filteredPinnedItems = PINNED_ITEMS.filter((item) => {
-    if (!item.roles) return true;
-    return item.roles.includes(userRole) || userRole.toLowerCase() === "admin";
-  });
+  const userPermissions: string[] = Array.isArray(currentUser?.permissions) ? currentUser.permissions : [];
+  const isAdmin = userRole.toLowerCase() === "admin";
 
-  const filteredMenuItems = ALL_MENU_ITEMS.filter((item) => {
-    if (!item.roles) return true;
-    return item.roles.includes(userRole) || userRole.toLowerCase() === "admin";
-  });
+  const isItemVisible = (item: MenuItem) => {
+    if (isAdmin) return true;
+    // 1. Dynamic RBAC permissions check: if user has any assigned permission matching this item
+    if (item.permissions && item.permissions.some((p) => userPermissions.includes(p))) {
+      return true;
+    }
+    // 2. Static role check fallback
+    if (item.roles && item.roles.includes(userRole)) {
+      return true;
+    }
+    // 3. If no restrictions defined, item is visible to all authenticated users
+    if (!item.roles && !item.permissions) {
+      return true;
+    }
+    return false;
+  };
+
+  const filteredPinnedItems = PINNED_ITEMS.filter(isItemVisible);
+  const filteredMenuItems = ALL_MENU_ITEMS.filter(isItemVisible);
 
   return (
     <ToastProvider>
@@ -442,9 +456,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {/* COLLAPSIBLE NAVIGATION GROUPS */}
             <div className="space-y-2.5">
               {NAVIGATION_GROUPS.map((group) => {
-                const visibleItems = group.items.filter(
-                  (item) => !item.roles || item.roles.includes(userRole) || userRole.toLowerCase() === "admin"
-                );
+                const visibleItems = group.items.filter(isItemVisible);
                 if (visibleItems.length === 0) return null;
 
                 const isOpen = !!openGroups[group.id];
