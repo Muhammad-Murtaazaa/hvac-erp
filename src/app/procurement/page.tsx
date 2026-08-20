@@ -667,15 +667,13 @@ function ProcurementPageContent() {
                           >
                             <FileText className="w-3.5 h-3.5" /> View
                           </button>
-                          {(po.status === "DRAFT" || po.status === "SUBMITTED") && (
-                            <button
-                              onClick={() => openEditPo(po)}
-                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold flex items-center gap-1 transition-all"
-                              title="Edit Purchase Order"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-amber-500" /> Edit
-                            </button>
-                          )}
+                          <button
+                            onClick={() => openEditPo(po)}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-400 rounded text-[10px] font-bold flex items-center gap-1 transition-all"
+                            title="Edit Purchase Order"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-amber-500" /> Edit
+                          </button>
                           <a
                             href={`/procurement/po/${po.id}/pdf`}
                             target="_blank"
@@ -1354,6 +1352,8 @@ function ProcurementPageContent() {
                     <option value="DRAFT">Draft</option>
                     <option value="SUBMITTED">Submitted (Active for GRN Receiving)</option>
                     <option value="PARTIALLY_RECEIVED">Partially Received</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
                   </select>
                 </div>
               </div>
@@ -1737,19 +1737,17 @@ function ProcurementPageContent() {
             )}
 
             <div className="flex justify-between items-center pt-4 border-t border-slate-100 dark:border-slate-800">
-              {(selectedPO.status === "DRAFT" || selectedPO.status === "SUBMITTED") ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const poToEdit = selectedPO;
-                    setSelectedPO(null);
-                    openEditPo(poToEdit);
-                  }}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5"
-                >
-                  <Edit2 className="w-3.5 h-3.5" /> Edit this PO
-                </button>
-              ) : <div />}
+              <button
+                type="button"
+                onClick={() => {
+                  const poToEdit = selectedPO;
+                  setSelectedPO(null);
+                  openEditPo(poToEdit);
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5"
+              >
+                <Edit2 className="w-3.5 h-3.5" /> Edit this PO
+              </button>
 
               <div className="flex items-center gap-2">
                 {selectedPO.id && (

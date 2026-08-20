@@ -165,13 +165,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Vendor and line items are required" }, { status: 400 });
     }
 
-    if (po.status === "COMPLETED") {
-      return NextResponse.json({ error: "Completed POs cannot be edited" }, { status: 400 });
-    }
+    // Map existing received quantities per product
+    const receivedMap = new Map<string, number>();
+    (po.lineItems || []).forEach((l: any) => {
+      receivedMap.set(l.productId, (receivedMap.get(l.productId) || 0) + (l.quantityReceived || 0));
+    });
 
     const updatedPO = await prisma.$transaction(async (tx: any) => {
-      // Revert old incomingQty if previously SUBMITTED
-      if (po.status === "SUBMITTED") {
+      // Revert old unreceived incomingQty if previously active
+      if (po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED") {
         for (const item of po.lineItems) {
           const remaining = Math.max(0, item.quantityOrdered - item.quantityReceived);
           if (remaining > 0) {
@@ -238,12 +240,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           status: nextStatus,
           createdAt: poDate ? new Date(poDate) : undefined,
           lineItems: {
-            create: lineItems.map((item: any) => ({
-              productId: item.productId,
-              quantityOrdered: parseInt(item.quantityOrdered),
-              unitCost: Number(item.unitCost),
-              expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
-            })),
+            create: lineItems.map((item: any) => {
+              const qtyOrdered = parseInt(item.quantityOrdered);
+              const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);
+              return {
+                productId: item.productId,
+                quantityOrdered: qtyOrdered,
+                quantityReceived: qtyReceived,
+                unitCost: Number(item.unitCost),
+                expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
+              };
+            }),
           },
         },
         include: {
@@ -264,17 +271,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         });
       }
 
-      // If next status is SUBMITTED, add new incoming quantities
-      if (nextStatus === "SUBMITTED") {
+      // If next status is SUBMITTED or PARTIALLY_RECEIVED, add new unreceived incoming quantities
+      if (nextStatus === "SUBMITTED" || nextStatus === "PARTIALLY_RECEIVED") {
         for (const item of lineItems) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              incomingQty: {
-                increment: parseInt(item.quantityOrdered),
+          const qtyOrdered = parseInt(item.quantityOrdered);
+          const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);
+          const remaining = Math.max(0, qtyOrdered - qtyReceived);
+          if (remaining > 0) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                incomingQty: {
+                  increment: remaining,
+                },
               },
-            },
-          });
+            });
+          }
         }
       }
 
