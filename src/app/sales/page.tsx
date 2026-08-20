@@ -1539,6 +1539,7 @@ function SalesPageContent() {
                     value={clientName}
                     phoneValue={clientPhone}
                     addressValue={clientAddress}
+                    includeVendors={true}
                     onChange={(c) => {
                       setClientName(c.name);
                       if (c.phone) setClientPhone(c.phone);
@@ -1872,6 +1873,7 @@ function SalesPageContent() {
                     value={doClientName}
                     phoneValue={doClientPhone}
                     addressValue={doAddress}
+                    includeVendors={true}
                     onChange={(c) => {
                       setDoClientName(c.name);
                       if (c.phone) setDoClientPhone(c.phone);

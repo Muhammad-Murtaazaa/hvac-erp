@@ -14,6 +14,7 @@ export interface CustomerData {
   ntn?: string | null;
   cnic?: string | null;
   notes?: string | null;
+  isVendor?: boolean;
 }
 
 interface CustomerSelectProps {
@@ -25,6 +26,7 @@ interface CustomerSelectProps {
   required?: boolean;
   placeholder?: string;
   className?: string;
+  includeVendors?: boolean;
 }
 
 export default function CustomerSelect({
@@ -36,6 +38,7 @@ export default function CustomerSelect({
   required = true,
   placeholder = "Search or select customer...",
   className = "",
+  includeVendors = false,
 }: CustomerSelectProps) {
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -57,15 +60,39 @@ export default function CustomerSelect({
   const fetchCustomers = async () => {
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+      let all: CustomerData[] = [];
+      
       const res = await fetch("/api/sales/customers", {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setCustomers(data.customers || []);
+        all = data.customers || [];
       }
+
+      if (includeVendors) {
+        const vRes = await fetch("/api/procurement/vendors", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          const mappedVendors: CustomerData[] = (vData.vendors || []).map((v: any) => ({
+            id: undefined, // pass undefined so invoice auto-creates a customer record
+            name: v.name,
+            phone: v.phone || "",
+            email: v.email || null,
+            address: v.address || null,
+            ntn: v.ntn || null,
+            notes: v.paymentTerms || null,
+            isVendor: true,
+          }));
+          all = [...all, ...mappedVendors];
+        }
+      }
+
+      setCustomers(all);
     } catch (e) {
-      console.error("Failed to fetch customers:", e);
+      console.error("Failed to fetch customers/vendors:", e);
     }
   };
 
@@ -251,7 +278,14 @@ export default function CustomerSelect({
                     {initials}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
+                    <p className="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-2">
+                      {c.name}
+                      {c.isVendor && (
+                        <span className="text-[9px] font-bold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 px-1.5 py-0.5 rounded-md uppercase">
+                          Vendor
+                        </span>
+                      )}
+                    </p>
                     <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                       {c.phone && (
                         <span className="flex items-center gap-1 font-mono">
