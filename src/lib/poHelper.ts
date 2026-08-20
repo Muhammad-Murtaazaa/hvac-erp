@@ -8,6 +8,7 @@ export interface POMetadata {
   discountAmount: number;
   subtotalAmount: number;
   totalAmount: number;
+  createdByName?: string;
 }
 
 export function parsePoMetadata(notes: string | null | undefined, po?: any): POMetadata {
@@ -20,6 +21,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
   let discountAmount = po ? Number(po.discount || 0) : 0;
   let subtotalAmount = 0;
   let totalAmount = po ? Number(po.totalAmount || 0) : 0;
+  let createdByName = "Saleem";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -35,6 +37,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
         if (parsed.discountAmount !== undefined) discountAmount = Number(parsed.discountAmount);
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
+        if (parsed.createdByName) createdByName = String(parsed.createdByName);
       } catch {
         userNotes = notes;
       }
@@ -74,6 +77,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
     discountAmount,
     subtotalAmount,
     totalAmount,
+    createdByName,
   };
 }
 
@@ -87,6 +91,7 @@ export function formatPoNotesPayload(data: {
   discountAmount: number;
   subtotalAmount: number;
   totalAmount: number;
+  createdByName?: string;
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -98,5 +103,6 @@ export function formatPoNotesPayload(data: {
     discountAmount: Number(data.discountAmount || 0),
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
+    createdByName: data.createdByName || "Saleem",
   });
 }

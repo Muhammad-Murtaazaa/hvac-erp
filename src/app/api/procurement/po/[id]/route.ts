@@ -206,6 +206,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTaxAmount = isGst ? Math.round(taxableAmount * (tRate / 100)) : 0;
       const finalTotalAmount = Math.max(0, taxableAmount + finalTaxAmount);
 
+      const existingMeta = parsePoMetadata(po.notes, po);
       const notesPayload = formatPoNotesPayload({
         userNotes: notes || "",
         isGst: Boolean(isGst),
@@ -216,6 +217,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         discountAmount: finalDiscountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        createdByName: existingMeta.createdByName || session.name || "Saleem",
       });
 
       const nextStatus = requestedStatus || po.status;

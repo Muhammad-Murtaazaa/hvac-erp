@@ -128,6 +128,7 @@ export async function POST(req: Request) {
         discountAmount: finalDiscountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        createdByName: session.name || "Saleem",
       });
 
       const po = await tx.purchaseOrder.create({

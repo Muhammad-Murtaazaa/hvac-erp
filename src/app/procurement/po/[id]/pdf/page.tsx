@@ -35,6 +35,7 @@ export default function POPdfPage() {
   const poId = params.id as string;
 
   const [po, setPo] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -42,6 +43,14 @@ export default function POPdfPage() {
     const fetchPO = async () => {
       const token = localStorage.getItem("token");
       try {
+        // Fetch logged in user
+        fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.user) setCurrentUser(d.user);
+          })
+          .catch(() => {});
+
         const res = await fetch(`/api/procurement/po/${poId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -209,6 +218,10 @@ export default function POPdfPage() {
                   <span className="font-bold text-black">
                     {po.createdAt ? new Date(po.createdAt).toLocaleDateString("en-GB") : "-"}
                   </span>
+                </div>
+                <div>
+                  <span className="font-bold text-black">User ID:</span>{" "}
+                  <span className="text-black font-normal">{currentUser?.name || meta.createdByName || "Saleem"}</span>
                 </div>
                 <div>
                   <span className="font-bold text-black">Status:</span>{" "}

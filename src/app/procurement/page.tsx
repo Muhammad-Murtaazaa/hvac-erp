@@ -1613,7 +1613,7 @@ function ProcurementPageContent() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs mb-6 border-b border-slate-100 dark:border-slate-800/80 pb-4">
+            <div className="grid grid-cols-3 gap-4 text-xs mb-6 border-b border-slate-100 dark:border-slate-800/80 pb-4">
               <div>
                 <p className="text-slate-400 font-semibold">Supplier Vendor:</p>
                 <p className="font-bold text-slate-700 dark:text-slate-200">{selectedPO.vendor?.name || "Unknown Vendor"}</p>
@@ -1626,6 +1626,12 @@ function ProcurementPageContent() {
               <div>
                 <p className="text-slate-400 font-semibold">PO Status:</p>
                 <p className="font-bold capitalize">{selectedPO.status || "DRAFT"}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 font-semibold">User ID / Created By:</p>
+                <p className="font-bold text-slate-700 dark:text-slate-200">
+                  {(selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO)).createdByName || "Saleem"}
+                </p>
               </div>
             </div>
 
