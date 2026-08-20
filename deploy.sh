@@ -5,8 +5,9 @@ echo "🚀 Starting TCE ERP automated production deployment..."
 
 cd /var/www/hvac-erp
 
-echo "📥 Pulling latest codebase from GitHub..."
-git pull origin main
+echo "📥 Fetching and resetting to latest origin/main..."
+git fetch origin main
+git reset --hard origin/main
 
 echo "📦 Installing dependencies..."
 npm install
