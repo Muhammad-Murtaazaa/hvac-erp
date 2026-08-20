@@ -99,6 +99,7 @@ function ProcurementPageContent() {
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
   const [newPoDeliveryDate, setNewPoDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
+  const [newPoDeliveryAddress, setNewPoDeliveryAddress] = useState("");
   const [newPoLines, setNewPoLines] = useState<any[]>([
     { productId: "", quantityOrdered: "", unitCost: "" },
   ]);
@@ -115,13 +116,14 @@ function ProcurementPageContent() {
   const [editPoVendor, setEditPoVendor] = useState("");
   const [editPoDate, setEditPoDate] = useState("");
   const [editPoDeliveryDate, setEditPoDeliveryDate] = useState("");
+  const [editPoDeliveryAddress, setEditPoDeliveryAddress] = useState("");
   const [editPoLines, setEditPoLines] = useState<any[]>([]);
   const [editPoDiscountType, setEditPoDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
   const [editPoDiscountValue, setEditPoDiscountValue] = useState("0");
   const [editPoIsGst, setEditPoIsGst] = useState(false);
   const [editPoTaxRate, setEditPoTaxRate] = useState(18);
   const [editPoNotes, setEditPoNotes] = useState("");
-  const [editPoStatus, setEditPoStatus] = useState("DRAFT");
+  const [editPoStatus, setEditPoStatus] = useState("APPROVED");
   const [updatingPo, setUpdatingPo] = useState(false);
 
   // GRN states
@@ -159,9 +161,9 @@ function ProcurementPageContent() {
         });
         setPendingItems(pLines);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load procurement records");
+      toast({ title: "Error", message: "Failed to load procurement data", type: "error" });
     } finally {
       setLoading(false);
     }
@@ -172,10 +174,10 @@ function ProcurementPageContent() {
     setMounted(true);
   }, []);
 
-  const handleCreatePo = async (e: React.FormEvent) => {
+  const handleSubmitPO = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPoVendor || newPoLines.some((l) => !l.productId || !l.quantityOrdered || !l.unitCost)) {
-      toast({ title: "Missing Information", message: "Please fill out the vendor and all PO line details.", type: "warning" });
+      toast({ title: "Missing Information", message: "Please fill out vendor and all PO lines.", type: "warning" });
       return;
     }
 
@@ -188,7 +190,7 @@ function ProcurementPageContent() {
           poNumber: newPoNumber || undefined,
           vendorId: newPoVendor,
           lineItems: newPoLines,
-          status: "SUBMITTED",
+          status: "APPROVED",
           discountType: newPoDiscountType,
           discountPercent: newPoDiscountType === "PERCENTAGE" ? Number(newPoDiscountValue) : 0,
           discount: newPoDiscountType === "FIXED" ? Number(newPoDiscountValue) : 0,
@@ -196,6 +198,7 @@ function ProcurementPageContent() {
           taxRate: Number(newPoTaxRate),
           poDate: newPoDate,
           deliveryDate: newPoDeliveryDate,
+          deliveryAddress: newPoDeliveryAddress,
           notes: poNotes,
         }),
       });
@@ -204,12 +207,13 @@ function ProcurementPageContent() {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || "Failed to create PO");
       }
-      toast({ title: "PO Created", message: "Purchase Order created and submitted successfully.", type: "success" });
+      toast({ title: "PO Created", message: "Purchase Order created and approved successfully.", type: "success" });
       setIsCreateOpen(false);
       setNewPoNumber("");
       setNewPoVendor("");
       setNewPoDate(new Date().toISOString().split("T")[0]);
       setNewPoDeliveryDate(new Date().toISOString().split("T")[0]);
+      setNewPoDeliveryAddress("");
       setNewPoLines([{ productId: "", quantityOrdered: "", unitCost: "" }]);
       setNewPoDiscountType("FIXED");
       setNewPoDiscountValue("0");
@@ -232,6 +236,7 @@ function ProcurementPageContent() {
       ? new Date(po.lineItems[0].expectedDeliveryDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
     setEditPoDeliveryDate(dDate);
+    setEditPoDeliveryAddress(meta.deliveryAddress || "");
     setEditPoLines(
       (po.lineItems || []).map((l: any) => ({
         productId: l.productId,
@@ -246,7 +251,7 @@ function ProcurementPageContent() {
       meta.discountType === "PERCENTAGE" ? String(meta.discountPercent) : String(meta.discountAmount)
     );
     setEditPoNotes(meta.userNotes || "");
-    setEditPoStatus(po.status || "DRAFT");
+    setEditPoStatus(po.status || "APPROVED");
     setIsEditPoOpen(true);
   };
 
@@ -274,6 +279,7 @@ function ProcurementPageContent() {
           taxRate: Number(editPoTaxRate),
           poDate: editPoDate,
           deliveryDate: editPoDeliveryDate,
+          deliveryAddress: editPoDeliveryAddress,
           notes: editPoNotes,
         }),
       });
@@ -648,6 +654,8 @@ function ProcurementPageContent() {
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           po.status === "COMPLETED"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                            : po.status === "APPROVED"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                             : po.status === "PARTIALLY_RECEIVED"
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
                             : po.status === "DRAFT"
@@ -720,7 +728,7 @@ function ProcurementPageContent() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredPOs
-                    .filter((po) => po.status === "SUBMITTED")
+                    .filter((po) => po.status === "APPROVED" || po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED")
                     .map((po) => (
                       <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                         <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
@@ -949,7 +957,7 @@ function ProcurementPageContent() {
             </div>
             <p className="text-xs text-slate-500 mb-6">Select a vendor and compile items to order from supplier. Submitted POs flag incoming quantities.</p>
 
-            <form onSubmit={handleCreatePo} className="space-y-4">
+            <form onSubmit={handleSubmitPO} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Supplier Vendor</label>
                 <div className="relative">
@@ -1039,6 +1047,18 @@ function ProcurementPageContent() {
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={newPoDeliveryDate}
                     onChange={(e) => setNewPoDeliveryDate(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Delivery Address <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Multan Warehouse #2, Site Delivery"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newPoDeliveryAddress}
+                    onChange={(e) => setNewPoDeliveryAddress(e.target.value)}
                   />
                 </div>
               </div>
@@ -1340,7 +1360,7 @@ function ProcurementPageContent() {
                 </div>
               </div>
 
-              {/* Order Status */}
+              {/* Order Status & Delivery Address */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">Order Status</label>
@@ -1349,12 +1369,25 @@ function ProcurementPageContent() {
                     value={editPoStatus}
                     onChange={(e) => setEditPoStatus(e.target.value)}
                   >
+                    <option value="APPROVED">Approved (Active for GRN Receiving)</option>
                     <option value="DRAFT">Draft</option>
-                    <option value="SUBMITTED">Submitted (Active for GRN Receiving)</option>
+                    <option value="SUBMITTED">Submitted</option>
                     <option value="PARTIALLY_RECEIVED">Partially Received</option>
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">
+                    Delivery Address <span className="text-slate-400 font-normal normal-case">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Multan Warehouse #2"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editPoDeliveryAddress}
+                    onChange={(e) => setEditPoDeliveryAddress(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -1634,6 +1667,20 @@ function ProcurementPageContent() {
                 </p>
               </div>
             </div>
+
+            {(() => {
+              const meta = selectedPO.meta || parsePoMetadata(selectedPO.notes, selectedPO);
+              if (!meta.deliveryAddress) return null;
+              return (
+                <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs border border-slate-100 dark:border-slate-800 flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px] block">Delivery Address</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{meta.deliveryAddress}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Order Line Items</h4>
             <div className="overflow-y-auto max-h-48 border border-slate-200 dark:border-slate-800 rounded-xl mb-6">

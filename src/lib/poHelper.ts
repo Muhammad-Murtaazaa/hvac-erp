@@ -9,6 +9,7 @@ export interface POMetadata {
   subtotalAmount: number;
   totalAmount: number;
   createdByName?: string;
+  deliveryAddress?: string;
 }
 
 export function parsePoMetadata(notes: string | null | undefined, po?: any): POMetadata {
@@ -22,6 +23,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
   let subtotalAmount = 0;
   let totalAmount = po ? Number(po.totalAmount || 0) : 0;
   let createdByName = "Saleem";
+  let deliveryAddress = "";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -38,6 +40,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
         if (parsed.createdByName) createdByName = String(parsed.createdByName);
+        if (parsed.deliveryAddress) deliveryAddress = String(parsed.deliveryAddress);
       } catch {
         userNotes = notes;
       }
@@ -78,6 +81,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
     subtotalAmount,
     totalAmount,
     createdByName,
+    deliveryAddress,
   };
 }
 
@@ -92,6 +96,7 @@ export function formatPoNotesPayload(data: {
   subtotalAmount: number;
   totalAmount: number;
   createdByName?: string;
+  deliveryAddress?: string;
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -104,5 +109,6 @@ export function formatPoNotesPayload(data: {
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
     createdByName: data.createdByName || "Saleem",
+    deliveryAddress: data.deliveryAddress || "",
   });
 }

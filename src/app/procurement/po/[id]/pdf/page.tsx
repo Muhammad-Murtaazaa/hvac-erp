@@ -167,7 +167,7 @@ export default function POPdfPage() {
 
             <div className="flex-grow pt-1">
               <div className="flex justify-between items-end border-b-2 border-black pb-1">
-                <h1 className="text-2xl font-normal tracking-wider text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
+                <h1 className="text-3xl font-black tracking-wide text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
                   Technicool Engineering
                 </h1>
                 <span className="text-[11px] font-normal italic text-black tracking-wider">
@@ -185,7 +185,7 @@ export default function POPdfPage() {
           </div>
 
           {/* Document Title */}
-          <h2 className="text-center text-lg font-normal tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
+          <h2 className="text-center text-xl font-bold tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
             PURCHASE ORDER
           </h2>
 
@@ -203,6 +203,14 @@ export default function POPdfPage() {
               {po.vendor?.ntn && (
                 <div className="text-black font-mono font-normal text-xs mt-0.5">
                   NTN: {po.vendor.ntn}
+                </div>
+              )}
+              {meta.deliveryAddress && (
+                <div className="mt-2 pt-2 border-t border-dashed border-black/40">
+                  <span className="text-black block font-normal">Delivery Address:</span>
+                  <div className="text-black font-normal leading-relaxed whitespace-pre-line text-xs">
+                    {meta.deliveryAddress}
+                  </div>
                 </div>
               )}
             </div>

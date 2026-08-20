@@ -73,34 +73,32 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Purchase Order not found" }, { status: 404 });
     }
 
-    // 1. Status action mode (submit / cancel)
-    if (action === "submit" || action === "cancel") {
-      if (po.status !== "DRAFT" && action === "submit") {
-        return NextResponse.json({ error: "Only draft POs can be submitted" }, { status: 400 });
-      }
-
+    // 1. Status action mode (approve / submit / cancel)
+    if (action === "submit" || action === "approve" || action === "cancel") {
       const updatedPO = await prisma.$transaction(async (tx: any) => {
         let finalStatus = po.status;
 
-        if (action === "submit") {
-          finalStatus = "SUBMITTED";
+        if (action === "submit" || action === "approve") {
+          finalStatus = "APPROVED";
 
-          // Increment incomingQty for all line items
-          for (const item of po.lineItems) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: {
-                incomingQty: {
-                  increment: item.quantityOrdered,
+          // Increment incomingQty for all line items if previously not active
+          if (po.status !== "APPROVED" && po.status !== "SUBMITTED" && po.status !== "PARTIALLY_RECEIVED") {
+            for (const item of po.lineItems) {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: {
+                  incomingQty: {
+                    increment: item.quantityOrdered,
+                  },
                 },
-              },
-            });
+              });
+            }
           }
         } else if (action === "cancel") {
           finalStatus = "CANCELLED";
 
-          // Revert incoming quantities if previously SUBMITTED
-          if (po.status === "SUBMITTED") {
+          // Revert incoming quantities if previously active
+          if (po.status === "APPROVED" || po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED") {
             for (const item of po.lineItems) {
               const remaining = Math.max(0, item.quantityOrdered - item.quantityReceived);
               if (remaining > 0) {
@@ -157,6 +155,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       taxRate = 18,
       poDate,
       deliveryDate,
+      deliveryAddress,
       notes,
       status: requestedStatus,
     } = body;
@@ -173,7 +172,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
     const updatedPO = await prisma.$transaction(async (tx: any) => {
       // Revert old unreceived incomingQty if previously active
-      if (po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED") {
+      if (po.status === "APPROVED" || po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED") {
         for (const item of po.lineItems) {
           const remaining = Math.max(0, item.quantityOrdered - item.quantityReceived);
           if (remaining > 0) {
@@ -220,6 +219,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         subtotalAmount,
         totalAmount: finalTotalAmount,
         createdByName: existingMeta.createdByName || session.name || "Saleem",
+        deliveryAddress: deliveryAddress !== undefined ? deliveryAddress : existingMeta.deliveryAddress,
       });
 
       const nextStatus = requestedStatus || po.status;
@@ -271,8 +271,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         });
       }
 
-      // If next status is SUBMITTED or PARTIALLY_RECEIVED, add new unreceived incoming quantities
-      if (nextStatus === "SUBMITTED" || nextStatus === "PARTIALLY_RECEIVED") {
+      // If next status is APPROVED, SUBMITTED or PARTIALLY_RECEIVED, add new unreceived incoming quantities
+      if (nextStatus === "APPROVED" || nextStatus === "SUBMITTED" || nextStatus === "PARTIALLY_RECEIVED") {
         for (const item of lineItems) {
           const qtyOrdered = parseInt(item.quantityOrdered);
           const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);

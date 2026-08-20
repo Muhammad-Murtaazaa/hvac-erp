@@ -85,6 +85,7 @@ export async function POST(req: Request) {
       taxRate = 18,
       poDate,
       deliveryDate,
+      deliveryAddress,
       notes,
     } = await req.json();
 
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
       const count = await prisma.purchaseOrder.count();
       poNumber = `PO-${10001 + count}`;
     }
-    const poStatus = status || "DRAFT";
+    const poStatus = status || "APPROVED";
 
     const purchaseOrder = await prisma.$transaction(async (tx: any) => {
       let subtotalAmount = 0;
@@ -129,6 +130,7 @@ export async function POST(req: Request) {
         subtotalAmount,
         totalAmount: finalTotalAmount,
         createdByName: session.name || "Saleem",
+        deliveryAddress: deliveryAddress || "",
       });
 
       const po = await tx.purchaseOrder.create({
@@ -139,7 +141,7 @@ export async function POST(req: Request) {
           discount: finalDiscountAmount,
           totalAmount: finalTotalAmount,
           notes: notesPayload,
-          createdAt: poDate ? new Date(poDate) : undefined,
+          createdAt: poDate ? new Date(poDate) : new Date(),
           lineItems: {
             create: lineItems.map((item: any) => ({
               productId: item.productId,
@@ -165,7 +167,7 @@ export async function POST(req: Request) {
         });
       }
 
-      if (poStatus === "SUBMITTED") {
+      if (poStatus === "APPROVED" || poStatus === "SUBMITTED") {
         for (const item of lineItems) {
           await tx.product.update({
             where: { id: item.productId },
