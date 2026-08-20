@@ -62,6 +62,7 @@ export async function POST(req: Request) {
       through,
       vehicle,
       poNumber,
+      invoiceId,
     } = body;
 
     const finalClientName = (clientName || "").trim();
@@ -199,6 +200,16 @@ export async function POST(req: Request) {
             });
           }
         }
+      }
+
+      if (invoiceId) {
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: {
+            doId: createdDO.id,
+            dispatchStatus: "DISPATCHED",
+          },
+        });
       }
 
       return createdDO;

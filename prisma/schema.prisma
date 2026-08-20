@@ -311,6 +311,8 @@ model Invoice {
   clientAddress      String?
   date               DateTime
   status             String        @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
+  dispatchStatus     String        @default("DISPATCHED") // DISPATCHED, PENDING_DISPATCH
+  isAdvance          Boolean       @default(false)
   totalAmount        Decimal
   amountPaid         Decimal       @default(0.00)
   notes              String?

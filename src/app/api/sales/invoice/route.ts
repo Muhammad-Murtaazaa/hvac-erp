@@ -227,6 +227,7 @@ export async function POST(req: Request) {
           doId: doId || null,
           complaintId: complaintId || null,
           isGst: isGst !== false,
+          dispatchStatus: "PENDING_DISPATCH",
           lineItems: {
             create: lineItemsWithInfo.map((l) => ({
               productId: l.productId,
@@ -267,26 +268,7 @@ export async function POST(req: Request) {
         }
       }
 
-      // Handle stock and stock ledger logs
-      if (!doId) {
-        // Standalone invoice: decrement catalog product quantities
-        for (const line of lineItemsWithInfo) {
-          if (line.productId) {
-            const prod = await tx.product.findUnique({ where: { id: line.productId } });
-            if (!prod) throw new Error("Catalog product not found");
-            if (prod.onHandQty < line.quantity) {
-              throw new Error(`Insufficient stock for product ${prod.sku}. On Hand: ${prod.onHandQty}, Sale: ${line.quantity}`);
-            }
-
-            await recordStockMovement(tx, {
-              productId: line.productId,
-              type: "SALE",
-              quantity: -line.quantity,
-              referenceDoc: invoiceNumber,
-            });
-          }
-        }
-      }
+      // Removed stock deduction: Stock is now handled exclusively by Delivery Orders.
 
       // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
       await recordLedgerEntry(tx, {

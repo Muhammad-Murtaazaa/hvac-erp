@@ -145,6 +145,7 @@ function SalesPageContent() {
   ]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [doPoNumber, setDoPoNumber] = useState("");
+  const [selectedDoInvoiceId, setSelectedDoInvoiceId] = useState("");
 
   // Payment State
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -549,6 +550,7 @@ function SalesPageContent() {
           vehicle: doVehicle,
           lineItems: formattedLines,
           poNumber: doPoNumber.trim() || undefined,
+          invoiceId: selectedDoInvoiceId || undefined,
           status: "DISPATCHED", // Dispatch directly to deduct stock
         }),
       });
@@ -570,6 +572,7 @@ function SalesPageContent() {
       setDoThrough("");
       setDoVehicle("");
       setDoPoNumber("");
+      setSelectedDoInvoiceId("");
       setDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "" }]);
       fetchData();
     } catch (err: any) {
@@ -1574,15 +1577,17 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Phase 6 DHA, Karachi"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
-                  value={clientAddress}
-                  onChange={(e) => setClientAddress(e.target.value)}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Phase 6 DHA, Karachi"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={clientAddress}
+                    onChange={(e) => setClientAddress(e.target.value)}
+                  />
+                </div>
               </div>
 
               {/* Subject Heading & Description */}
@@ -1866,7 +1871,8 @@ function SalesPageContent() {
             )}
 
             <form onSubmit={handleDoSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 items-start">
+              {/* Customer Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div className="sm:col-span-2">
                   <CustomerSelect
                     label="Recipient Customer / Client"
@@ -1895,6 +1901,9 @@ function SalesPageContent() {
                     onChange={(e) => setDoClientPhone(e.target.value)}
                   />
                 </div>
+              </div>
+              {/* Delivery Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start mt-4">
                 <div>
                   <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Delivery Address</label>
                   <input
@@ -1926,13 +1935,53 @@ function SalesPageContent() {
                     onChange={(e) => setDoVehicle(e.target.value)}
                   />
                 </div>
+              </div>
+              {/* Links */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start mt-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Link Invoice (Optional)</label>
+                  <select
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm shadow-sm"
+                    value={selectedDoInvoiceId}
+                    onChange={(e) => {
+                      const invId = e.target.value;
+                      setSelectedDoInvoiceId(invId);
+                      if (invId) {
+                        const inv = invoices.find((i) => i.id === invId);
+                        if (inv) {
+                          setDoClientName(inv.clientName);
+                          setDoClientPhone(inv.clientPhone || "");
+                          setDoAddress(inv.clientAddress || "");
+                          if (inv.customerId) setSelectedCustomerId(inv.customerId);
+                          
+                          if (inv.lineItems && inv.lineItems.length > 0) {
+                            setDoLines(inv.lineItems.map((l: any) => ({
+                              productId: l.productId || "",
+                              description: l.description || "",
+                              quantity: String(l.quantity),
+                              salesPrice: String(l.salesPrice),
+                            })));
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    <option value="">-- No linked invoice --</option>
+                    {invoices.filter((i) => !i.doId).map((inv) => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.invoiceNumber} - {inv.clientName} (PKR {Number(inv.totalAmount).toLocaleString()})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">Select an invoice to auto-fill DO details.</p>
+                </div>
                 <div>
                   <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Link PO (Optional)</label>
                   <input
                     type="text"
                     list="po-options"
                     placeholder="Type or select PO number..."
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono shadow-sm"
                     value={doPoNumber}
                     onChange={(e) => setDoPoNumber(e.target.value)}
                   />
