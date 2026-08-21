@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
@@ -176,6 +177,31 @@ export async function POST(req: Request) {
         });
 
         totalAmount += debitAP;
+      }
+
+      // Native Double-Entry Journal: Vendor Return
+      if (totalAmount > 0) {
+        await postJournalEntry(tx, {
+          entryDate: new Date(),
+          narration: `Vendor return (${vendorReturnNumber}) to vendor`,
+          sourceType: "VENDOR_RETURN",
+          sourceId: createdReturn.id,
+          idempotencyKey: `VENDOR_RETURN:${createdReturn.id}:debit-memo`,
+          lines: [
+            {
+              accountName: "Accounts Payable (Trade Creditors)",
+              partyId: vendorId,
+              debit: totalAmount,
+              credit: 0,
+            },
+            {
+              accountName: "Inventory Asset",
+              partyId: null,
+              debit: 0,
+              credit: totalAmount,
+            },
+          ],
+        });
       }
 
       // Update total return amount and complete the return status

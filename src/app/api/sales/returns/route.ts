@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
@@ -138,9 +139,33 @@ export async function POST(req: Request) {
         referenceType: "RETURN",
         referenceId: createdReturn.id,
         partyType: "CUSTOMER",
+        partyId: targetInvoice.customerId,
         partyName: targetInvoice.clientName,
         voucherType: "CN",
         voucherNumber: returnNumber,
+      });
+
+      // Native Double-Entry Journal: Revenue Reversal
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `Sales revenue reversal for return ${returnNumber} against Invoice ${targetInvoice.invoiceNumber}`,
+        sourceType: "RETURN",
+        sourceId: createdReturn.id,
+        idempotencyKey: `RETURN:${createdReturn.id}:revenue-reversal`,
+        lines: [
+          {
+            accountName: "Sales Revenue",
+            partyId: null,
+            debit: totalReturnAmount,
+            credit: 0,
+          },
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: targetInvoice.customerId,
+            debit: 0,
+            credit: totalReturnAmount,
+          },
+        ],
       });
 
       // Debit Inventory Asset / Credit COGS (reversing COGS for catalog items)
@@ -153,9 +178,33 @@ export async function POST(req: Request) {
           referenceType: "RETURN",
           referenceId: createdReturn.id,
           partyType: "CUSTOMER",
+          partyId: targetInvoice.customerId,
           partyName: targetInvoice.clientName,
           voucherType: "CN",
           voucherNumber: returnNumber,
+        });
+
+        // Native Double-Entry Journal: COGS Reversal
+        await postJournalEntry(tx, {
+          entryDate: new Date(),
+          narration: `COGS reversal for customer return ${returnNumber}`,
+          sourceType: "RETURN",
+          sourceId: createdReturn.id,
+          idempotencyKey: `RETURN:${createdReturn.id}:cogs-reversal`,
+          lines: [
+            {
+              accountName: "Inventory Asset",
+              partyId: null,
+              debit: totalCogsToReverse,
+              credit: 0,
+            },
+            {
+              accountName: "Cost of Goods Sold",
+              partyId: null,
+              debit: 0,
+              credit: totalCogsToReverse,
+            },
+          ],
         });
       }
 

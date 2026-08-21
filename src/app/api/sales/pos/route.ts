@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
+import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
@@ -95,11 +96,34 @@ export async function POST(req: Request) {
       // Debit Accounts Receivable / Credit Sales Revenue
       await recordLedgerEntry(tx, {
         description: `POS sale Revenue (${invoiceNumber})`,
-        debitAccount: "Accounts Receivable",
+        debitAccount: "Accounts Receivable (Trade Debtors)",
         creditAccount: "Sales Revenue",
         amount: totalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
+      });
+
+      // Native Double-Entry: POS Revenue (partyId null for walk-in)
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `POS sale Revenue (${invoiceNumber})`,
+        sourceType: "POS",
+        sourceId: createdInvoice.id,
+        idempotencyKey: `POS:${createdInvoice.id}:revenue`,
+        lines: [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: null,
+            debit: totalAmount,
+            credit: 0,
+          },
+          {
+            accountName: "Sales Revenue",
+            partyId: null,
+            debit: 0,
+            credit: totalAmount,
+          },
+        ],
       });
 
       // 4. Ledger Entries: COGS
@@ -112,6 +136,29 @@ export async function POST(req: Request) {
           amount: totalCogs,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
+        });
+
+        // Native Double-Entry: POS COGS
+        await postJournalEntry(tx, {
+          entryDate: new Date(),
+          narration: `POS sale COGS release (${invoiceNumber})`,
+          sourceType: "POS",
+          sourceId: createdInvoice.id,
+          idempotencyKey: `POS:${createdInvoice.id}:cogs`,
+          lines: [
+            {
+              accountName: "Cost of Goods Sold",
+              partyId: null,
+              debit: totalCogs,
+              credit: 0,
+            },
+            {
+              accountName: "Inventory Asset",
+              partyId: null,
+              debit: 0,
+              credit: totalCogs,
+            },
+          ],
         });
       }
 
@@ -126,13 +173,39 @@ export async function POST(req: Request) {
 
       // 6. Ledger Entries: Payment collection
       // Debit Cash/Bank / Credit Accounts Receivable
+      const isBank = payMethod === "BANK_TRANSFER" || payMethod === "CHEQUE" || payMethod === "ONLINE" || payMethod === "CARD";
+      const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+
       await recordLedgerEntry(tx, {
         description: `POS payment received against Invoice ${invoiceNumber} via ${payMethod}`,
-        debitAccount: "Cash/Bank",
-        creditAccount: "Accounts Receivable",
+        debitAccount: liquidAcc,
+        creditAccount: "Accounts Receivable (Trade Debtors)",
         amount: totalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
+      });
+
+      // Native Double-Entry: POS Payment
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `POS payment received against Invoice ${invoiceNumber} via ${payMethod}`,
+        sourceType: "POS",
+        sourceId: createdInvoice.id,
+        idempotencyKey: `POS:${createdInvoice.id}:payment`,
+        lines: [
+          {
+            accountName: mapPaymentMethodToAccount(payMethod),
+            partyId: null,
+            debit: totalAmount,
+            credit: 0,
+          },
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: null,
+            debit: 0,
+            credit: totalAmount,
+          },
+        ],
       });
 
       return createdInvoice;

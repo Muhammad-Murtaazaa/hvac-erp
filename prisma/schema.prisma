@@ -435,6 +435,63 @@ model LedgerEntry {
   createdAt     DateTime            @default(now())
 }
 
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+model Account {
+  id             String        @id @default(uuid())
+  name           String        @unique
+  type           AccountType
+  isPartyControl Boolean       @default(false)
+  partyType      String?       // CUSTOMER, VENDOR, EMPLOYEE
+  partyId        String?
+  legacyAliases  String[]      @default([])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  journalLines   JournalLine[]
+
+  @@index([partyType, partyId])
+  @@index([isPartyControl])
+}
+
+model JournalEntry {
+  id             String        @id @default(uuid())
+  entryDate      DateTime
+  narration      String
+  sourceType     String        // INVOICE, PAYMENT, GRN, VOUCHER, PAYROLL, POS, RETURN, VENDOR_RETURN, ADJUSTMENT, MANUAL
+  sourceId       String?
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lines          JournalLine[]
+
+  @@index([sourceType, sourceId])
+  @@index([entryDate])
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id])
+  partyId        String?
+  debit          Decimal      @default(0.00)
+  credit         Decimal      @default(0.00)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([journalEntryId])
+  @@index([accountId])
+  @@index([partyId])
+}
+
+
 model Complaint {
   id                   String           @id @default(uuid())
   complaintNumber      String           @unique

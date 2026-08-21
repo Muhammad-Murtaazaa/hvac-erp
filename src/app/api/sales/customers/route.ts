@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { postJournalEntry } from "@/lib/journal";
 import { syncAllCustomers } from "@/lib/customerSync";
 
 export async function GET(req: Request) {
@@ -308,6 +309,29 @@ export async function POST(req: Request) {
           description: `Opening receivable balance for customer ${cleanName}${notes ? ` - ${notes}` : ""}`,
         },
       });
+
+      // Native Double-Entry Journal: Opening Balance
+      await postJournalEntry(prisma, {
+        entryDate: new Date(),
+        narration: `Opening receivable balance for customer ${cleanName}${notes ? ` - ${notes}` : ""}`,
+        sourceType: "CUSTOMER",
+        sourceId: customer.id,
+        idempotencyKey: `CUSTOMER:${customer.id}:opening-balance`,
+        lines: [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: customer.id,
+            debit: opBal,
+            credit: 0,
+          },
+          {
+            accountName: "Owner Equity / Capital",
+            partyId: null,
+            debit: 0,
+            credit: opBal,
+          },
+        ],
+      });
     } else {
       await prisma.ledgerEntry.create({
         data: {
@@ -324,6 +348,29 @@ export async function POST(req: Request) {
           amount: 0,
           description: `Customer account registered: Phone: ${cleanPhone}${address ? `, Address: ${address}` : ""}`,
         },
+      });
+
+      // Native Double-Entry Journal: Customer Registration
+      await postJournalEntry(prisma, {
+        entryDate: new Date(),
+        narration: `Customer account registered: Phone: ${cleanPhone}${address ? `, Address: ${address}` : ""}`,
+        sourceType: "CUSTOMER",
+        sourceId: customer.id,
+        idempotencyKey: `CUSTOMER:${customer.id}:registration`,
+        lines: [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: customer.id,
+            debit: 0,
+            credit: 0,
+          },
+          {
+            accountName: "Customer Advance Deposits",
+            partyId: customer.id,
+            debit: 0,
+            credit: 0,
+          },
+        ],
       });
     }
 

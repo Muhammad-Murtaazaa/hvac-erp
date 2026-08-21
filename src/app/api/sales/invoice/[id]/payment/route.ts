@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -30,7 +31,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       }
 
       // 1. Create the Payment log
-      await tx.payment.create({
+      const createdPayment = await tx.payment.create({
         data: {
           invoiceId: params.id,
           amountPaid: Number(amountPaid),
@@ -65,10 +66,34 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         referenceType: "INVOICE",
         referenceId: invoice.id,
         partyType: "CUSTOMER",
+        partyId: invoice.customerId,
         partyName: invoice.clientName,
         voucherType: isBank ? "BRV" : "CRV",
         voucherNumber: invoice.invoiceNumber,
         paymentMethod: method || "CASH",
+      });
+
+      // Native Double-Entry Journal: Payment receipt
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `Payment received against Invoice ${invoice.invoiceNumber} via ${method || "CASH"}`,
+        sourceType: "PAYMENT",
+        sourceId: createdPayment.id,
+        idempotencyKey: `PAYMENT:${createdPayment.id}:receipt`,
+        lines: [
+          {
+            accountName: mapPaymentMethodToAccount(method),
+            partyId: null,
+            debit: Number(amountPaid),
+            credit: 0,
+          },
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: invoice.customerId,
+            debit: 0,
+            credit: Number(amountPaid),
+          },
+        ],
       });
 
       return inv;

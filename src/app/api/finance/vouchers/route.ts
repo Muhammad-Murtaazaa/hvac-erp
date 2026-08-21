@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { getNextVoucherNumber, recordLedgerEntry } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +130,29 @@ export async function POST(req: Request) {
         paymentMethod: paymentMethod || "CASH",
         chequeNumber: chequeNumber || null,
         notes: notes || null,
+      });
+
+      // Native Double-Entry Journal: One JournalEntry per voucher submission
+      await postJournalEntry(tx, {
+        entryDate: entryDate ? new Date(entryDate) : new Date(),
+        narration: description,
+        sourceType: "VOUCHER",
+        sourceId: voucherNumber,
+        idempotencyKey: `VOUCHER:${voucherNumber}:entry`,
+        lines: [
+          {
+            accountName: debitAccount,
+            partyId: partyId || null,
+            debit: parsedAmount,
+            credit: 0,
+          },
+          {
+            accountName: creditAccount,
+            partyId: partyId || null,
+            debit: 0,
+            credit: parsedAmount,
+          },
+        ],
       });
 
       return entry;

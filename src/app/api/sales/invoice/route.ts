@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
+import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
@@ -89,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Client details and billing line items are required" }, { status: 400 });
     }
 
-    const invoice = await prisma.$transaction(async (tx: any) => {
+    const invoice = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Resolve or create Customer profile
       let resolvedCustomerId = inputCustomerId || null;
       if (!resolvedCustomerId && finalClientName) {
@@ -200,7 +202,7 @@ export async function POST(req: Request) {
 
       if (payments && payments.length > 0) {
         payments.forEach((p: any) => {
-          amountPaid += Math.round(Number(p.amountPaid));
+          amountPaid += Math.round(Number(p.amountPaid ?? p.amount ?? 0));
         });
         if (amountPaid >= finalTotalAmount) {
           invoiceStatus = "PAID";
@@ -213,7 +215,7 @@ export async function POST(req: Request) {
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
-          customerId: resolvedCustomerId,
+          customer: resolvedCustomerId ? { connect: { id: resolvedCustomerId } } : undefined,
           clientName: finalClientName,
           clientPhone: finalClientPhone || null,
           clientAddress: finalClientAddress || null,
@@ -224,8 +226,8 @@ export async function POST(req: Request) {
           notes: notes || null,
           subjectHeading: subjectHeading || null,
           subjectDescription: subjectDescription || null,
-          doId: doId || null,
-          complaintId: complaintId || null,
+          deliveryOrder: doId ? { connect: { id: doId } } : undefined,
+          complaint: complaintId ? { connect: { id: complaintId } } : undefined,
           isGst: isGst !== false,
           dispatchStatus: "PENDING_DISPATCH",
           lineItems: {
@@ -279,6 +281,7 @@ export async function POST(req: Request) {
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
         partyType: "CUSTOMER",
+        partyId: resolvedCustomerId,
         partyName: finalClientName,
         voucherType: "INV",
         voucherNumber: invoiceNumber,
@@ -293,11 +296,45 @@ export async function POST(req: Request) {
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: "CUSTOMER",
+          partyId: resolvedCustomerId,
           partyName: finalClientName,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
         });
       }
+
+      // Native Double-Entry Journal: Revenue & Tax grouped together
+      const revenueLines = [
+        {
+          accountName: "Accounts Receivable (Trade Debtors)",
+          partyId: resolvedCustomerId,
+          debit: finalTotalAmount,
+          credit: 0,
+        },
+        {
+          accountName: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
+          partyId: null,
+          debit: 0,
+          credit: subtotalAmount,
+        },
+      ];
+      if (taxAmount > 0) {
+        revenueLines.push({
+          accountName: "Sales Tax Payable",
+          partyId: null,
+          debit: 0,
+          credit: taxAmount,
+        });
+      }
+
+      await postJournalEntry(tx, {
+        entryDate: new Date(date || Date.now()),
+        narration: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}`,
+        sourceType: "INVOICE",
+        sourceId: createdInvoice.id,
+        idempotencyKey: `INVOICE:${createdInvoice.id}:revenue`,
+        lines: revenueLines,
+      });
 
       // General Ledger COGS entries (Debit COGS / Credit Inventory Asset)
       if (totalCogs > 0) {
@@ -309,21 +346,46 @@ export async function POST(req: Request) {
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: "CUSTOMER",
+          partyId: resolvedCustomerId,
           partyName: finalClientName,
           voucherType: "COGS",
           voucherNumber: invoiceNumber,
+        });
+
+        // Native Double-Entry Journal: COGS separate
+        await postJournalEntry(tx, {
+          entryDate: new Date(date || Date.now()),
+          narration: `COGS release for Invoice ${invoiceNumber}`,
+          sourceType: "INVOICE",
+          sourceId: createdInvoice.id,
+          idempotencyKey: `INVOICE:${createdInvoice.id}:cogs`,
+          lines: [
+            {
+              accountName: "Cost of Goods Sold",
+              partyId: null,
+              debit: totalCogs,
+              credit: 0,
+            },
+            {
+              accountName: "Inventory Asset",
+              partyId: null,
+              debit: 0,
+              credit: totalCogs,
+            },
+          ],
         });
       }
 
       // Process payments if provided
       if (payments && payments.length > 0) {
-        for (const payment of payments) {
-          const pAmount = Number(payment.amountPaid);
-          const pMethod = payment.method || "CASH";
-          const isBank = pMethod === "BANK_TRANSFER" || pMethod === "CHEQUE" || pMethod === "ONLINE";
+        for (let pIdx = 0; pIdx < payments.length; pIdx++) {
+          const payment = payments[pIdx];
+          const pAmount = Number(payment.amountPaid ?? payment.amount ?? 0);
+          const pMethod = payment.paymentMethod || payment.method || "CASH";
+          const isBank = pMethod === "BANK" || pMethod === "BANK_TRANSFER" || pMethod === "CHEQUE" || pMethod === "ONLINE";
           const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
 
-          await tx.payment.create({
+          const createdPayment = await tx.payment.create({
             data: {
               invoiceId: createdInvoice.id,
               amountPaid: pAmount,
@@ -340,10 +402,34 @@ export async function POST(req: Request) {
             referenceType: "INVOICE",
             referenceId: createdInvoice.id,
             partyType: "CUSTOMER",
+            partyId: resolvedCustomerId,
             partyName: finalClientName,
             voucherType: isBank ? "BRV" : "CRV",
             voucherNumber: invoiceNumber,
             paymentMethod: pMethod,
+          });
+
+          // Native Double-Entry Journal: Payment separate
+          await postJournalEntry(tx, {
+            entryDate: new Date(date || Date.now()),
+            narration: `Payment received against Invoice ${invoiceNumber} via ${pMethod}`,
+            sourceType: "INVOICE",
+            sourceId: createdInvoice.id,
+            idempotencyKey: `INVOICE:${createdInvoice.id}:payment:${createdPayment.id}`,
+            lines: [
+              {
+                accountName: mapPaymentMethodToAccount(pMethod),
+                partyId: null,
+                debit: pAmount,
+                credit: 0,
+              },
+              {
+                accountName: "Accounts Receivable (Trade Debtors)",
+                partyId: resolvedCustomerId,
+                debit: 0,
+                credit: pAmount,
+              },
+            ],
           });
         }
       }

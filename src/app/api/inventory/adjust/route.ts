@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function GET(req: Request) {
@@ -88,6 +89,29 @@ export async function POST(req: Request) {
             referenceType: "STOCK_ADJUSTMENT",
             referenceId: createdAdj.id,
           });
+
+          // Native Double-Entry Journal
+          await postJournalEntry(tx, {
+            entryDate: new Date(),
+            narration: `Manual stock adjustment up for ${product.sku} (${adjDoc}) - Reason: ${adjReason}`,
+            sourceType: "STOCK_ADJUSTMENT",
+            sourceId: createdAdj.id,
+            idempotencyKey: `STOCK_ADJUSTMENT:${createdAdj.id}:variance-up`,
+            lines: [
+              {
+                accountName: "Inventory Asset",
+                partyId: null,
+                debit: varianceVal,
+                credit: 0,
+              },
+              {
+                accountName: "Inventory Adjustment Expense",
+                partyId: null,
+                debit: 0,
+                credit: varianceVal,
+              },
+            ],
+          });
         } else {
           // Adjusting DOWN: Debit Inventory Adjustment Expense / Credit Inventory Asset
           await recordLedgerEntry(tx, {
@@ -97,6 +121,29 @@ export async function POST(req: Request) {
             amount: varianceVal,
             referenceType: "STOCK_ADJUSTMENT",
             referenceId: createdAdj.id,
+          });
+
+          // Native Double-Entry Journal
+          await postJournalEntry(tx, {
+            entryDate: new Date(),
+            narration: `Manual stock adjustment down for ${product.sku} (${adjDoc}) - Reason: ${adjReason}`,
+            sourceType: "STOCK_ADJUSTMENT",
+            sourceId: createdAdj.id,
+            idempotencyKey: `STOCK_ADJUSTMENT:${createdAdj.id}:variance-down`,
+            lines: [
+              {
+                accountName: "Inventory Adjustment Expense",
+                partyId: null,
+                debit: varianceVal,
+                credit: 0,
+              },
+              {
+                accountName: "Inventory Asset",
+                partyId: null,
+                debit: 0,
+                credit: varianceVal,
+              },
+            ],
           });
         }
       }

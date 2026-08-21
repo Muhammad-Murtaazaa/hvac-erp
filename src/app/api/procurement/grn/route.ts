@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement, updateProductAverageCost } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
         },
       });
 
+      let totalGrnValue = 0;
       // Process each received item
       for (const item of lineItems) {
         const qtyReceived = parseInt(item.quantityReceived);
@@ -167,6 +169,8 @@ export async function POST(req: Request) {
 
         // e. Double-Entry General Ledger write (Debit Inventory Asset / Credit Accounts Payable)
         const lineTotalAmount = Math.round(qtyReceived * costPerUnit);
+        totalGrnValue += lineTotalAmount;
+
         await recordLedgerEntry(tx, {
           description: `Received ${qtyReceived} units of ${product.sku} against ${po.poNumber} (${grnNumber})`,
           debitAccount: "Inventory Asset",
@@ -190,6 +194,31 @@ export async function POST(req: Request) {
             unitCost: costPerUnit,
             poPendingItemId: linkedPendingId,
           },
+        });
+      }
+
+      // Native Double-Entry Journal: One JournalEntry per GRN receipt
+      if (totalGrnValue > 0) {
+        await postJournalEntry(tx, {
+          entryDate: new Date(),
+          narration: `Stock Intake for ${po.poNumber} (${grnNumber}) from ${po.vendor?.name || "Vendor"}`,
+          sourceType: "PO_RECEIPT",
+          sourceId: createdGRN.id,
+          idempotencyKey: `GRN:${createdGRN.id}:intake`,
+          lines: [
+            {
+              accountName: "Inventory Asset",
+              partyId: null,
+              debit: totalGrnValue,
+              credit: 0,
+            },
+            {
+              accountName: "Accounts Payable (Trade Creditors)",
+              partyId: po.vendorId,
+              debit: 0,
+              credit: totalGrnValue,
+            },
+          ],
         });
       }
 

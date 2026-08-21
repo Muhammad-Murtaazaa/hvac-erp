@@ -1,14 +1,21 @@
 import { PrismaClient } from "@prisma/client";
 
+export interface ExtendedPrismaClient extends PrismaClient {
+  account: any;
+  journalEntry: any;
+  journalLine: any;
+  [key: string]: any;
+}
+
 const prismaClientSingleton = () => {
-  return new PrismaClient();
+  return new PrismaClient() as ExtendedPrismaClient;
 };
 
 declare global {
-  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+  var prismaGlobal: undefined | ExtendedPrismaClient;
 }
 
-const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+const prisma: ExtendedPrismaClient = (globalThis.prismaGlobal ?? prismaClientSingleton()) as ExtendedPrismaClient;
 
 export default prisma;
 

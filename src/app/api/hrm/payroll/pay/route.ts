@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
@@ -57,6 +58,55 @@ export async function POST(req: Request) {
         voucherType: "EAV",
         voucherNumber: `PAY-${run.month}/${run.year}`,
       });
+
+      // Native Double-Entry Journal: Salary Payout
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `Salary payout for employee ${run.employee.name} for period ${run.month}/${run.year}`,
+        sourceType: "PAYROLL",
+        sourceId: run.id,
+        idempotencyKey: `PAYROLL:${run.id}:salary`,
+        lines: [
+          {
+            accountName: "Salary Expense",
+            partyId: run.employeeId,
+            debit: netPayVal,
+            credit: 0,
+          },
+          {
+            accountName: "Cash in Hand",
+            partyId: run.employeeId,
+            debit: 0,
+            credit: netPayVal,
+          },
+        ],
+      });
+
+      // If deductions exist (advance recovery), post separate JournalEntry
+      const deductionsVal = Number(run.deductions || 0);
+      if (deductionsVal > 0) {
+        await postJournalEntry(tx, {
+          entryDate: new Date(),
+          narration: `Advance deduction for employee ${run.employee.name} for period ${run.month}/${run.year}`,
+          sourceType: "PAYROLL",
+          sourceId: run.id,
+          idempotencyKey: `PAYROLL:${run.id}:advance-deduction`,
+          lines: [
+            {
+              accountName: "Salary Expense",
+              partyId: run.employeeId,
+              debit: deductionsVal,
+              credit: 0,
+            },
+            {
+              accountName: "Employee Advance",
+              partyId: run.employeeId,
+              debit: 0,
+              credit: deductionsVal,
+            },
+          ],
+        });
+      }
 
       return record;
     }, {

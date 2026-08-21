@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: Request) {
@@ -68,10 +69,34 @@ export async function POST(req: Request) {
         referenceType: "RETURN",
         referenceId: createdRefund.id,
         partyType: "CUSTOMER",
+        partyId: ret.invoice.customerId,
         partyName: ret.invoice.clientName,
         voucherType: isBank ? "BPV" : "CPV",
         voucherNumber: ret.returnNumber,
         paymentMethod: method || "CASH",
+      });
+
+      // Native Double-Entry Journal: Refund payout
+      await postJournalEntry(tx, {
+        entryDate: new Date(),
+        narration: `Refund payout for Return ${ret.returnNumber} against Invoice ${ret.invoice.invoiceNumber} via ${method}`,
+        sourceType: "REFUND",
+        sourceId: createdRefund.id,
+        idempotencyKey: `REFUND:${createdRefund.id}:payout`,
+        lines: [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: ret.invoice.customerId,
+            debit: refundAmt,
+            credit: 0,
+          },
+          {
+            accountName: mapPaymentMethodToAccount(method),
+            partyId: null,
+            debit: 0,
+            credit: refundAmt,
+          },
+        ],
       });
 
       return createdRefund;
