@@ -445,7 +445,7 @@ function FinancialsPageContent() {
   const [txnDate, setTxnDate] = useState(new Date().toISOString().split("T")[0]);
 
   const [txnSourceType, setTxnSourceType] = useState<"GENERAL" | "PARTY">("GENERAL");
-  const [txnSourceGeneralAccount, setTxnSourceGeneralAccount] = useState("Bank Account (Meezan Bank)");
+  const [txnSourceGeneralAccount, setTxnSourceGeneralAccount] = useState("Cash in Hand");
   const [txnSourcePartyType, setTxnSourcePartyType] = useState<"CUSTOMER" | "VENDOR" | "EMPLOYEE">("CUSTOMER");
   const [txnSourcePartyId, setTxnSourcePartyId] = useState("");
   const [txnSourcePartyName, setTxnSourcePartyName] = useState("");
@@ -889,12 +889,12 @@ function FinancialsPageContent() {
       targetAcc = txnTargetGeneralAccount;
     }
 
-    let sourceAcc = "Bank Account (Meezan Bank)";
+    let sourceAcc = txnSourceGeneralAccount || "Cash in Hand";
     let sourcePartyId: string | null = null;
     let sourcePartyName: string | null = null;
 
     if (txnSourceType === "GENERAL") {
-      sourceAcc = txnSourceGeneralAccount;
+      sourceAcc = txnSourceGeneralAccount || "Cash in Hand";
     } else {
       sourcePartyId = txnSourcePartyId || null;
       sourcePartyName = txnSourcePartyName || null;
@@ -967,13 +967,13 @@ function FinancialsPageContent() {
 
   // Key Balance Aggregates for Header Bar
   const keyMetrics = useMemo(() => {
-    const cashAcc = accountsData.find((a) => a.name === "Cash in Hand");
-    const meezanAcc = accountsData.find((a) => a.name === "Bank Account (Meezan Bank)");
-    const hblAcc = accountsData.find((a) => a.name === "Bank Account (HBL)");
+    const cashAcc = accountsData.find((a) => a.name?.toLowerCase().includes("cash"));
+    const bankAccounts = accountsData.filter((a) => a.name?.toLowerCase().includes("bank"));
     const arAcc = accountsData.find((a) => a.name?.includes("Receivable"));
     const apAcc = accountsData.find((a) => a.name?.includes("Payable"));
 
-    const totalLiquidCash = (cashAcc?.balance || 0) + (meezanAcc?.balance || 0) + (hblAcc?.balance || 0);
+    const totalBankBalance = bankAccounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+    const totalLiquidCash = (cashAcc?.balance || 0) + totalBankBalance;
     const totalAR = arAcc?.balance || 0;
     const totalAP = apAcc?.balance || 0;
 
@@ -982,7 +982,7 @@ function FinancialsPageContent() {
       receivables: totalAR,
       payables: totalAP,
       cashInHand: cashAcc?.balance || 0,
-      bankBalance: (meezanAcc?.balance || 0) + (hblAcc?.balance || 0),
+      bankBalance: totalBankBalance,
     };
   }, [accountsData]);
 
@@ -1121,20 +1121,8 @@ function FinancialsPageContent() {
             </div>
           </div>
 
-          {/* Quick Action & Balance Highlights */}
+          {/* Quick Action */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60">
-              <PiggyBank className="w-4 h-4 text-emerald-500" />
-              <div>
-                <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-widest block leading-none">
-                  Available Liquidity
-                </span>
-                <span className="text-xs font-mono font-black text-slate-800 dark:text-slate-200">
-                  PKR {formatCompact(keyMetrics.liquidCash)}
-                </span>
-              </div>
-            </div>
-
             <button
               type="button"
               onClick={() => {
@@ -1898,130 +1886,71 @@ function FinancialsPageContent() {
 
             {/* Step 4: Source / Offsetting Account */}
             <div className="space-y-3 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
-              <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">4</span>
-                <span>Source / Offsetting Account (Where did funds come from / go to?)</span>
-              </label>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">4</span>
+                  <span>Source / Offsetting Account (Where did funds come from / go to?)</span>
+                </label>
+                <span className="text-[11px] text-slate-400">Type any custom account or choose below</span>
+              </div>
 
-              <div>
-                <select
-                  className="w-full px-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  value={
-                    txnSourceType === "GENERAL"
-                      ? `GL:${txnSourceGeneralAccount}`
-                      : `PARTY:${txnSourcePartyType}:${txnSourcePartyId}:${txnSourcePartyName}`
-                  }
+              {/* Searchable / Editable Text Input with Datalist */}
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  list="source-account-suggestions"
+                  placeholder="Type any account name (e.g. Cash, Bank Account, Operating Expenses, etc.)..."
+                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 shadow-xs"
+                  value={txnSourceGeneralAccount}
                   onChange={(e) => {
-                    const val = e.target.value;
-                    if (val.startsWith("PARTY:")) {
-                      const [, pType, pId, pName] = val.split(":");
-                      setTxnSourceType("PARTY");
-                      setTxnSourcePartyType(pType as any);
-                      setTxnSourcePartyId(pId);
-                      setTxnSourcePartyName(pName);
-                    } else if (val.startsWith("GL:")) {
-                      const accName = val.replace("GL:", "");
-                      setTxnSourceType("GENERAL");
-                      setTxnSourceGeneralAccount(accName);
-                      setTxnSourcePartyId("");
-                      setTxnSourcePartyName("");
-                    }
+                    setTxnSourceType("GENERAL");
+                    setTxnSourceGeneralAccount(e.target.value);
                   }}
-                >
-                  <optgroup label="🏛️ Liquid Accounts (Bank & Cash)">
-                    <option value="GL:Bank Account (Meezan Bank)">Bank Account (Meezan Bank)</option>
-                    <option value="GL:Bank Account (HBL)">Bank Account (HBL)</option>
-                    <option value="GL:Cash in Hand">Cash in Hand</option>
-                  </optgroup>
+                />
+                <datalist id="source-account-suggestions">
+                  <option value="Cash in Hand" />
+                  <option value="Bank Account" />
+                  <option value="Sales Revenue" />
+                  <option value="Service & Maintenance Revenue" />
+                  <option value="Operating Expenses" />
+                  <option value="Office Rent & Utilities" />
+                  <option value="Salary & Wage Expense" />
+                  <option value="Owner Capital / Equity" />
+                  <option value="General & Administrative Expense" />
+                  <option value="Logistics & Carriage Outward" />
+                </datalist>
+              </div>
 
-                  <optgroup label="📈 Revenue & Income">
-                    <option value="GL:Sales Revenue">Sales Revenue (AC Units & Goods)</option>
-                    <option value="GL:Service & Maintenance Income">Service & Maintenance Revenue</option>
-                  </optgroup>
-
-                  <optgroup label="💼 Operating Expenses">
-                    <option value="GL:Office Rent & Utilities">Office Rent & Utilities</option>
-                    <option value="GL:Salary & Wage Expense">Salary & Wage Expense</option>
-                    <option value="GL:Logistics & Carriage Outward">Logistics & Carriage Outward</option>
-                    <option value="GL:General & Administrative Expense">General & Administrative Expense</option>
-                  </optgroup>
-
-                  {partiesList.customers?.length > 0 && (
-                    <optgroup label="👥 Customer Accounts (Party)">
-                      {partiesList.customers.map((c: any) => (
-                        <option key={c.id || c.name} value={`PARTY:CUSTOMER:${c.id || ""}:${c.name}`}>
-                          Customer: {c.name} {c.phone ? `(${c.phone})` : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-
-                  {partiesList.vendors?.length > 0 && (
-                    <optgroup label="🏢 Vendor Accounts (Party)">
-                      {partiesList.vendors.map((v: any) => (
-                        <option key={v.id || v.name} value={`PARTY:VENDOR:${v.id || ""}:${v.name}`}>
-                          Vendor: {v.name} {v.phone ? `(${v.phone})` : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-
-                  {partiesList.employees?.length > 0 && (
-                    <optgroup label="👤 Staff / Employees (Party)">
-                      {partiesList.employees.map((e: any) => (
-                        <option key={e.id || e.name} value={`PARTY:EMPLOYEE:${e.id || ""}:${e.name}`}>
-                          Staff: {e.name} {e.position ? `(${e.position})` : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-
-                  {accountsData
-                    .filter(
-                      (a) =>
-                        ![
-                          "Cash in Hand",
-                          "Bank Account (Meezan Bank)",
-                          "Bank Account (HBL)",
-                          "Sales Revenue",
-                          "Service & Maintenance Income",
-                          "Office Rent & Utilities",
-                          "Salary & Wage Expense",
-                          "Logistics & Carriage Outward",
-                          "General & Administrative Expense",
-                          "Accounts Receivable (Trade Debtors)",
-                          "Accounts Payable (Trade Creditors)",
-                          "Employee Advance",
-                        ].includes(a.name)
-                    )
-                    .length > 0 && (
-                    <optgroup label="📑 Other General Accounts">
-                      {accountsData
-                        .filter(
-                          (a) =>
-                            ![
-                              "Cash in Hand",
-                              "Bank Account (Meezan Bank)",
-                              "Bank Account (HBL)",
-                              "Sales Revenue",
-                              "Service & Maintenance Income",
-                              "Office Rent & Utilities",
-                              "Salary & Wage Expense",
-                              "Logistics & Carriage Outward",
-                              "General & Administrative Expense",
-                              "Accounts Receivable (Trade Debtors)",
-                              "Accounts Payable (Trade Creditors)",
-                              "Employee Advance",
-                            ].includes(a.name)
-                        )
-                        .map((acc) => (
-                          <option key={acc.name} value={`GL:${acc.name}`}>
-                            {acc.name} ({acc.type})
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                </select>
+              {/* Simple Easy Quick-Select Option Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Quick Select:</span>
+                {[
+                  "Cash in Hand",
+                  "Bank Account",
+                  "Sales Revenue",
+                  "Operating Expenses",
+                  "Office Rent & Utilities",
+                  "Salary & Wage Expense",
+                  "Owner Capital / Equity",
+                  "General Expense",
+                ].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setTxnSourceType("GENERAL");
+                      setTxnSourceGeneralAccount(item);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-all border ${
+                      txnSourceGeneralAccount === item
+                        ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold ring-1 ring-blue-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
               </div>
             </div>
 
