@@ -2157,34 +2157,6 @@ function FinancialsPageContent() {
       {/* ========================================================================= */}
       {activeSection === "entries" && (
         <div className="space-y-5 animate-fadeIn">
-          {/* Universal General Ledger Balance Verification Banner */}
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl border border-indigo-800/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-black text-white">Universal General Ledger</h3>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${glTotals.isBalanced ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-rose-500/20 text-rose-300 border border-rose-500/40"}`}>
-                  {glTotals.isBalanced ? "Sum(Debit) == Sum(Credit) Balanced ✅" : "Out of Balance ⚠️"}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                Chronological record of all journal transactions company-wide with double-entry audit lines.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80 text-xs font-mono">
-              <div>
-                <span className="text-[10px] uppercase text-emerald-400 block font-bold">Total Debits</span>
-                <span className="text-sm font-black text-emerald-400">PKR {Number(glTotals.totalDebit || 0).toLocaleString()}</span>
-              </div>
-              <div className="h-6 w-px bg-slate-700"></div>
-              <div>
-                <span className="text-[10px] uppercase text-blue-400 block font-bold">Total Credits</span>
-                <span className="text-sm font-black text-blue-400">PKR {Number(glTotals.totalCredit || 0).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
           {/* Filter and Search Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex flex-wrap items-center gap-2.5">
