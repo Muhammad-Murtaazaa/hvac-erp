@@ -54,6 +54,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         },
       });
 
+      // If invoice is linked to a complaint, sync complaint status
+      if (invoice.complaintId) {
+        await tx.complaint.update({
+          where: { id: invoice.complaintId },
+          data: {
+            amount: Number(invoice.totalAmount),
+            amountStatus: newStatus,
+          },
+        });
+      }
+
       // 3. Write General Ledger entries (Debit Cash-Bank / Credit Accounts Receivable)
       const isBank = (method || "CASH") === "BANK_TRANSFER" || (method || "CASH") === "CHEQUE" || (method || "CASH") === "ONLINE";
       const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";

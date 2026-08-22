@@ -35,6 +35,7 @@ export async function GET(req: Request) {
         include: {
           lineItems: { include: { product: true } },
           deliveryOrder: true,
+          complaint: true,
         },
       });
       if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });

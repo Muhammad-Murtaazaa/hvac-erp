@@ -25,31 +25,76 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      // Header
-      doc.fontSize(22).fillColor("#1e3a8a").text("HVAC Service & Trading ERP", { align: "left" });
-      doc.fontSize(10).fillColor("#4b5563").text("Cloud Ledger-Synchronized Invoice Document", { align: "left" });
-      doc.moveDown();
+      // TCE Logo Left
+      let logoLoaded = false;
+      try {
+        let logoPath = path.resolve("LOGO.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve("public/logo.png");
+        }
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 50, 40, { width: 70 });
+          logoLoaded = true;
+        }
+      } catch (e) {
+        console.error("Error loading logo image:", e);
+      }
 
-      // Horizontal line
-      doc.moveTo(50, 95).lineTo(550, 95).strokeColor("#e5e7eb").stroke();
+      if (!logoLoaded) {
+        doc.save();
+        doc.fillColor("#F28C28");
+        doc.moveTo(60, 45)
+           .bezierCurveTo(45, 55, 45, 75, 60, 85)
+           .bezierCurveTo(63, 81, 63, 79, 60, 75)
+           .bezierCurveTo(52, 69, 52, 61, 60, 55)
+           .bezierCurveTo(63, 51, 63, 49, 60, 45)
+           .closePath()
+           .fill();
+         
+        doc.moveTo(100, 45)
+           .bezierCurveTo(115, 55, 115, 75, 100, 85)
+           .bezierCurveTo(97, 81, 97, 79, 100, 75)
+           .bezierCurveTo(108, 69, 108, 61, 100, 55)
+           .bezierCurveTo(97, 51, 97, 49, 100, 45)
+           .closePath()
+           .fill();
+
+        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
+        doc.text("TCE", 60, 57, { width: 40, align: "center" });
+        doc.restore();
+      }
+
+      // Right Side Header (Official TCE Letterhead)
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+
+      // Title Banner
+      doc.rect(50, 102, 500, 20).fill("#1e293b"); // dark slate header
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("BILLING INVOICE", 50, 107, { align: "center", width: 500 });
 
       // Info metadata block
-      doc.font("Roboto-Bold").fontSize(14).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 110);
-      doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
-      doc.text(`Date: ${new Date(invoiceData.date).toLocaleDateString()}`, 50, 130);
-      doc.text(`Client Name: ${invoiceData.clientName}`, 50, 145);
-      if (invoiceData.clientPhone) doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, 160);
-      if (invoiceData.clientAddress) doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, 175);
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 130);
+      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
+      doc.text(`Date: ${new Date(invoiceData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Client Name: ${invoiceData.clientName}`, 50, 162);
+      if (invoiceData.clientPhone) doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, 176);
+      if (invoiceData.clientAddress) doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, 190, { width: 280 });
 
       if (invoiceData.deliveryOrder) {
-        doc.text(`Ref Delivery Order: ${invoiceData.deliveryOrder.doNumber}`, 350, 130);
+        doc.text(`Ref Delivery Order: ${invoiceData.deliveryOrder.doNumber}`, 340, 148);
       }
-      doc.text(`Status: ${invoiceData.status}`, 350, 145);
-      doc.text(`NTN: G535752`, 350, 160);
-      doc.text(`STRN: 3277876376780`, 350, 175);
+      if (invoiceData.complaint) {
+        doc.text(`Ref Support Ticket: ${invoiceData.complaint.complaintNumber}`, 340, 162);
+      }
+      doc.text(`Payment Status: ${invoiceData.status}`, 340, 176);
+      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 190);
 
       // Subject Block
-      let y = 210;
+      let y = 220;
       if (invoiceData.subjectHeading) {
         doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937").text(`Subject: ${invoiceData.subjectHeading}`, 50, y);
         y += 15;

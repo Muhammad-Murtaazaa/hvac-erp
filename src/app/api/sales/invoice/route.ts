@@ -254,7 +254,8 @@ export async function POST(req: Request) {
           await tx.complaint.update({
             where: { id: complaintId },
             data: {
-              amountStatus: invoiceStatus === "PAID" ? "PAID" : "INVOICED",
+              amount: finalTotalAmount,
+              amountStatus: invoiceStatus,
               customerId: resolvedCustomerId || complaint.customerId,
             },
           });

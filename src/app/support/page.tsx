@@ -101,6 +101,27 @@ function SupportPageContent() {
   const [updating, setUpdating] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
+  // Helper to accurately derive billed, received, and pending amount from linked invoice or complaint fields
+  const getTicketFinancials = (t: any) => {
+    if (t?.invoice) {
+      const total = Number(t.invoice.totalAmount ?? 0);
+      const paid = Number(t.invoice.amountPaid ?? 0);
+      const pending = Math.max(0, total - paid);
+      return { amt: total, rec: paid, pend: pending };
+    }
+    const amt = Number(t?.amount || 0);
+    let rec = 0;
+    let pend = amt;
+    if (t?.amountStatus === "PAID") {
+      rec = amt;
+      pend = 0;
+    } else if (t?.amountStatus === "PARTIALLY_PAID") {
+      rec = Number(t?.receivedAmount ?? 0);
+      pend = Math.max(0, amt - rec);
+    }
+    return { amt, rec, pend };
+  };
+
   const { toast } = useToast();
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [bulkTechModalOpen, setBulkTechModalOpen] = useState(false);
@@ -598,9 +619,9 @@ function SupportPageContent() {
             const totalInProgress = complaints.filter((c) => c.status === "IN_PROGRESS").length;
             const totalOpen = complaints.filter((c) => c.status === "OPEN").length;
 
-            const totalAmountBilled = complaints.reduce((acc, c) => acc + Number(c.amount || 0), 0);
-            const totalAmountReceived = complaints.reduce((acc, c) => acc + (c.amountStatus === "PAID" ? Number(c.amount || 0) : 0), 0);
-            const totalAmountPending = complaints.reduce((acc, c) => acc + (c.amountStatus === "UNPAID" ? Number(c.amount || 0) : 0), 0);
+            const totalAmountBilled = complaints.reduce((acc, c) => acc + getTicketFinancials(c).amt, 0);
+            const totalAmountReceived = complaints.reduce((acc, c) => acc + getTicketFinancials(c).rec, 0);
+            const totalAmountPending = complaints.reduce((acc, c) => acc + getTicketFinancials(c).pend, 0);
 
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -719,9 +740,7 @@ function SupportPageContent() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredTickets.map((t, idx) => {
-                    const amt = Number(t.amount || 0);
-                    const rec = t.amountStatus === "PAID" ? amt : 0;
-                    const pend = t.amountStatus === "UNPAID" ? amt : 0;
+                    const { amt, rec, pend } = getTicketFinancials(t);
                     const isSelected = selectedTicketIds.includes(t.id);
                     return (
                       <tr
@@ -733,8 +752,9 @@ function SupportPageContent() {
                           setSelectedTicket(t);
                           setEditStatus(t.status);
                           setEditTechId(t.assignedTechnicianId || "");
-                          setEditAmount(String(t.amount));
-                          setEditAmountStatus(t.amountStatus || "UNPAID");
+                          const fin = getTicketFinancials(t);
+                          setEditAmount(String(fin.amt));
+                          setEditAmountStatus(t.invoice ? t.invoice.status : (t.amountStatus || "UNPAID"));
                         }}
                       >
                         <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -800,8 +820,9 @@ function SupportPageContent() {
                                 setSelectedTicket(t);
                                 setEditStatus(t.status);
                                 setEditTechId(t.assignedTechnicianId || "");
-                                setEditAmount(String(t.amount));
-                                setEditAmountStatus(t.amountStatus || "UNPAID");
+                                const fin = getTicketFinancials(t);
+                                setEditAmount(String(fin.amt));
+                                setEditAmountStatus(t.invoice ? t.invoice.status : (t.amountStatus || "UNPAID"));
                               }}
                               className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-300"
                             >
