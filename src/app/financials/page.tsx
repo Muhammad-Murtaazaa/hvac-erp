@@ -1991,45 +1991,6 @@ function FinancialsPageContent() {
               </div>
             </div>
 
-            {/* LIVE DOUBLE-ENTRY PREVIEW CARD */}
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-md border border-indigo-900/60 space-y-3">
-              <div className="flex items-center justify-between border-b border-indigo-800/60 pb-2">
-                <span className="text-xs font-black uppercase tracking-widest text-indigo-300 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Live Double-Entry Balanced Journal Preview</span>
-                </span>
-                <span className="text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
-                  Balanced Double-Entry ✅
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
-                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 space-y-1">
-                  <span className="text-[10px] font-black uppercase text-emerald-400 block">DEBIT LINE</span>
-                  <div className="font-bold text-white truncate">
-                    {journalPreview.debitAccount}
-                  </div>
-                  <div className="text-sm font-black text-emerald-400">
-                    PKR {txnAmount && Number(txnAmount) > 0 ? Number(txnAmount).toLocaleString() : "0"}
-                  </div>
-                </div>
-
-                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 space-y-1">
-                  <span className="text-[10px] font-black uppercase text-blue-400 block">CREDIT LINE</span>
-                  <div className="font-bold text-white truncate">
-                    {journalPreview.creditAccount}
-                  </div>
-                  <div className="text-sm font-black text-blue-400">
-                    PKR {txnAmount && Number(txnAmount) > 0 ? Number(txnAmount).toLocaleString() : "0"}
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-slate-400 font-sans">
-                Saving this entry automatically creates 1 balanced <code>JournalEntry</code> with 2 <code>JournalLines</code> and updates the permanent audit trail.
-              </p>
-            </div>
-
             {/* FORM ACTIONS */}
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
