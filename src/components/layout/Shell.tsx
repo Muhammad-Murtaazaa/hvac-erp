@@ -37,6 +37,7 @@ import {
   Zap,
   Info,
   ExternalLink,
+  ArrowLeftRight,
 } from "lucide-react";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
@@ -64,15 +65,15 @@ const PINNED_ITEMS: MenuItem[] = [
 
 const NAVIGATION_GROUPS: NavigationGroup[] = [
   {
-    id: "business-pulse",
-    title: "Business Pulse",
+    id: "financials",
+    title: "Financials & Accounts",
     defaultOpen: true,
     items: [
-      { name: "Financials", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
-      { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_REPORTS"] },
-      { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
-      { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
-      { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement", "Support", "Technician", "Investor"], permissions: ["VIEW_DASHBOARD", "VIEW_FINANCIALS", "MANAGE_SALES", "MANAGE_SUPPORT", "MANAGE_PROCUREMENT"] },
+      { name: "Debit / Credit Entry", href: "/financials?tab=record", icon: ArrowLeftRight, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "General Ledger", href: "/financials?tab=general-ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "Party Ledgers (SOA)", href: "/financials?tab=statements", icon: Receipt, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "Financial Accounts", href: "/financials?tab=accounts", icon: Scale, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "Financial Insights", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
     ],
   },
   {
@@ -109,13 +110,22 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     ],
   },
   {
-    id: "finance-people",
-    title: "Finance & People",
+    id: "human-resources",
+    title: "Human Resources",
     defaultOpen: true,
     items: [
-      { name: "General Ledger", href: "/financials?tab=general-ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Financial Accounts", href: "/financials?tab=accounts", icon: Scale, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"], permissions: ["MANAGE_HRM"] },
+      { name: "Employees & Payroll", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"], permissions: ["MANAGE_HRM"] },
+    ],
+  },
+  {
+    id: "business-pulse",
+    title: "Reports & Analytics",
+    defaultOpen: true,
+    items: [
+      { name: "Reports", href: "/reports", icon: BarChart3, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_REPORTS"] },
+      { name: "Report Builder", href: "/reports/builder", icon: Sliders, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
+      { name: "Scheduled Reports", href: "/reports/schedules", icon: Mail, roles: ["Admin", "Accountant"], permissions: ["VIEW_REPORTS"] },
+      { name: "AI Copilot", href: "/copilot", icon: Bot, roles: ["Admin", "Accountant", "Sales", "Inventory/Procurement", "Support", "Technician", "Investor"], permissions: ["VIEW_DASHBOARD", "VIEW_FINANCIALS", "MANAGE_SALES", "MANAGE_SUPPORT", "MANAGE_PROCUREMENT"] },
     ],
   },
   {
@@ -152,11 +162,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   // Collapsible Accordion Groups state
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "business-pulse": true,
+    financials: true,
     "sales-customers": true,
     "field-operations": true,
     "warehouse-procurement": true,
-    "finance-people": true,
+    "human-resources": true,
+    "business-pulse": true,
     system: false, // Collapsed by default
   });
 
