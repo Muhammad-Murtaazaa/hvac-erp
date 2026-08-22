@@ -12,8 +12,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing Delivery Order ID" }, { status: 400 });
     }
 
-    const deliveryOrder = await prisma.deliveryOrder.findUnique({
-      where: { id },
+    const trimmedId = id.trim();
+    const deliveryOrder = await prisma.deliveryOrder.findFirst({
+      where: {
+        OR: [
+          { id: trimmedId },
+          { doNumber: trimmedId },
+          { doNumber: `DO-${trimmedId}` },
+        ],
+      },
       include: {
         lineItems: {
           include: { product: true },
@@ -22,7 +29,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!deliveryOrder) {
-      return NextResponse.json({ success: false, error: "Delivery Order not found." }, { status: 404 });
+      return NextResponse.json({ success: false, error: `Delivery Order not found for identifier: ${trimmedId}` }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, deliveryOrder });
@@ -41,15 +48,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing Delivery Order ID" }, { status: 400 });
     }
 
-    const existingDO = await prisma.deliveryOrder.findUnique({
-      where: { id },
+    const trimmedId = String(id).trim();
+    const existingDO = await prisma.deliveryOrder.findFirst({
+      where: {
+        OR: [
+          { id: trimmedId },
+          { doNumber: trimmedId },
+          { doNumber: `DO-${trimmedId}` },
+        ],
+      },
       include: {
         lineItems: { include: { product: true } },
       },
     });
 
     if (!existingDO) {
-      return NextResponse.json({ success: false, error: "Delivery Order not found." }, { status: 404 });
+      return NextResponse.json({ success: false, error: `Delivery Order not found for identifier: ${trimmedId}` }, { status: 404 });
     }
 
     if (existingDO.status === "DELIVERED") {

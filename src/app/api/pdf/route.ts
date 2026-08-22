@@ -54,7 +54,12 @@ export async function GET(req: Request) {
         },
       });
       if (!doRecord) return NextResponse.json({ error: "Delivery Order not found" }, { status: 404 });
-      pdfBuffer = await generateDeliveryOrderPDF(doRecord);
+      
+      const proto = req.headers.get("x-forwarded-proto") || (req.headers.get("host")?.includes("localhost") ? "http" : "https");
+      const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+      const baseUrl = host ? `${proto}://${host}` : undefined;
+
+      pdfBuffer = await generateDeliveryOrderPDF(doRecord, baseUrl);
       fileName = `delivery-order-${doRecord.doNumber}.pdf`;
     } else if (type === "payslip") {
       const payslip: any = await prisma.payrollRun.findUnique({

@@ -197,7 +197,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
   });
 }
 
-export function generateDeliveryOrderPDF(doData: any): Promise<Buffer> {
+export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
@@ -209,36 +209,90 @@ export function generateDeliveryOrderPDF(doData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      doc.fontSize(22).fillColor("#047857").text("HVAC Delivery Order", { align: "left" });
-      doc.fontSize(10).fillColor("#4b5563").text("Official Dispatch & Delivery Challan Record", { align: "left" });
-      doc.moveDown();
+      // TCE Logo Left
+      let logoLoaded = false;
+      try {
+        let logoPath = path.resolve("LOGO.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve("public/logo.png");
+        }
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 50, 40, { width: 70 });
+          logoLoaded = true;
+        }
+      } catch (e) {
+        console.error("Error loading logo image:", e);
+      }
 
-      doc.moveTo(50, 95).lineTo(550, 95).strokeColor("#e5e7eb").stroke();
+      if (!logoLoaded) {
+        doc.save();
+        doc.fillColor("#F28C28");
+        doc.moveTo(60, 45)
+           .bezierCurveTo(45, 55, 45, 75, 60, 85)
+           .bezierCurveTo(63, 81, 63, 79, 60, 75)
+           .bezierCurveTo(52, 69, 52, 61, 60, 55)
+           .bezierCurveTo(63, 51, 63, 49, 60, 45)
+           .closePath()
+           .fill();
+         
+        doc.moveTo(100, 45)
+           .bezierCurveTo(115, 55, 115, 75, 100, 85)
+           .bezierCurveTo(97, 81, 97, 79, 100, 75)
+           .bezierCurveTo(108, 69, 108, 61, 100, 55)
+           .bezierCurveTo(97, 51, 97, 49, 100, 45)
+           .closePath()
+           .fill();
 
-      doc.font("Roboto-Bold").fontSize(14).fillColor("#1f2937").text(`DO NUMBER: ${doData.doNumber}`, 50, 110);
-      doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
-      doc.text(`Date: ${new Date(doData.date).toLocaleDateString()}`, 50, 130);
-      doc.text(`Client Name: ${doData.clientName}`, 50, 145);
-      doc.text(`Client Phone: ${doData.clientPhone}`, 50, 160);
-      doc.text(`Delivery Address: ${doData.deliveryAddress}`, 50, 175);
-      doc.text(`DO Status: ${doData.status}`, 310, 130);
+        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
+        doc.text("TCE", 60, 57, { width: 40, align: "center" });
+        doc.restore();
+      }
+
+      // Right Side Header (Official TCE Letterhead)
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+
+      // Title Banner
+      doc.rect(50, 102, 500, 20).fill("#065f46"); // emerald header
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("DELIVERY ORDER / DISPATCH CHALLAN", 50, 107, { align: "center", width: 500 });
+
+      // Info metadata block
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`DO NUMBER: ${doData.doNumber}`, 50, 130);
+      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
+      doc.text(`Date: ${new Date(doData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Client Name: ${doData.clientName}`, 50, 162);
+      if (doData.clientPhone) doc.text(`Client Phone: ${doData.clientPhone}`, 50, 176);
+      if (doData.deliveryAddress) doc.text(`Delivery Address: ${doData.deliveryAddress}`, 50, 190, { width: 280 });
+
+      doc.text(`DO Status: ${doData.status}`, 340, 148);
       if (doData.poNumber) {
-        doc.text(`Ref PO Number: ${doData.poNumber}`, 310, 145);
+        doc.text(`Ref PO Number: ${doData.poNumber}`, 340, 162);
+      }
+      if (doData.vehicle) {
+        doc.text(`Vehicle / Transport: ${doData.vehicle}`, 340, 176);
       }
 
       // Generate and embed QR code
       try {
-        const rawHost = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || process.env.NEXTAUTH_URL || "https://hvac-erp-bay.vercel.app";
-        const baseUrl = rawHost.startsWith("http") ? rawHost : `https://${rawHost}`;
-        const confirmUrl = `${baseUrl}/delivery/confirm/${doData.id}`;
+        const rawHost = baseUrlOverride || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "";
+        let baseUrl = rawHost ? (rawHost.startsWith("http") ? rawHost : `https://${rawHost}`) : "";
+        if (!baseUrl && typeof window !== "undefined") {
+          baseUrl = window.location.origin;
+        }
+        const confirmUrl = baseUrl ? `${baseUrl}/delivery/confirm/${doData.id}` : `/delivery/confirm/${doData.id}`;
+        
         const qrBuffer = await QRCode.toBuffer(confirmUrl, {
           errorCorrectionLevel: "H",
           margin: 1,
-          width: 80,
+          width: 75,
           color: { dark: "#0f172a", light: "#ffffff" },
         });
-        doc.image(qrBuffer, 465, 105, { width: 75 });
-        doc.fontSize(7).fillColor("#6b7280").text("Scan to Confirm Receipt", 450, 182, { width: 105, align: "center" });
+        doc.image(qrBuffer, 470, 130, { width: 68 });
+        doc.fontSize(6.5).fillColor("#6b7280").text("Scan to Confirm Receipt", 450, 202, { width: 105, align: "center" });
       } catch (qrErr) {
         console.warn("Could not embed QR code on DO PDF", qrErr);
       }

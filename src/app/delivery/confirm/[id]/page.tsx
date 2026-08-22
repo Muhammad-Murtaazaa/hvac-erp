@@ -20,7 +20,8 @@ import { useToast } from "@/components/shared/ToastProvider";
 
 export default function DeliveryConfirmationPage() {
   const params = useParams();
-  const doId = params.id as string;
+  const rawId = (params?.id as string) || "";
+  const doId = decodeURIComponent(rawId);
   const { toast } = useToast();
 
   const [deliveryOrder, setDeliveryOrder] = useState<any>(null);
@@ -39,9 +40,11 @@ export default function DeliveryConfirmationPage() {
   }, [doId]);
 
   const fetchDODetails = async () => {
+    if (!doId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/delivery/confirm?id=${doId}`);
+      setError("");
+      const res = await fetch(`/api/delivery/confirm?id=${encodeURIComponent(doId)}`);
       const data = await res.json();
 
       if (!res.ok || !data.success) {
@@ -73,9 +76,9 @@ export default function DeliveryConfirmationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: doId,
-          receiverName,
-          receiverPhone,
-          remarks,
+          receiverName: receiverName.trim(),
+          receiverPhone: receiverPhone.trim(),
+          remarks: remarks.trim(),
         }),
       });
 
@@ -110,8 +113,14 @@ export default function DeliveryConfirmationPage() {
         <div className="p-4 bg-rose-50 dark:bg-rose-950/50 text-rose-500 rounded-full mb-4">
           <AlertCircle className="w-10 h-10" />
         </div>
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Invalid or Expired QR Code</h2>
-        <p className="text-xs text-slate-500 max-w-sm">{error || "Could not find a valid Delivery Order matching this QR code."}</p>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Delivery Verification</h2>
+        <p className="text-xs text-slate-500 max-w-sm mb-4">{error || "Could not find a valid Delivery Order matching this QR code."}</p>
+        <button
+          onClick={fetchDODetails}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
