@@ -338,22 +338,27 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* KPI 3: General Ledger Cash */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col justify-between space-y-3 hover:border-indigo-500/40 hover:shadow-md transition-all duration-300 group">
+        {/* KPI 3: Inventory Asset Valuation */}
+        <div
+          onClick={() => router.push("/inventory")}
+          className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-5 rounded-3xl shadow-sm flex flex-col justify-between space-y-3 hover:border-amber-500/40 hover:shadow-md transition-all duration-300 cursor-pointer group"
+        >
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">General Ledger Liquid Cash</span>
-              <span className={`text-2xl font-black font-mono block mt-1.5 ${Number(summary.cashBalance ?? 0) < 0 ? "text-rose-600" : "text-indigo-600 dark:text-indigo-400"}`}>
-                <AnimatedCounter value={Number(summary.cashBalance ?? 0)} prefix="PKR " />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Inventory Value</span>
+              <span className="text-2xl font-black font-mono block mt-1.5 text-slate-900 dark:text-white">
+                <AnimatedCounter value={Number(summary.totalInventoryValue ?? 0)} prefix="PKR " />
               </span>
             </div>
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-2xl group-hover:scale-110 transition-transform">
-              <Activity className="w-5 h-5" />
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl group-hover:scale-110 transition-transform">
+              <Box className="w-5 h-5" />
             </div>
           </div>
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex justify-between items-center text-xs text-slate-500">
-            <span>Bank & Cash Holdings</span>
-            <span className="font-bold text-indigo-600 dark:text-indigo-400">Audited Balance</span>
+            <span>{Number(summary.totalStockUnits ?? 0).toLocaleString()} Units in Stock</span>
+            <span className={`font-bold font-mono ${Number(summary.lowStockCount ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600"}`}>
+              {summary.lowStockCount ?? 0} Low-Stock Alert
+            </span>
           </div>
         </div>
 

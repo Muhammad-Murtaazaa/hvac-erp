@@ -31,9 +31,17 @@ export async function GET(req: Request) {
     });
     const outstandingAR = arInvoices.reduce((acc, inv) => acc + (Number(inv.totalAmount) - Number(inv.amountPaid)), 0);
 
-    // 3. Low-Stock Items count
+    // 3. Inventory Valuation & Stock Health
     const products = await prisma.product.findMany();
     const lowStockCount = products.filter((p) => p.onHandQty <= p.reorderLevel).length;
+    const totalInventoryValue = products.reduce(
+      (acc, p) => acc + (Number(p.averageCost || p.salesPrice || 0) * (p.onHandQty > 0 ? p.onHandQty : 0)),
+      0
+    );
+    const totalStockUnits = products.reduce(
+      (acc, p) => acc + (p.onHandQty > 0 ? p.onHandQty : 0),
+      0
+    );
 
     // 4. Open Complaints
     const openComplaintsCount = await prisma.complaint.count({
@@ -131,6 +139,8 @@ export async function GET(req: Request) {
         totalSalesToday: Number(todaySales._sum.totalAmount || 0),
         outstandingAR,
         lowStockCount,
+        totalInventoryValue,
+        totalStockUnits,
         openComplaintsCount,
         pendingPOItemsCount,
         cashBalance,
