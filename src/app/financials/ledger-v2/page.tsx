@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   PlusCircle,
@@ -15,6 +16,13 @@ import {
 } from "lucide-react";
 
 export default function LedgerV2Page() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Automatically redirect to the consolidated General Ledger in /financials
+    router.replace("/financials?tab=general-ledger");
+  }, [router]);
+
   const [activeTab, setActiveTab] = useState<"manual" | "party" | "trial" | "journal">("manual");
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);

@@ -1032,8 +1032,13 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       doc.text(`Total Period Credits: PKR ${Math.round(soaData.totals?.totalCredit || 0).toLocaleString()}`, 230, y + 9);
       
       const closeBal = Math.round(soaData.totals?.closingBalance || 0);
-      const closeLabel = closeBal > 0 ? "Net Receivable" : closeBal < 0 ? "Net Payable / Advance" : "Settled";
-      doc.font("Roboto-Bold").fontSize(9).fillColor(closeBal >= 0 ? "#0284c7" : "#e11d48").text(`Closing Balance: PKR ${Math.abs(closeBal).toLocaleString()} (${closeLabel})`, 380, y + 9, { width: 165, align: "right" });
+      let closeLabel = "Settled";
+      if (closeBal > 0) {
+        closeLabel = soaData.partyType === "VENDOR" ? "Net Payable" : "Net Receivable";
+      } else if (closeBal < 0) {
+        closeLabel = soaData.partyType === "VENDOR" ? "Advance Paid" : "Advance Held";
+      }
+      doc.font("Roboto-Bold").fontSize(9).fillColor(closeBal > 0 ? (soaData.partyType === "VENDOR" ? "#e11d48" : "#0284c7") : closeBal < 0 ? "#059669" : "#64748b").text(`Closing Balance: PKR ${Math.abs(closeBal).toLocaleString()} (${closeLabel})`, 340, y + 9, { width: 205, align: "right" });
 
       // Bottom Universal Footer
       const footerY = 790;
@@ -1049,5 +1054,114 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
     }
   });
 }
+
+export function generateMonthlySalarySheetPDF(data: { month: number; year: number; monthName: string; items: any[] }): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Landscape A4 for master salary sheet
+      const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape", font: fontRegularPath });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
+
+      registerAppFonts(doc);
+
+      // Header Banner
+      doc.rect(0, 0, 842, 65).fill("#0f172a");
+      doc.font("Roboto-Bold").fontSize(16).fillColor("#ffffff").text("TECHNICOOL ENGINEERING", 30, 16);
+      doc.font("Roboto-Regular").fontSize(10).fillColor("#93c5fd").text(`MASTER MONTHLY SALARY & ATTENDANCE SHEET — ${data.monthName.toUpperCase()} ${data.year}`, 30, 36);
+
+      let y = 80;
+
+      // Table Header (Width: 782)
+      doc.rect(30, y, 782, 22).fill("#1e293b");
+      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#ffffff");
+      doc.text("Emp #", 35, y + 6, { width: 45 });
+      doc.text("Employee Name & Role", 85, y + 6, { width: 130 });
+      doc.text("Base Salary", 220, y + 6, { width: 60, align: "right" });
+      doc.text("Duty Days", 285, y + 6, { width: 45, align: "center" });
+      doc.text("Absent", 335, y + 6, { width: 40, align: "center" });
+      doc.text("Overtime", 380, y + 6, { width: 55, align: "right" });
+      doc.text("Allowances", 440, y + 6, { width: 55, align: "right" });
+      doc.text("Mess Exp.", 500, y + 6, { width: 55, align: "right" });
+      doc.text("Adv. Deduct", 560, y + 6, { width: 55, align: "right" });
+      doc.text("Net Payable", 620, y + 6, { width: 65, align: "right" });
+      doc.text("Status", 690, y + 6, { width: 45, align: "center" });
+      doc.text("Signature", 740, y + 6, { width: 65, align: "center" });
+
+      y += 22;
+
+      let totalBase = 0;
+      let totalOvertime = 0;
+      let totalAllowances = 0;
+      let totalMess = 0;
+      let totalAdv = 0;
+      let totalNet = 0;
+
+      data.items.forEach((item, idx) => {
+        if (y > 510) {
+          doc.addPage({ margin: 30, size: "A4", layout: "landscape", font: fontRegularPath });
+          registerAppFonts(doc);
+          y = 30;
+        }
+
+        const bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+        doc.rect(30, y, 782, 18).fill(bg);
+
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#64748b").text(item.employeeNo || "EMP", 35, y + 5, { width: 45 });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(item.name || "Staff", 85, y + 5, { width: 130 });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#0f172a").text(Math.round(item.baseSalary).toLocaleString(), 220, y + 5, { width: 60, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#059669").text(`${item.presentDays}/${item.totalDays || 30}`, 285, y + 5, { width: 45, align: "center" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor(item.absentDays > 0 ? "#e11d48" : "#64748b").text(`${item.absentDays || 0}`, 335, y + 5, { width: 40, align: "center" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#0284c7").text(item.overtimeAmount > 0 ? Math.round(item.overtimeAmount).toLocaleString() : "-", 380, y + 5, { width: 55, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#0284c7").text(item.allowances > 0 ? Math.round(item.allowances).toLocaleString() : "-", 440, y + 5, { width: 55, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#e11d48").text(item.messDeductions > 0 ? Math.round(item.messDeductions).toLocaleString() : "-", 500, y + 5, { width: 55, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#e11d48").text(item.advanceDeductions > 0 ? Math.round(item.advanceDeductions).toLocaleString() : "-", 560, y + 5, { width: 55, align: "right" });
+        doc.font("Roboto-Bold").fontSize(8).fillColor("#2563eb").text(`PKR ${Math.round(item.netPay).toLocaleString()}`, 620, y + 5, { width: 65, align: "right" });
+        doc.font("Roboto-Bold").fontSize(6.5).fillColor(item.status === "PAID" ? "#059669" : "#d97706").text(item.status || "PENDING", 690, y + 5, { width: 45, align: "center" });
+        doc.font("Roboto-Regular").fontSize(6.5).fillColor("#cbd5e1").text("____________", 740, y + 5, { width: 65, align: "center" });
+
+        totalBase += Number(item.baseSalary || 0);
+        totalOvertime += Number(item.overtimeAmount || 0);
+        totalAllowances += Number(item.allowances || 0);
+        totalMess += Number(item.messDeductions || 0);
+        totalAdv += Number(item.advanceDeductions || 0);
+        totalNet += Number(item.netPay || 0);
+
+        y += 18;
+      });
+
+      // Total Summary Row
+      y += 4;
+      doc.rect(30, y, 782, 22).fill("#0f172a");
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#ffffff");
+      doc.text("TOTALS", 85, y + 6);
+      doc.text(`PKR ${Math.round(totalBase).toLocaleString()}`, 220, y + 6, { width: 60, align: "right" });
+      doc.text(`PKR ${Math.round(totalOvertime).toLocaleString()}`, 380, y + 6, { width: 55, align: "right" });
+      doc.text(`PKR ${Math.round(totalAllowances).toLocaleString()}`, 440, y + 6, { width: 55, align: "right" });
+      doc.text(`PKR ${Math.round(totalMess).toLocaleString()}`, 500, y + 6, { width: 55, align: "right" });
+      doc.text(`PKR ${Math.round(totalAdv).toLocaleString()}`, 560, y + 6, { width: 55, align: "right" });
+      doc.text(`PKR ${Math.round(totalNet).toLocaleString()}`, 620, y + 6, { width: 65, align: "right" });
+
+      // Signatures
+      y += 40;
+      doc.moveTo(50, y).lineTo(180, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Prepared By (HR Officer)", 50, y + 4, { align: "center", width: 130 });
+
+      doc.moveTo(350, y).lineTo(480, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Verified By (Accounts Manager)", 350, y + 4, { align: "center", width: 130 });
+
+      doc.moveTo(650, y).lineTo(780, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Approved By (CEO / Director)", 650, y + 4, { align: "center", width: 130 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 
 

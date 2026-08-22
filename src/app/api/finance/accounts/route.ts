@@ -72,18 +72,28 @@ export async function GET(req: Request) {
       };
     });
 
-    // Also fetch distinct parties & active documents list for quick dropdown selectors & linking
-    const [customers, vendors, employees, recentInvoices, recentPOs, recentDOs, recentComplaints] = await Promise.all([
-      prisma.invoice.findMany({
-        distinct: ["clientName"],
-        select: { clientName: true, clientPhone: true, clientAddress: true },
+    // Fetch all Customers, Vendors, Employees, plus JournalLines to calculate per-party balances
+    const [allCustomers, allVendors, allEmployees, journalLines, recentInvoices, recentPOs, recentDOs, recentComplaints] = await Promise.all([
+      prisma.customer.findMany({
+        select: { id: true, name: true, phone: true, address: true, email: true },
+        orderBy: { name: "asc" },
       }),
       prisma.vendor.findMany({
-        select: { id: true, name: true, phone: true, address: true },
+        select: { id: true, name: true, contactPerson: true, phone: true, address: true, email: true, paymentTerms: true },
+        orderBy: { name: "asc" },
       }),
       prisma.employee.findMany({
         where: { status: "ACTIVE" },
-        select: { id: true, name: true, phone: true, position: true, department: true },
+        select: { id: true, employeeNo: true, name: true, phone: true, department: true, position: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.journalLine.findMany({
+        where: {
+          partyId: { not: null },
+        },
+        include: {
+          account: true,
+        },
       }),
       prisma.invoice.findMany({
         select: {
@@ -135,12 +145,87 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    // Compute balance maps per partyId from double-entry JournalLines
+    const partyDebitTotals: Record<string, number> = {};
+    const partyCreditTotals: Record<string, number> = {};
+
+    journalLines.forEach((jl: any) => {
+      if (jl.partyId) {
+        partyDebitTotals[jl.partyId] = (partyDebitTotals[jl.partyId] || 0) + Number(jl.debit);
+        partyCreditTotals[jl.partyId] = (partyCreditTotals[jl.partyId] || 0) + Number(jl.credit);
+      }
+    });
+
+    // Structure party financial accounts
+    const customerAccounts = allCustomers.map((c) => {
+      const dr = partyDebitTotals[c.id] || 0;
+      const cr = partyCreditTotals[c.id] || 0;
+      const net = dr - cr; // Positive = Receivable from Customer, Negative = Advance Held
+      return {
+        id: c.id,
+        name: c.name,
+        partyType: "CUSTOMER" as const,
+        phone: c.phone || "",
+        email: c.email || "",
+        address: c.address || "",
+        totalDebit: Math.round(dr * 100) / 100,
+        totalCredit: Math.round(cr * 100) / 100,
+        balance: Math.round(net * 100) / 100,
+        statusLabel: net > 0 ? "Receivable" : net < 0 ? "Advance Held" : "Settled",
+      };
+    });
+
+    const vendorAccounts = allVendors.map((v) => {
+      const dr = partyDebitTotals[v.id] || 0;
+      const cr = partyCreditTotals[v.id] || 0;
+      const net = cr - dr; // Positive = Payable to Vendor, Negative = Advance Paid
+      return {
+        id: v.id,
+        name: v.name,
+        partyType: "VENDOR" as const,
+        contactPerson: v.contactPerson,
+        phone: v.phone || "",
+        email: v.email || "",
+        address: v.address || "",
+        paymentTerms: v.paymentTerms || "Net 30 Days",
+        totalDebit: Math.round(dr * 100) / 100,
+        totalCredit: Math.round(cr * 100) / 100,
+        balance: Math.round(net * 100) / 100,
+        statusLabel: net > 0 ? "Payable" : net < 0 ? "Advance Paid" : "Settled",
+      };
+    });
+
+    const employeeAccounts = allEmployees.map((e) => {
+      const dr = partyDebitTotals[e.id] || 0;
+      const cr = partyCreditTotals[e.id] || 0;
+      const net = dr - cr; // Positive = Advance/Loan Outstanding, Negative = Settled
+      return {
+        id: e.id,
+        name: e.name,
+        partyType: "EMPLOYEE" as const,
+        employeeNo: e.employeeNo,
+        phone: e.phone || "",
+        department: e.department,
+        position: e.position,
+        totalDebit: Math.round(dr * 100) / 100,
+        totalCredit: Math.round(cr * 100) / 100,
+        balance: Math.round(net * 100) / 100,
+        statusLabel: net > 0 ? "Loan Outstanding" : "Settled",
+      };
+    });
+
     return NextResponse.json({
       accounts: accountsWithBalances,
+      partyAccounts: {
+        customers: customerAccounts,
+        vendors: vendorAccounts,
+        employees: employeeAccounts,
+        all: [...customerAccounts, ...vendorAccounts, ...employeeAccounts],
+      },
       parties: {
-        customers: customers.map((c) => ({ id: c.clientName, name: c.clientName, phone: c.clientPhone })),
-        vendors: vendors.map((v) => ({ id: v.id, name: v.name, phone: v.phone })),
-        employees: employees.map((e) => ({ id: e.id, name: e.name, phone: e.phone, role: `${e.department} - ${e.position}` })),
+        customers: allCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone })),
+        vendors: allVendors.map((v) => ({ id: v.id, name: v.name, phone: v.phone })),
+        employees: allEmployees.map((e) => ({ id: e.id, name: e.name, phone: e.phone, role: `${e.department} - ${e.position}` })),
       },
       documents: {
         invoices: recentInvoices.map((inv) => ({

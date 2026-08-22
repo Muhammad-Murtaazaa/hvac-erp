@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { generateInvoicePDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF } from "@/lib/pdfGenerator";
+import { generateInvoicePDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF } from "@/lib/pdfGenerator";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +10,19 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type"); // invoice, do, payslip, complaint, employee-form, soa
+    const type = searchParams.get("type"); // invoice, do, payslip, complaint, employee-form, soa, salary-sheet
     const id = searchParams.get("id");
 
     if (!type) {
       return NextResponse.json({ error: "Document type is required" }, { status: 400 });
     }
 
-    if (type !== "soa" && !id) {
+    if (!["soa", "salary-sheet"].includes(type) && !id) {
       return NextResponse.json({ error: "Type and ID are required" }, { status: 400 });
     }
 
     // Sensitive HR documents require active authenticated session
-    if (["payslip", "employee-form"].includes(type) && !session) {
+    if (["payslip", "employee-form", "salary-sheet"].includes(type) && !session) {
       return NextResponse.json({ error: "Unauthorized: Please log in to view payroll/employee files" }, { status: 401 });
     }
 
@@ -78,6 +78,60 @@ export async function GET(req: Request) {
       if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
       pdfBuffer = await generateEmployeeFormPDF(employee);
       fileName = `employment-form-${employee.name.replace(/\s+/g, "_")}.pdf`;
+    } else if (type === "salary-sheet") {
+      const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
+      const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
+
+      const employees = await prisma.employee.findMany({
+        where: { status: "ACTIVE" },
+        orderBy: { name: "asc" },
+      });
+
+      const runs = await prisma.payrollRun.findMany({
+        where: { month, year },
+      });
+      const runMap = new Map(runs.map((r: any) => [r.employeeId, r]));
+
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const monthName = new Date(year, month - 1, 1).toLocaleString("default", { month: "long" });
+
+      const items = employees.map((emp) => {
+        const r: any = runMap.get(emp.id);
+        const baseSalary = Number(emp.baseSalary || 0);
+        const totalDays = r?.totalDays || daysInMonth;
+        const presentDays = r?.presentDays ?? daysInMonth;
+        const absentDays = r?.absentDays ?? Math.max(0, totalDays - presentDays);
+        const dailyWage = baseSalary / totalDays;
+        const earnedBase = Math.round(dailyWage * presentDays * 100) / 100;
+        const overtimeAmount = Number(r?.overtimeAmount || 0);
+        const allowances = Number(r?.allowances || 0);
+        const messDeductions = Number(r?.messDeductions || 0);
+        const advanceDeductions = Number(r?.advanceDeductions || 0);
+        const otherDeductions = Number(r?.otherDeductions || 0);
+        const totalDeductions = Number(r?.deductions ?? (messDeductions + advanceDeductions + otherDeductions));
+        const netPay = Number(r?.netPay ?? Math.max(0, earnedBase + overtimeAmount + allowances - totalDeductions));
+
+        return {
+          employeeNo: emp.employeeNo || "",
+          name: emp.name,
+          department: emp.department,
+          position: emp.position,
+          baseSalary,
+          totalDays,
+          presentDays,
+          absentDays,
+          overtimeAmount,
+          allowances,
+          messDeductions,
+          advanceDeductions,
+          totalDeductions,
+          netPay,
+          status: r?.status || "PENDING",
+        };
+      });
+
+      pdfBuffer = await generateMonthlySalarySheetPDF({ month, year, monthName, items });
+      fileName = `salary-sheet-${monthName}-${year}.pdf`;
     } else if (type === "soa") {
       const partyType = searchParams.get("partyType") || "CUSTOMER";
       const partyId = searchParams.get("partyId") || "";

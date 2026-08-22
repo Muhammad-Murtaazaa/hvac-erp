@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, ListFilter, Clipboard, AlertCircle, FileText, CheckCircle2, RotateCcw, Printer, BookOpen, ArrowRight, Building2, Phone, Mail, MapPin, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
+import ProductSelect from "@/components/shared/ProductSelect";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/shared/ToastProvider";
@@ -1088,24 +1089,18 @@ function ProcurementPageContent() {
                   {newPoLines.map((line, index) => (
                     <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
                       <div className="col-span-12 sm:col-span-5">
-                        <select
-                          required
-                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-white dark:bg-slate-900"
+                        <ProductSelect
+                          products={products}
                           value={line.productId}
-                          onChange={(e) => {
+                          placeholder="Search product name or SKU..."
+                          priceType="cost"
+                          onChange={(prod) => {
                             const updated = [...newPoLines];
-                            updated[index].productId = e.target.value;
-                            // default unit cost
-                            const prod = products.find((p) => p.id === e.target.value);
-                            if (prod) updated[index].unitCost = String(prod.averageCost);
+                            updated[index].productId = prod ? prod.id : "";
+                            if (prod) updated[index].unitCost = String(prod.averageCost || 0);
                             setNewPoLines(updated);
                           }}
-                        >
-                          <option value="">Choose item...</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
 
                       <div className="col-span-12 sm:col-span-3">
@@ -1415,23 +1410,18 @@ function ProcurementPageContent() {
                   {editPoLines.map((line, index) => (
                     <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
                       <div className="col-span-12 sm:col-span-5">
-                        <select
-                          required
-                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs bg-white dark:bg-slate-900"
+                        <ProductSelect
+                          products={products}
                           value={line.productId}
-                          onChange={(e) => {
+                          placeholder="Search product name or SKU..."
+                          priceType="cost"
+                          onChange={(prod) => {
                             const updated = [...editPoLines];
-                            updated[index].productId = e.target.value;
-                            const prod = products.find((p) => p.id === e.target.value);
-                            if (prod) updated[index].unitCost = String(prod.averageCost);
+                            updated[index].productId = prod ? prod.id : "";
+                            if (prod) updated[index].unitCost = String(prod.averageCost || 0);
                             setEditPoLines(updated);
                           }}
-                        >
-                          <option value="">Choose item...</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
 
                       <div className="col-span-12 sm:col-span-3">

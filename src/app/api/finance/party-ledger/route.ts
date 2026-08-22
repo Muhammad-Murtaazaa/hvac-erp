@@ -312,7 +312,7 @@ export async function GET(req: Request) {
 
     rawItems.forEach((item) => {
       const itemTime = new Date(item.date).getTime();
-      const change = item.debit - item.credit;
+      const change = partyType === "VENDOR" ? (item.credit - item.debit) : (item.debit - item.credit);
 
       if (itemTime < startDate.getTime()) {
         openingBalance += change;
@@ -328,7 +328,8 @@ export async function GET(req: Request) {
     rawItems.forEach((item, idx) => {
       const itemTime = new Date(item.date).getTime();
       if (itemTime >= startDate.getTime() && itemTime <= endDate.getTime()) {
-        runningBalance += (item.debit - item.credit);
+        const delta = partyType === "VENDOR" ? (item.credit - item.debit) : (item.debit - item.credit);
+        runningBalance += delta;
         runningBalance = Math.round(runningBalance * 100) / 100;
 
         totalDebit += item.debit;
@@ -366,9 +367,9 @@ export async function GET(req: Request) {
         totalCredit,
         closingBalance,
         status: closingBalance > 0
-          ? (partyType === "CUSTOMER" ? "RECEIVABLE" : "ADVANCE_PAID")
+          ? (partyType === "CUSTOMER" ? "RECEIVABLE" : "PAYABLE")
           : closingBalance < 0
-          ? (partyType === "CUSTOMER" ? "ADVANCE_HELD" : "PAYABLE")
+          ? (partyType === "CUSTOMER" ? "ADVANCE_HELD" : "ADVANCE_PAID")
           : "SETTLED",
       },
     });

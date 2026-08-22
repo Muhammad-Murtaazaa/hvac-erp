@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { postJournalEntry } from "@/lib/journal";
 
 export const dynamic = "force-dynamic";
 
@@ -147,47 +148,8 @@ export async function POST(req: Request) {
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
 
-    // Create a voucher or ledger profile record if opening balance is specified
-    const opBal = Number(openingBalance) || 0;
-    const vNum = opBal > 0 ? `OB-CUST-${Date.now().toString().slice(-4)}` : `REG-CUST-${Date.now().toString().slice(-4)}`;
-    
-    if (opBal > 0) {
-      await prisma.ledgerEntry.create({
-        data: {
-          entryDate: new Date(),
-          voucherType: "OBV",
-          voucherNumber: vNum,
-          referenceType: "ADVANCE",
-          referenceId: vNum,
-          partyType: "CUSTOMER",
-          partyName: trimmedName,
-          debitAccount: "Accounts Receivable (Trade Debtors)",
-          creditAccount: "Owner Equity / Capital",
-          amount: opBal,
-          description: `Opening receivable balance for customer ${trimmedName}${notes ? ` - ${notes}` : ""}`,
-        },
-      });
-    } else {
-      // Create a nominal registration entry so the party exists permanently in the system
-      await prisma.ledgerEntry.create({
-        data: {
-          entryDate: new Date(),
-          voucherType: "REG",
-          voucherNumber: vNum,
-          referenceType: "VOUCHER",
-          referenceId: vNum,
-          partyType: "CUSTOMER",
-          partyName: trimmedName,
-          debitAccount: "Accounts Receivable (Trade Debtors)",
-          creditAccount: "Customer Advance Deposits",
-          amount: 0,
-          description: `Customer account registered: Phone: ${trimmedPhone}${address ? `, Address: ${address}` : ""}${email ? `, Email: ${email}` : ""}${ntn ? `, NTN: ${ntn}` : ""}`,
-        },
-      });
-    }
-
-    // Also sync/upsert into central Customer table so visible in Customers section
-    await prisma.customer.upsert({
+    // 1. Sync/upsert into central Customer table so customer immediately exists everywhere
+    const customer = await prisma.customer.upsert({
       where: { phone: trimmedPhone },
       update: {
         name: trimmedName,
@@ -205,6 +167,70 @@ export async function POST(req: Request) {
         notes: notes ? notes.trim() : null,
       },
     });
+
+    // 2. Create Ledger Account entry (Opening balance if provided, or nominal registration entry)
+    const opBal = Number(openingBalance) || 0;
+    const vNum = opBal > 0 ? `OB-CUST-${Date.now().toString().slice(-4)}` : `REG-CUST-${Date.now().toString().slice(-4)}`;
+    
+    if (opBal > 0) {
+      await prisma.ledgerEntry.create({
+        data: {
+          entryDate: new Date(),
+          voucherType: "OBV",
+          voucherNumber: vNum,
+          referenceType: "ADVANCE",
+          referenceId: vNum,
+          partyType: "CUSTOMER",
+          partyId: customer.id,
+          partyName: trimmedName,
+          debitAccount: "Accounts Receivable (Trade Debtors)",
+          creditAccount: "Owner Equity / Capital",
+          amount: opBal,
+          description: `Opening receivable balance for customer ${trimmedName}${notes ? ` - ${notes}` : ""}`,
+        },
+      });
+
+      // Post double-entry journal line
+      await postJournalEntry(prisma, {
+        entryDate: new Date(),
+        narration: `Opening receivable balance for customer ${trimmedName}${notes ? ` - ${notes}` : ""}`,
+        sourceType: "CUSTOMER",
+        sourceId: customer.id,
+        idempotencyKey: `CUSTOMER:${customer.id}:opening-balance`,
+        lines: [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: customer.id,
+            debit: opBal,
+            credit: 0,
+          },
+          {
+            accountName: "Owner Equity / Capital",
+            partyId: null,
+            debit: 0,
+            credit: opBal,
+          },
+        ],
+      });
+    } else {
+      // Create a nominal registration entry so the party exists permanently in the system
+      await prisma.ledgerEntry.create({
+        data: {
+          entryDate: new Date(),
+          voucherType: "REG",
+          voucherNumber: vNum,
+          referenceType: "VOUCHER",
+          referenceId: vNum,
+          partyType: "CUSTOMER",
+          partyId: customer.id,
+          partyName: trimmedName,
+          debitAccount: "Accounts Receivable (Trade Debtors)",
+          creditAccount: "Customer Advance Deposits",
+          amount: 0,
+          description: `Customer account registered: Phone: ${trimmedPhone}${address ? `, Address: ${address}` : ""}${email ? `, Email: ${email}` : ""}${ntn ? `, NTN: ${ntn}` : ""}`,
+        },
+      });
+    }
 
     // Record audit log
     await recordAuditSnapshot({

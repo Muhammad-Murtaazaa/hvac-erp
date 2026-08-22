@@ -113,8 +113,8 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Finance & People",
     defaultOpen: true,
     items: [
-      { name: "Ledger", href: "/reports?type=ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Double-Entry Ledger (v2)", href: "/financials/ledger-v2", icon: Scale, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "General Ledger", href: "/financials?tab=general-ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
+      { name: "Financial Accounts", href: "/financials?tab=accounts", icon: Scale, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
       { name: "Employees", href: "/hrm", icon: Users, roles: ["Admin", "Accountant"], permissions: ["MANAGE_HRM"] },
     ],
   },

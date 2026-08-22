@@ -86,6 +86,8 @@ export async function POST(req: Request) {
       amount,
       partyType, // "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "GENERAL"
       partyId,
+      debitPartyId,
+      creditPartyId,
       partyName,
       paymentMethod, // "CASH" | "BANK_TRANSFER" | "CHEQUE" | "ONLINE"
       chequeNumber,
@@ -103,14 +105,18 @@ export async function POST(req: Request) {
       const voucherNumber = await getNextVoucherNumber(tx, voucherType as any);
 
       // Auto resolve partyName if missing but partyId provided
+      let resolvedPartyId = partyId || debitPartyId || creditPartyId || null;
       let resolvedPartyName = partyName || null;
-      if (partyId && !resolvedPartyName) {
+      if (resolvedPartyId && !resolvedPartyName) {
         if (partyType === "VENDOR") {
-          const v = await tx.vendor.findUnique({ where: { id: partyId } });
+          const v = await tx.vendor.findUnique({ where: { id: resolvedPartyId } });
           if (v) resolvedPartyName = v.name;
         } else if (partyType === "EMPLOYEE") {
-          const e = await tx.employee.findUnique({ where: { id: partyId } });
+          const e = await tx.employee.findUnique({ where: { id: resolvedPartyId } });
           if (e) resolvedPartyName = e.name;
+        } else if (partyType === "CUSTOMER") {
+          const c = await tx.customer.findUnique({ where: { id: resolvedPartyId } });
+          if (c) resolvedPartyName = c.name;
         }
       }
 
@@ -123,7 +129,7 @@ export async function POST(req: Request) {
         referenceId: voucherNumber,
         entryDate: entryDate ? new Date(entryDate) : new Date(),
         partyType: partyType || "GENERAL",
-        partyId: partyId || null,
+        partyId: resolvedPartyId,
         partyName: resolvedPartyName,
         voucherType,
         voucherNumber,
@@ -131,6 +137,10 @@ export async function POST(req: Request) {
         chequeNumber: chequeNumber || null,
         notes: notes || null,
       });
+
+      // Resolved party IDs for lines
+      const lineDebitPartyId = debitPartyId !== undefined ? debitPartyId : resolvedPartyId;
+      const lineCreditPartyId = creditPartyId !== undefined ? creditPartyId : resolvedPartyId;
 
       // Native Double-Entry Journal: One JournalEntry per voucher submission
       await postJournalEntry(tx, {
@@ -142,13 +152,13 @@ export async function POST(req: Request) {
         lines: [
           {
             accountName: debitAccount,
-            partyId: partyId || null,
+            partyId: lineDebitPartyId || null,
             debit: parsedAmount,
             credit: 0,
           },
           {
             accountName: creditAccount,
-            partyId: partyId || null,
+            partyId: lineCreditPartyId || null,
             debit: 0,
             credit: parsedAmount,
           },

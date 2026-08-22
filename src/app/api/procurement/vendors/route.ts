@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { postJournalEntry } from "@/lib/journal";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -148,7 +149,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, contactPerson, phone, email, ntn, address, paymentTerms } = await req.json();
+    const { name, contactPerson, phone, email, ntn, address, paymentTerms, openingBalance } = await req.json();
 
     if (!name || !contactPerson || !phone) {
       return NextResponse.json({ error: "Name, Contact Person, and Phone are required" }, { status: 400 });
@@ -156,15 +157,76 @@ export async function POST(req: Request) {
 
     const vendor = await prisma.vendor.create({
       data: {
-        name,
-        contactPerson,
-        phone,
+        name: name.trim(),
+        contactPerson: contactPerson.trim(),
+        phone: phone.trim(),
         email: email ? email.trim() : null,
         ntn: ntn ? ntn.trim() : null,
         address: address || "",
         paymentTerms: paymentTerms || "Net 30 Days",
       },
     });
+
+    const opBal = Number(openingBalance) || 0;
+    const vNum = opBal > 0 ? `OB-VEND-${Date.now().toString().slice(-4)}` : `REG-VEND-${Date.now().toString().slice(-4)}`;
+
+    if (opBal > 0) {
+      await prisma.ledgerEntry.create({
+        data: {
+          entryDate: new Date(),
+          voucherType: "OBV",
+          voucherNumber: vNum,
+          referenceType: "ADVANCE",
+          referenceId: vNum,
+          partyType: "VENDOR",
+          partyId: vendor.id,
+          partyName: vendor.name,
+          debitAccount: "Owner Equity / Capital",
+          creditAccount: "Accounts Payable (Trade Creditors)",
+          amount: opBal,
+          description: `Opening payable balance for vendor ${vendor.name}`,
+        },
+      });
+
+      await postJournalEntry(prisma, {
+        entryDate: new Date(),
+        narration: `Opening payable balance for vendor ${vendor.name}`,
+        sourceType: "VENDOR",
+        sourceId: vendor.id,
+        idempotencyKey: `VENDOR:${vendor.id}:opening-balance`,
+        lines: [
+          {
+            accountName: "Owner Equity / Capital",
+            partyId: null,
+            debit: opBal,
+            credit: 0,
+          },
+          {
+            accountName: "Accounts Payable (Trade Creditors)",
+            partyId: vendor.id,
+            debit: 0,
+            credit: opBal,
+          },
+        ],
+      });
+    } else {
+      await prisma.ledgerEntry.create({
+        data: {
+          entryDate: new Date(),
+          voucherType: "REG",
+          voucherNumber: vNum,
+          referenceType: "VOUCHER",
+          referenceId: vNum,
+          partyType: "VENDOR",
+          partyId: vendor.id,
+          partyName: vendor.name,
+          debitAccount: "Vendor Advance Payments",
+          creditAccount: "Accounts Payable (Trade Creditors)",
+          amount: 0,
+          description: `Vendor account registered: Contact: ${contactPerson}, Phone: ${phone}`,
+        },
+      });
+    }
 
     // Record audit snapshot
     await recordAuditSnapshot({

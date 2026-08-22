@@ -187,7 +187,7 @@ export default function DashboardPage() {
       desc: "Financial Audit",
       icon: BookOpen,
       color: "bg-purple-50/90 hover:bg-purple-100/90 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 dark:text-purple-300 border-purple-200/70 dark:border-purple-800/60 shadow-xs",
-      onClick: () => router.push("/reports?type=ledger"),
+      onClick: () => router.push("/financials?tab=general-ledger"),
     },
     {
       label: "Record Dr / Cr",

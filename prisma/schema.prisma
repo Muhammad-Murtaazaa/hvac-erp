@@ -108,19 +108,30 @@ model Attendance {
 }
 
 model PayrollRun {
-  id          String        @id @default(uuid())
-  employeeId  String
-  employee    Employee      @relation(fields: [employeeId], references: [id])
-  month       Int
-  year        Int
-  baseSalary  Decimal
-  allowances  Decimal       @default(0.00)
-  deductions  Decimal       @default(0.00)
-  netPay      Decimal
-  status      String        @default("PENDING") // PENDING, PAID
-  paymentDate DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                String        @id @default(uuid())
+  employeeId        String
+  employee          Employee      @relation(fields: [employeeId], references: [id])
+  month             Int
+  year              Int
+  totalDays         Int           @default(30)
+  presentDays       Int           @default(30)
+  absentDays        Int           @default(0)
+  baseSalary        Decimal
+  overtimeHours     Decimal       @default(0.00)
+  overtimeAmount    Decimal       @default(0.00)
+  allowances        Decimal       @default(0.00)
+  messDeductions    Decimal       @default(0.00)
+  advanceDeductions Decimal       @default(0.00)
+  otherDeductions   Decimal       @default(0.00)
+  deductions        Decimal       @default(0.00)
+  netPay            Decimal
+  status            String        @default("PENDING") // PENDING, PAID
+  paymentDate       DateTime?
+  paymentAccount    String?
+  paymentMethod     String?
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@unique([employeeId, month, year])
 }

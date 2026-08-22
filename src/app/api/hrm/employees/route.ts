@@ -113,6 +113,29 @@ export async function POST(req: Request) {
       },
     });
 
+    // Record nominal ledger registration for the employee's financial account
+    const vNum = `REG-EMP-${Date.now().toString().slice(-4)}`;
+    try {
+      await prisma.ledgerEntry.create({
+        data: {
+          entryDate: new Date(),
+          voucherType: "REG",
+          voucherNumber: vNum,
+          referenceType: "VOUCHER",
+          referenceId: vNum,
+          partyType: "EMPLOYEE",
+          partyId: employee.id,
+          partyName: employee.name,
+          debitAccount: "Employee Advance",
+          creditAccount: "Salaries Payable",
+          amount: 0,
+          description: `Staff financial account registered: ID: ${employee.employeeNo}, Dept: ${employee.department}, Role: ${employee.position}`,
+        },
+      });
+    } catch (leErr) {
+      console.warn("Could not create nominal ledger entry for employee:", leErr);
+    }
+
     // Record audit snapshot
     await recordAuditSnapshot({
       entityName: "Employee",

@@ -368,8 +368,8 @@ function FinancialsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  // Top Section Mode: "statements" | "record" | "entries" | "accounts" | "overview"
-  const [activeSection, setActiveSection] = useState<"statements" | "record" | "entries" | "accounts" | "overview">("statements");
+  // Top Section Mode: "accounts" | "record" | "entries" | "statements" | "overview"
+  const [activeSection, setActiveSection] = useState<"statements" | "record" | "entries" | "accounts" | "overview">("accounts");
 
   // Timeframe presets for Overview
   const [timeframe, setTimeframe] = useState<"30d" | "this_month" | "quarter" | "ytd" | "all" | "custom">("30d");
@@ -420,32 +420,48 @@ function FinancialsPageContent() {
   const [soaLoading, setSoaLoading] = useState(false);
   const [soaPreset, setSoaPreset] = useState<"this_month" | "last_30" | "ytd" | "all">("this_month");
 
-  // ================= ENTRIES LIST STATE =================
+  // ================= ENTRIES & GENERAL LEDGER STATE =================
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [vouchersLoading, setVouchersLoading] = useState(false);
   const [voucherFilterType, setVoucherFilterType] = useState("");
   const [voucherSearch, setVoucherSearch] = useState("");
 
-  // ================= RECORD ENTRY FORM STATE =================
-  const [entryCategory, setEntryCategory] = useState<
-    "RECEIVE_CUSTOMER" | "RECEIVE_VENDOR" | "PAY_VENDOR" | "EMPLOYEE_ADVANCE" | "TRANSFER_BANK" | "CUSTOM_JOURNAL"
-  >("RECEIVE_CUSTOMER");
-  const [vEntryDate, setVEntryDate] = useState(new Date().toISOString().split("T")[0]);
-  const [vPartyId, setVPartyId] = useState("");
-  const [vPartyName, setVPartyName] = useState("");
-  const [vPaymentAccount, setVPaymentAccount] = useState("Cash in Hand");
-  const [vTransferToAccount, setVTransferToAccount] = useState("Bank Account (Meezan Bank)");
-  const [vCustomDebitAccount, setVCustomDebitAccount] = useState("Office Rent & Utilities");
-  const [vCustomCreditAccount, setVCustomCreditAccount] = useState("Cash in Hand");
-  const [vAmount, setVAmount] = useState("");
-  const [vPaymentMethod, setVPaymentMethod] = useState("CASH");
-  const [vChequeNumber, setVChequeNumber] = useState("");
-  const [vDescription, setVDescription] = useState("");
-  const [vIsAdvance, setVIsAdvance] = useState(true);
+  const [generalLedgerEntries, setGeneralLedgerEntries] = useState<any[]>([]);
+  const [glLoading, setGlLoading] = useState(false);
+  const [glTotals, setGlTotals] = useState<any>({ totalDebit: 0, totalCredit: 0, isBalanced: true, count: 0 });
+  const [glSearch, setGlSearch] = useState("");
+  const [glSourceType, setGlSourceType] = useState("");
+  const [glStartDate, setGlStartDate] = useState("");
+  const [glEndDate, setGlEndDate] = useState("");
+
+  // ================= SIMPLIFIED 2-ACCOUNT DEBIT/CREDIT ENTRY STATE =================
+  const [txnAccountType, setTxnAccountType] = useState<"PARTY" | "GENERAL">("PARTY");
+  const [txnPartyType, setTxnPartyType] = useState<"CUSTOMER" | "VENDOR" | "EMPLOYEE">("CUSTOMER");
+  const [txnTargetPartyId, setTxnTargetPartyId] = useState("");
+  const [txnTargetPartyName, setTxnTargetPartyName] = useState("");
+  const [txnTargetGeneralAccount, setTxnTargetGeneralAccount] = useState("Sales Revenue");
+  const [txnDirection, setTxnDirection] = useState<"DEBIT" | "CREDIT">("DEBIT"); // DEBIT or CREDIT on Target Account
+  const [txnAmount, setTxnAmount] = useState("");
+  const [txnDate, setTxnDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const [txnSourceType, setTxnSourceType] = useState<"GENERAL" | "PARTY">("GENERAL");
+  const [txnSourceGeneralAccount, setTxnSourceGeneralAccount] = useState("Bank Account (Meezan Bank)");
+  const [txnSourcePartyType, setTxnSourcePartyType] = useState<"CUSTOMER" | "VENDOR" | "EMPLOYEE">("CUSTOMER");
+  const [txnSourcePartyId, setTxnSourcePartyId] = useState("");
+  const [txnSourcePartyName, setTxnSourcePartyName] = useState("");
+
+  const [txnPaymentMethod, setTxnPaymentMethod] = useState("BANK");
+  const [txnReferenceNumber, setTxnReferenceNumber] = useState("");
+  const [txnNarration, setTxnNarration] = useState("");
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
 
-  // ================= CHART OF ACCOUNTS & LINKED DOCS STATE =================
+  // ================= FINANCIAL ACCOUNTS & LINKED DOCS STATE =================
   const [accountsData, setAccountsData] = useState<any[]>([]);
+  const [partyAccountsList, setPartyAccountsList] = useState<any>({ customers: [], vendors: [], employees: [], all: [] });
+  const [partyAccountTab, setPartyAccountTab] = useState<"all" | "customers" | "vendors" | "employees">("all");
+  const [partyAccountSearch, setPartyAccountSearch] = useState("");
+  const [partyStatusFilter, setPartyStatusFilter] = useState<"all" | "receivable" | "payable" | "settled">("all");
+
   const [partiesList, setPartiesList] = useState<any>({ customers: [], vendors: [], employees: [] });
   const [documentsList, setDocumentsList] = useState<any>({ invoices: [], purchaseOrders: [], deliveryOrders: [], complaints: [] });
   const [accountsLoading, setAccountsLoading] = useState(false);
@@ -461,7 +477,7 @@ function FinancialsPageContent() {
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [isSavingVendor, setIsSavingVendor] = useState(false);
-  const [modalContext, setModalContext] = useState<"statement" | "record">("statement");
+  const [modalContext, setModalContext] = useState<"statement" | "record" | "source">("statement");
 
   const [customerForm, setCustomerForm] = useState({
     originalName: "",
@@ -545,12 +561,14 @@ function FinancialsPageContent() {
       ]);
 
       let accounts = [];
+      let partyAccounts = { customers: [], vendors: [], employees: [], all: [] };
       let parties: any = { customers: [], vendors: [], employees: [] };
       let docs: any = { invoices: [], purchaseOrders: [], deliveryOrders: [], complaints: [] };
 
       if (accRes.ok) {
         const accJson = await accRes.json();
         accounts = accJson.accounts || [];
+        partyAccounts = accJson.partyAccounts || partyAccounts;
         parties = accJson.parties || parties;
         docs = accJson.documents || docs;
       }
@@ -570,6 +588,7 @@ function FinancialsPageContent() {
       }
 
       setAccountsData(accounts);
+      setPartyAccountsList(partyAccounts);
       setPartiesList(parties);
       setDocumentsList(docs);
     } catch (err) {
@@ -579,8 +598,29 @@ function FinancialsPageContent() {
     }
   };
 
+  const fetchGeneralLedger = async () => {
+    setGlLoading(true);
+    const token = localStorage.getItem("token");
+    try {
+      let url = `/api/finance/journal?search=${encodeURIComponent(glSearch)}&limit=200`;
+      if (glSourceType) url += `&sourceType=${glSourceType}`;
+      if (glStartDate) url += `&startDate=${glStartDate}`;
+      if (glEndDate) url += `&endDate=${glEndDate}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const json = await res.json();
+        setGeneralLedgerEntries(json.entries || []);
+        setGlTotals(json.totals || { totalDebit: 0, totalCredit: 0, isBalanced: true, count: 0 });
+      }
+    } catch (err) {
+      console.error("Failed to load General Ledger:", err);
+    } finally {
+      setGlLoading(false);
+    }
+  };
+
   // Quick Open Modal Handlers
-  const handleOpenAddCustomer = (initialName = "", ctx: "statement" | "record" = "statement") => {
+  const handleOpenAddCustomer = (initialName = "", ctx: "statement" | "record" | "source" = "statement") => {
     setModalContext(ctx);
     setCustomerForm({
       originalName: "",
@@ -609,7 +649,7 @@ function FinancialsPageContent() {
     setShowEditCustomerModal(true);
   };
 
-  const handleOpenAddVendor = (initialName = "", ctx: "statement" | "record" = "statement") => {
+  const handleOpenAddVendor = (initialName = "", ctx: "statement" | "record" | "source" = "statement") => {
     setModalContext(ctx);
     setVendorForm({
       name: initialName,
@@ -626,20 +666,19 @@ function FinancialsPageContent() {
   const handleSaveCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerForm.name.trim()) {
-      toast({ title: "Customer Name Required", message: "Please enter the customer name.", type: "warning" });
-      return;
-    }
-    if (!customerForm.phone.trim()) {
-      toast({ title: "Phone Number Required", message: "Phone number is compulsory.", type: "warning" });
+      toast({ title: "Customer Name Required", message: "Please enter a valid customer name.", type: "warning" });
       return;
     }
 
     setIsSavingCustomer(true);
     const token = localStorage.getItem("token");
+    const isEdit = showEditCustomerModal;
+
     try {
-      const isEdit = showEditCustomerModal;
-      const res = await fetch("/api/finance/customers", {
-        method: isEdit ? "PUT" : "POST",
+      const url = isEdit ? "/api/finance/customers" : "/api/finance/customers";
+      const method = isEdit ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(customerForm),
       });
@@ -659,8 +698,10 @@ function FinancialsPageContent() {
         setPartyType("CUSTOMER");
         setSelectedPartyName(customerForm.name);
         fetchPartyLedger(customerForm.name, "");
+      } else if (modalContext === "source") {
+        setTxnSourcePartyName(customerForm.name);
       } else {
-        setVPartyName(customerForm.name);
+        setTxnTargetPartyName(customerForm.name);
       }
 
       setShowAddCustomerModal(false);
@@ -709,9 +750,12 @@ function FinancialsPageContent() {
         setSelectedPartyId(created?.id || "");
         setSelectedPartyName(created?.name || vendorForm.name);
         fetchPartyLedger(created?.name || vendorForm.name, created?.id || "");
+      } else if (modalContext === "source") {
+        setTxnSourcePartyId(created?.id || "");
+        setTxnSourcePartyName(created?.name || vendorForm.name);
       } else {
-        setVPartyId(created?.id || "");
-        setVPartyName(created?.name || vendorForm.name);
+        setTxnTargetPartyId(created?.id || "");
+        setTxnTargetPartyName(created?.name || vendorForm.name);
       }
 
       setShowAddVendorModal(false);
@@ -773,6 +817,39 @@ function FinancialsPageContent() {
     }
   };
 
+  // Synchronize URL search parameters (tab, partyType, partyName, partyId)
+  useEffect(() => {
+    if (!searchParams) return;
+    const tab = searchParams.get("tab");
+    const pType = searchParams.get("partyType");
+    const pName = searchParams.get("partyName");
+    const pId = searchParams.get("partyId");
+
+    if (tab === "general-ledger" || tab === "gl" || tab === "entries") {
+      setActiveSection("entries");
+      fetchGeneralLedger();
+    } else if (tab === "accounts" || tab === "financial-accounts") {
+      setActiveSection("accounts");
+      fetchAccountsAndParties();
+    } else if (tab === "record" || tab === "add") {
+      setActiveSection("record");
+    } else if (tab === "overview" || tab === "analytics") {
+      setActiveSection("overview");
+    } else if (tab === "statements" || tab === "ledger" || pName || pType) {
+      setActiveSection("statements");
+      if (pType === "CUSTOMER" || pType === "VENDOR" || pType === "EMPLOYEE") {
+        setPartyType(pType);
+      }
+      if (pName) {
+        setSelectedPartyName(pName);
+        fetchPartyLedger(pName, pId || "");
+      }
+      if (pId) {
+        setSelectedPartyId(pId);
+      }
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     fetchFinancials();
     fetchAccountsAndParties();
@@ -781,6 +858,7 @@ function FinancialsPageContent() {
   useEffect(() => {
     if (activeSection === "entries") {
       fetchVouchers();
+      fetchGeneralLedger();
     } else if (activeSection === "accounts") {
       fetchAccountsAndParties();
     }
@@ -795,52 +873,96 @@ function FinancialsPageContent() {
 
   // Dynamic double entry preview
   const journalPreview = useMemo(() => {
-    let voucherType = "JV";
-    let debitAccount = "Cash in Hand";
-    let creditAccount = "Customer Advance Deposits";
-    let typeLabel = "Customer Advance Payment";
+    let targetAcc = "Accounts Receivable (Trade Debtors)";
+    let targetPartyId: string | null = null;
+    let targetPartyName: string | null = null;
+    let targetPartyType: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "GENERAL" = "GENERAL";
 
-    if (entryCategory === "RECEIVE_CUSTOMER") {
-      voucherType = vPaymentMethod === "CASH" ? "CRV" : "BRV";
-      debitAccount = vPaymentAccount;
-      creditAccount = vIsAdvance ? "Customer Advance Deposits" : "Accounts Receivable (Trade Debtors)";
-      typeLabel = vIsAdvance ? "Customer Advance Inward" : "Invoice Settlement Inward";
-    } else if (entryCategory === "RECEIVE_VENDOR") {
-      voucherType = vPaymentMethod === "CASH" ? "CRV" : "BRV";
-      debitAccount = vPaymentAccount;
-      creditAccount = "Accounts Payable (Trade Creditors)";
-      typeLabel = "Vendor Advance / Refund Received";
-    } else if (entryCategory === "PAY_VENDOR") {
-      voucherType = vPaymentMethod === "CASH" ? "CPV" : "BPV";
-      debitAccount = vIsAdvance ? "Vendor Advance Payments" : "Accounts Payable (Trade Creditors)";
-      creditAccount = vPaymentAccount;
-      typeLabel = vIsAdvance ? "Vendor Advance Outward" : "Vendor Bill Payment";
-    } else if (entryCategory === "EMPLOYEE_ADVANCE") {
-      voucherType = "EAV";
-      debitAccount = "Employee Advances & Staff Loans";
-      creditAccount = vPaymentAccount;
-      typeLabel = "Staff Advance / Loan Disbursed";
-    } else if (entryCategory === "TRANSFER_BANK") {
-      voucherType = "CV";
-      debitAccount = vTransferToAccount;
-      creditAccount = vPaymentAccount;
-      typeLabel = "Contra Account Transfer";
+    if (txnAccountType === "PARTY") {
+      targetPartyType = txnPartyType;
+      targetPartyId = txnTargetPartyId || null;
+      targetPartyName = txnTargetPartyName || null;
+      if (txnPartyType === "CUSTOMER") targetAcc = "Accounts Receivable (Trade Debtors)";
+      else if (txnPartyType === "VENDOR") targetAcc = "Accounts Payable (Trade Creditors)";
+      else if (txnPartyType === "EMPLOYEE") targetAcc = "Employee Advance";
     } else {
-      voucherType = "JV";
-      debitAccount = vCustomDebitAccount;
-      creditAccount = vCustomCreditAccount;
-      typeLabel = "General Journal Entry";
+      targetAcc = txnTargetGeneralAccount;
     }
 
-    return { voucherType, debitAccount, creditAccount, typeLabel };
+    let sourceAcc = "Bank Account (Meezan Bank)";
+    let sourcePartyId: string | null = null;
+    let sourcePartyName: string | null = null;
+
+    if (txnSourceType === "GENERAL") {
+      sourceAcc = txnSourceGeneralAccount;
+    } else {
+      sourcePartyId = txnSourcePartyId || null;
+      sourcePartyName = txnSourcePartyName || null;
+      if (txnSourcePartyType === "CUSTOMER") sourceAcc = "Accounts Receivable (Trade Debtors)";
+      else if (txnSourcePartyType === "VENDOR") sourceAcc = "Accounts Payable (Trade Creditors)";
+      else if (txnSourcePartyType === "EMPLOYEE") sourceAcc = "Employee Advance";
+    }
+
+    let debitAccount = targetAcc;
+    let creditAccount = sourceAcc;
+    let debitPartyId = targetPartyId;
+    let creditPartyId = sourcePartyId;
+
+    if (txnDirection === "DEBIT") {
+      debitAccount = targetAcc;
+      debitPartyId = targetPartyId;
+      creditAccount = sourceAcc;
+      creditPartyId = sourcePartyId;
+    } else {
+      debitAccount = sourceAcc;
+      debitPartyId = sourcePartyId;
+      creditAccount = targetAcc;
+      creditPartyId = targetPartyId;
+    }
+
+    let voucherType = "JV";
+    const hasBank = debitAccount.toLowerCase().includes("bank") || creditAccount.toLowerCase().includes("bank");
+    const hasCash = debitAccount.toLowerCase().includes("cash") || creditAccount.toLowerCase().includes("cash");
+
+    if (hasBank && hasCash) {
+      voucherType = "CV";
+    } else if (hasBank) {
+      voucherType = txnDirection === "CREDIT" ? "BRV" : "BPV";
+    } else if (hasCash) {
+      voucherType = txnDirection === "CREDIT" ? "CRV" : "CPV";
+    } else if (targetAcc.includes("Employee") || sourceAcc.includes("Employee")) {
+      voucherType = "EAV";
+    }
+
+    const typeLabel = txnDirection === "DEBIT"
+      ? `Debit ${targetAcc} / Credit ${sourceAcc}`
+      : `Credit ${targetAcc} / Debit ${sourceAcc}`;
+
+    return {
+      voucherType,
+      debitAccount,
+      creditAccount,
+      debitPartyId,
+      creditPartyId,
+      targetAcc,
+      sourceAcc,
+      targetPartyType,
+      targetPartyId,
+      targetPartyName,
+      typeLabel,
+    };
   }, [
-    entryCategory,
-    vPaymentMethod,
-    vPaymentAccount,
-    vTransferToAccount,
-    vCustomDebitAccount,
-    vCustomCreditAccount,
-    vIsAdvance,
+    txnAccountType,
+    txnPartyType,
+    txnTargetPartyId,
+    txnTargetPartyName,
+    txnTargetGeneralAccount,
+    txnDirection,
+    txnSourceType,
+    txnSourceGeneralAccount,
+    txnSourcePartyType,
+    txnSourcePartyId,
+    txnSourcePartyName,
   ]);
 
   // Key Balance Aggregates for Header Bar
@@ -879,11 +1001,11 @@ function FinancialsPageContent() {
   const handleSaveEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingEntry) return;
-    if (!vAmount || Number(vAmount) <= 0) {
+    if (!txnAmount || Number(txnAmount) <= 0) {
       toast({ title: "Validation Error", message: "Please specify a valid transaction amount.", type: "warning" });
       return;
     }
-    if (!vDescription) {
+    if (!txnNarration) {
       toast({ title: "Validation Error", message: "Please provide a clear narration or reason.", type: "warning" });
       return;
     }
@@ -891,10 +1013,9 @@ function FinancialsPageContent() {
     setIsSubmittingEntry(true);
     const token = localStorage.getItem("token");
 
-    let partyTypeValue = "GENERAL";
-    if (entryCategory === "RECEIVE_CUSTOMER") partyTypeValue = "CUSTOMER";
-    else if (entryCategory === "RECEIVE_VENDOR" || entryCategory === "PAY_VENDOR") partyTypeValue = "VENDOR";
-    else if (entryCategory === "EMPLOYEE_ADVANCE") partyTypeValue = "EMPLOYEE";
+    const finalDescription = linkedDocNumber
+      ? `[Linked ${linkedDocType}: ${linkedDocNumber}] ${txnNarration}`
+      : txnNarration;
 
     try {
       const res = await fetch("/api/finance/vouchers", {
@@ -902,16 +1023,18 @@ function FinancialsPageContent() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           voucherType: journalPreview.voucherType,
-          entryDate: vEntryDate,
+          entryDate: txnDate,
           debitAccount: journalPreview.debitAccount,
           creditAccount: journalPreview.creditAccount,
-          amount: Number(vAmount),
-          partyType: partyTypeValue,
-          partyId: vPartyId || undefined,
-          partyName: vPartyName || undefined,
-          paymentMethod: vPaymentMethod,
-          chequeNumber: vChequeNumber || undefined,
-          description: linkedDocNumber ? `[Linked ${linkedDocType}: ${linkedDocNumber}] ${vDescription}` : vDescription,
+          debitPartyId: journalPreview.debitPartyId || undefined,
+          creditPartyId: journalPreview.creditPartyId || undefined,
+          amount: Number(txnAmount),
+          partyType: journalPreview.targetPartyType,
+          partyId: journalPreview.targetPartyId || undefined,
+          partyName: journalPreview.targetPartyName || undefined,
+          paymentMethod: txnPaymentMethod,
+          chequeNumber: txnReferenceNumber || undefined,
+          description: finalDescription,
         }),
       });
 
@@ -920,18 +1043,19 @@ function FinancialsPageContent() {
 
       toast({
         title: "Transaction Posted Successfully",
-        message: `${json.voucher.voucherNumber} logged into general ledger.`,
+        message: `${json.voucher.voucherNumber} logged with balanced double-entry.`,
         type: "success",
       });
 
       // Clear & Refresh
-      setVAmount("");
-      setVChequeNumber("");
-      setVDescription("");
+      setTxnAmount("");
+      setTxnReferenceNumber("");
+      setTxnNarration("");
       setLinkedDocType("NONE");
       setLinkedDocId("");
       setLinkedDocNumber("");
       fetchVouchers();
+      fetchGeneralLedger();
       fetchAccountsAndParties();
       setActiveSection("entries");
     } catch (err: any) {
@@ -1015,9 +1139,7 @@ function FinancialsPageContent() {
               type="button"
               onClick={() => {
                 setActiveSection("record");
-                setEntryCategory("RECEIVE_CUSTOMER");
-                setVDescription("Customer advance payment received");
-                setVIsAdvance(true);
+                setTxnNarration("Advance payment received");
               }}
               className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition-all shadow-md shadow-blue-500/25 flex items-center gap-2 transform active:scale-95"
             >
@@ -1031,22 +1153,17 @@ function FinancialsPageContent() {
         <div className="flex items-center overflow-x-auto no-scrollbar border-t border-slate-100 dark:border-slate-800/80 pt-4">
           <div className="inline-flex bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 gap-1.5 shadow-inner">
             <button
-              onClick={() => {
-                setActiveSection("statements");
-                if (partiesList.customers?.length > 0 && !selectedPartyName) {
-                  setSelectedPartyName(partiesList.customers[0].name);
-                }
-              }}
+              onClick={() => setActiveSection("accounts")}
               className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                activeSection === "statements"
+                activeSection === "accounts"
                   ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
                   : "hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <FileText className="w-4 h-4 text-blue-500" />
-              <span>Customer & Vendor Statements</span>
+              <Scale className="w-4 h-4 text-blue-500" />
+              <span>Financial Accounts</span>
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                SOA
+                Parties
               </span>
             </button>
 
@@ -1071,35 +1188,41 @@ function FinancialsPageContent() {
               }`}
             >
               <BookOpen className="w-4 h-4 text-indigo-500" />
-              <span>All Ledger Entries</span>
-              {vouchers.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                  {vouchers.length}
-                </span>
-              )}
+              <span>Universal General Ledger</span>
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
+                Balanced Dr=Cr
+              </span>
             </button>
 
             <button
-              onClick={() => setActiveSection("accounts")}
+              onClick={() => {
+                setActiveSection("statements");
+                if (partiesList.customers?.length > 0 && !selectedPartyName) {
+                  setSelectedPartyName(partiesList.customers[0].name);
+                }
+              }}
               className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                activeSection === "accounts"
-                  ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
+                activeSection === "statements"
+                  ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
                   : "hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <Landmark className="w-4 h-4 text-emerald-500" />
-              <span>Bank & Cash Balances</span>
+              <FileText className="w-4 h-4 text-purple-500" />
+              <span>Party Statements</span>
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
+                SOA
+              </span>
             </button>
 
             <button
               onClick={() => setActiveSection("overview")}
               className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
                 activeSection === "overview"
-                  ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
+                  ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
                   : "hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <TrendingUp className="w-4 h-4 text-purple-500" />
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
               <span>Analytics & Insights</span>
             </button>
           </div>
@@ -1532,739 +1655,516 @@ function FinancialsPageContent() {
             <div>
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
-                  <Sparkles className="w-5 h-5" />
+                  <PlusCircle className="w-5 h-5" />
                 </span>
                 <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  Record New Financial Transaction
+                  Add Financial Transaction
                 </h2>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Select transaction nature below. The ERP automatically generates balanced double-entry accounting journals.
+                Select the primary account, specify Debit or Credit, choose the offsetting source account, and post.
               </p>
             </div>
 
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
               <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>Real-Time Audit Logged</span>
+              <span>Balanced Double-Entry Journal</span>
             </div>
           </div>
 
-          {/* Transaction Type Cards Grid */}
-          <div className="space-y-3">
-            <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">
-              1. Choose Transaction Flow
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {/* Customer Received */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("RECEIVE_CUSTOMER");
-                  setVDescription("Customer advance payment received");
-                  setVIsAdvance(true);
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "RECEIVE_CUSTOMER"
-                    ? "bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-500/10 ring-2 ring-emerald-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-emerald-300 hover:bg-emerald-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "RECEIVE_CUSTOMER"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 group-hover:scale-110"
+          <form onSubmit={handleSaveEntry} className="space-y-6">
+            {/* Step 1: Target Account Selection */}
+            <div className="space-y-3 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">1</span>
+                  <span>Select Primary Account (Who or what is this transaction for?)</span>
+                </label>
+
+                {/* Switch between Party Account vs General Account */}
+                <div className="inline-flex bg-white dark:bg-slate-900 p-1 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setTxnAccountType("PARTY")}
+                    className={`px-3 py-1 rounded-lg transition-all ${
+                      txnAccountType === "PARTY"
+                        ? "bg-blue-600 text-white font-black shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
-                    <ArrowDownLeft className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "RECEIVE_CUSTOMER" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-emerald-600">
-                  Customer Inflow
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Advance / Invoice receipt
-                </div>
-              </button>
-
-              {/* Vendor Advance In */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("RECEIVE_VENDOR");
-                  setVDescription("Vendor advance payment received / supplier refund");
-                  setVIsAdvance(true);
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "RECEIVE_VENDOR"
-                    ? "bg-teal-50/90 dark:bg-teal-950/40 border-teal-500 shadow-md shadow-teal-500/10 ring-2 ring-teal-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-teal-300 hover:bg-teal-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "RECEIVE_VENDOR"
-                        ? "bg-teal-600 text-white shadow-sm"
-                        : "bg-teal-100 dark:bg-teal-900/50 text-teal-600 dark:text-teal-400 group-hover:scale-110"
+                    👤 Party Account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTxnAccountType("GENERAL")}
+                    className={`px-3 py-1 rounded-lg transition-all ${
+                      txnAccountType === "GENERAL"
+                        ? "bg-blue-600 text-white font-black shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
-                    <Coins className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "RECEIVE_VENDOR" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-teal-600">
-                  Vendor Refund / In
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Supplier refund or DO advance
-                </div>
-              </button>
-
-              {/* Vendor Paid Out */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("PAY_VENDOR");
-                  setVDescription("Advance payment to supplier");
-                  setVIsAdvance(true);
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "PAY_VENDOR"
-                    ? "bg-amber-50/90 dark:bg-amber-950/40 border-amber-500 shadow-md shadow-amber-500/10 ring-2 ring-amber-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-amber-300 hover:bg-amber-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "PAY_VENDOR"
-                        ? "bg-amber-500 text-white shadow-sm"
-                        : "bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 group-hover:scale-110"
-                    }`}
-                  >
-                    <ArrowUpRight className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "PAY_VENDOR" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-amber-600">
-                  Vendor Outflow
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Supplier advance or PO bill
-                </div>
-              </button>
-
-              {/* Staff Advance */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("EMPLOYEE_ADVANCE");
-                  setVDescription("Staff advance loan disbursement");
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "EMPLOYEE_ADVANCE"
-                    ? "bg-purple-50/90 dark:bg-purple-950/40 border-purple-500 shadow-md shadow-purple-500/10 ring-2 ring-purple-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-purple-300 hover:bg-purple-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "EMPLOYEE_ADVANCE"
-                        ? "bg-purple-500 text-white shadow-sm"
-                        : "bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 group-hover:scale-110"
-                    }`}
-                  >
-                    <UserCheck className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "EMPLOYEE_ADVANCE" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-purple-600">
-                  Staff Loan / Advance
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Technician loan disbursement
-                </div>
-              </button>
-
-              {/* Bank Transfer */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("TRANSFER_BANK");
-                  setVDescription("Cash transfer to bank account");
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "TRANSFER_BANK"
-                    ? "bg-blue-50/90 dark:bg-blue-950/40 border-blue-500 shadow-md shadow-blue-500/10 ring-2 ring-blue-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-blue-300 hover:bg-blue-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "TRANSFER_BANK"
-                        ? "bg-blue-500 text-white shadow-sm"
-                        : "bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 group-hover:scale-110"
-                    }`}
-                  >
-                    <ArrowRightLeft className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "TRANSFER_BANK" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-blue-600">
-                  Bank Transfer
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Cash deposit or inter-bank
-                </div>
-              </button>
-
-              {/* Custom Journal Entry */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEntryCategory("CUSTOM_JOURNAL");
-                  setVDescription("General debit/credit adjustment");
-                }}
-                className={`group relative p-4 rounded-2xl text-left transition-all duration-200 border ${
-                  entryCategory === "CUSTOM_JOURNAL"
-                    ? "bg-indigo-50/90 dark:bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-500/10 ring-2 ring-indigo-500/30"
-                    : "bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-700/60 hover:border-indigo-300 hover:bg-indigo-50/30"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2.5">
-                  <div
-                    className={`p-2.5 rounded-xl transition-transform ${
-                      entryCategory === "CUSTOM_JOURNAL"
-                        ? "bg-indigo-500 text-white shadow-sm"
-                        : "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 group-hover:scale-110"
-                    }`}
-                  >
-                    <Scale className="w-4 h-4" />
-                  </div>
-                  {entryCategory === "CUSTOM_JOURNAL" && (
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                  )}
-                </div>
-                <div className="font-black text-xs text-slate-900 dark:text-white group-hover:text-indigo-600">
-                  Custom JV
-                </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                  Expense, asset, or adjustment
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Main Structured Form */}
-          <form onSubmit={handleSaveEntry} className="space-y-5">
-            {/* SECTION 1: Transaction Meta (Date, Method, Channel) */}
-            <div className="bg-slate-50/80 dark:bg-slate-950/70 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest block">
-                2. Date, Mode & Channel Details
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Transaction Date */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs">
-                      <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Transaction Date</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setVEntryDate(new Date().toISOString().split("T")[0])}
-                      className="text-[10px] text-blue-600 hover:underline font-bold"
-                    >
-                      Today
-                    </button>
-                  </div>
-                  <input
-                    type="date"
-                    required
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                    value={vEntryDate}
-                    onChange={(e) => setVEntryDate(e.target.value)}
-                  />
-                </div>
-
-                {/* Payment Method */}
-                <div>
-                  <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Payment Method</span>
-                  </label>
-                  <select
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                    value={vPaymentMethod}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setVPaymentMethod(val);
-                      if (val === "CASH") setVPaymentAccount("Cash in Hand");
-                      else if (val === "ONLINE") setVPaymentAccount("Bank Account (HBL)");
-                      else setVPaymentAccount("Bank Account (Meezan Bank)");
-                    }}
-                  >
-                    <option value="CASH">💵 Cash</option>
-                    <option value="BANK_TRANSFER">🏛️ Bank Transfer</option>
-                    <option value="CHEQUE">📝 Cheque</option>
-                    <option value="ONLINE">💳 Online Transfer</option>
-                  </select>
+                    🏛️ General Account
+                  </button>
                 </div>
               </div>
 
-              {/* Dynamic Party Selector Grid */}
-              {entryCategory === "RECEIVE_CUSTOMER" && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <SearchablePartyCombobox
-                    label="Customer / Client Name"
-                    type="CUSTOMER"
-                    selectedName={vPartyName}
-                    parties={partiesList.customers || []}
-                    placeholder="Type or search customer by name, phone..."
-                    required={true}
-                    onSelect={(p) => setVPartyName(p ? p.name : "")}
-                    onAddNew={(name) => handleOpenAddCustomer(name, "record")}
-                    onEdit={(p) => handleOpenEditCustomer(p)}
-                    onViewLedger={(p) => handleJumpToStatement("CUSTOMER", p.name)}
-                  />
-                </div>
-              )}
+              {txnAccountType === "PARTY" ? (
+                <div className="space-y-3 pt-2">
+                  <div className="flex gap-2">
+                    {(["CUSTOMER", "VENDOR", "EMPLOYEE"] as const).map((pType) => (
+                      <button
+                        key={pType}
+                        type="button"
+                        onClick={() => {
+                          setTxnPartyType(pType);
+                          setTxnTargetPartyId("");
+                          setTxnTargetPartyName("");
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                          txnPartyType === pType
+                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500 font-black"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                        }`}
+                      >
+                        {pType === "CUSTOMER" ? "Customer" : pType === "VENDOR" ? "Vendor" : "Staff"}
+                      </button>
+                    ))}
+                  </div>
 
-              {/* Vendor Inflow */}
-              {entryCategory === "RECEIVE_VENDOR" && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
                   <SearchablePartyCombobox
-                    label="Vendor / Supplier (Payer)"
-                    type="VENDOR"
-                    selectedId={vPartyId}
-                    selectedName={vPartyName}
-                    parties={partiesList.vendors || []}
-                    placeholder="Type or search vendor name..."
-                    required={true}
-                    onSelect={(p) => {
-                      setVPartyId(p ? p.id : "");
-                      setVPartyName(p ? p.name : "");
+                    label={`Choose ${txnPartyType === "CUSTOMER" ? "Customer" : txnPartyType === "VENDOR" ? "Vendor" : "Staff Member"}`}
+                    type={txnPartyType}
+                    selectedName={txnTargetPartyName}
+                    selectedId={txnTargetPartyId}
+                    parties={
+                      txnPartyType === "CUSTOMER"
+                        ? partiesList.customers || []
+                        : txnPartyType === "VENDOR"
+                        ? partiesList.vendors || []
+                        : partiesList.employees || []
+                    }
+                    placeholder={`Search ${txnPartyType.toLowerCase()} by name, phone...`}
+                    onSelect={(party) => {
+                      if (party) {
+                        setTxnTargetPartyName(party.name);
+                        setTxnTargetPartyId(party.id || "");
+                      } else {
+                        setTxnTargetPartyName("");
+                        setTxnTargetPartyId("");
+                      }
                     }}
-                    onAddNew={(name) => handleOpenAddVendor(name, "record")}
-                    onViewLedger={(p) => handleJumpToStatement("VENDOR", p.name, p.id)}
-                  />
-                </div>
-              )}
-
-              {/* Vendor Outflow */}
-              {entryCategory === "PAY_VENDOR" && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <SearchablePartyCombobox
-                    label="Vendor / Supplier (Payee)"
-                    type="VENDOR"
-                    selectedId={vPartyId}
-                    selectedName={vPartyName}
-                    parties={partiesList.vendors || []}
-                    placeholder="Type or search vendor name..."
-                    required={true}
-                    onSelect={(p) => {
-                      setVPartyId(p ? p.id : "");
-                      setVPartyName(p ? p.name : "");
+                    onAddNew={(initialName) => {
+                      if (txnPartyType === "CUSTOMER") handleOpenAddCustomer(initialName, "record");
+                      else if (txnPartyType === "VENDOR") handleOpenAddVendor(initialName, "record");
                     }}
-                    onAddNew={(name) => handleOpenAddVendor(name, "record")}
-                    onViewLedger={(p) => handleJumpToStatement("VENDOR", p.name, p.id)}
                   />
                 </div>
-              )}
-
-              {/* Staff Advance */}
-              {entryCategory === "EMPLOYEE_ADVANCE" && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <SearchablePartyCombobox
-                    label="Staff Member / Employee"
-                    type="EMPLOYEE"
-                    selectedId={vPartyId}
-                    selectedName={vPartyName}
-                    parties={partiesList.employees || []}
-                    placeholder="Type or search employee name..."
-                    required={true}
-                    onSelect={(p) => {
-                      setVPartyId(p ? p.id : "");
-                      setVPartyName(p ? p.name : "");
-                    }}
-                    onAddNew={() => {}}
-                    onViewLedger={(p) => handleJumpToStatement("EMPLOYEE", p.name, p.id)}
-                  />
-                </div>
-              )}
-
-              {/* Transfer Bank */}
-              {entryCategory === "TRANSFER_BANK" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <div>
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                      <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" />
-                      <span>Transfer From (Source)</span>
-                    </label>
-                    <select
-                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                      value={vPaymentAccount}
-                      onChange={(e) => setVPaymentAccount(e.target.value)}
-                    >
-                      <option value="Cash in Hand">💵 Cash in Hand Counter</option>
-                      <option value="Bank Account (Meezan Bank)">🏛️ Meezan Bank</option>
-                      <option value="Bank Account (HBL)">🏛️ Habib Bank (HBL)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                      <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Transfer To (Destination)</span>
-                    </label>
-                    <select
-                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                      value={vTransferToAccount}
-                      onChange={(e) => setVTransferToAccount(e.target.value)}
-                    >
-                      <option value="Bank Account (Meezan Bank)">🏛️ Meezan Bank</option>
-                      <option value="Bank Account (HBL)">🏛️ Habib Bank (HBL)</option>
-                      <option value="Cash in Hand">💵 Cash in Hand Counter</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {/* Custom Journal */}
-              {entryCategory === "CUSTOM_JOURNAL" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                  <div>
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                      <Scale className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Debit Account (Receiving / Expense)</span>
-                    </label>
-                    <select
-                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                      value={vCustomDebitAccount}
-                      onChange={(e) => setVCustomDebitAccount(e.target.value)}
-                    >
-                      {accountsData.map((acc) => (
-                        <option key={acc.name} value={acc.name}>
-                          {acc.name} ({acc.type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                      <CreditCard className="w-3.5 h-3.5 text-blue-500" />
-                      <span>Credit Account (Payment Source)</span>
-                    </label>
-                    <select
-                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                      value={vCustomCreditAccount}
-                      onChange={(e) => setVCustomCreditAccount(e.target.value)}
-                    >
-                      {accountsData.map((acc) => (
-                        <option key={acc.name} value={acc.name}>
-                          {acc.name} ({acc.type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              ) : (
+                <div className="pt-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Select General Ledger Account
+                  </label>
+                  <select
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    value={txnTargetGeneralAccount}
+                    onChange={(e) => setTxnTargetGeneralAccount(e.target.value)}
+                  >
+                    {accountsData.map((acc) => (
+                      <option key={acc.name} value={acc.name}>
+                        {acc.name} ({acc.type} - Balance: PKR {acc.balance.toLocaleString()})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
 
-            {/* SECTION 2: Document Linker (Optional) */}
-            {(entryCategory === "RECEIVE_CUSTOMER" || entryCategory === "RECEIVE_VENDOR" || entryCategory === "PAY_VENDOR") && (
-              <div className="bg-blue-50/60 dark:bg-blue-950/30 p-4 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 font-black text-blue-900 dark:text-blue-300 uppercase tracking-wider text-[11px]">
-                    <Link2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Link to Specific Invoice, DO or Purchase Order (Optional)</span>
-                  </label>
-                  {linkedDocNumber && (
-                    <span className="text-[10px] font-black bg-blue-600 text-white px-2.5 py-0.5 rounded-full shadow-xs">
-                      Linked: {linkedDocNumber}
+            {/* Step 2: Action / Direction on this Account */}
+            <div className="space-y-2 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
+              <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">2</span>
+                <span>Direction on Primary Account</span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setTxnDirection("DEBIT")}
+                  className={`p-4 rounded-2xl border text-left transition-all ${
+                    txnDirection === "DEBIT"
+                      ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 ring-2 ring-emerald-500/30 text-emerald-900 dark:text-emerald-100"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-emerald-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-black flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500 shrink-0"></span>
+                      <span>DEBIT (+ Inflow / Increase Receivable / Expense)</span>
                     </span>
-                  )}
+                    {txnDirection === "DEBIT" && (
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                    Charges customer, disburses staff advance, logs expense, or increases asset.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setTxnDirection("CREDIT")}
+                  className={`p-4 rounded-2xl border text-left transition-all ${
+                    txnDirection === "CREDIT"
+                      ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30 text-blue-900 dark:text-blue-100"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-blue-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-black flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-blue-500 shrink-0"></span>
+                      <span>CREDIT (- Outflow / Payment Received / Settled)</span>
+                    </span>
+                    {txnDirection === "CREDIT" && (
+                      <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                    Receives customer payment, settles invoice/bill, earns revenue, or reduces balance.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 3: Amount & Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2 mb-2">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">3</span>
+                  <span>Amount (PKR) <span className="text-rose-500">*</span></span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-xs text-slate-400">
+                    PKR
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    min="1"
+                    placeholder="e.g. 50,000"
+                    className="w-full pl-12 pr-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-lg font-mono font-black text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
+                    value={txnAmount}
+                    onChange={(e) => setTxnAmount(e.target.value)}
+                  />
                 </div>
 
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {[10000, 25000, 50000, 100000, 500000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setTxnAmount(String(amt))}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                      +{amt >= 1000 ? `${amt / 1000}k` : amt}
+                    </button>
+                  ))}
+                  {txnAmount && (
+                    <button
+                      type="button"
+                      onClick={() => setTxnAmount("")}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-indigo-500" />
+                  <span>Transaction Date</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
+                  value={txnDate}
+                  onChange={(e) => setTxnDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Step 4: Source / Offsetting Account */}
+            <div className="space-y-3 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
+              <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">4</span>
+                <span>Source / Offsetting Account (Where did funds come from / go to?)</span>
+              </label>
+
+              <div>
                 <select
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all"
-                  value={linkedDocId}
+                  className="w-full px-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 shadow-xs"
+                  value={
+                    txnSourceType === "GENERAL"
+                      ? `GL:${txnSourceGeneralAccount}`
+                      : `PARTY:${txnSourcePartyType}:${txnSourcePartyId}:${txnSourcePartyName}`
+                  }
                   onChange={(e) => {
                     const val = e.target.value;
-                    setLinkedDocId(val);
-                    if (!val) {
-                      setLinkedDocType("NONE");
-                      setLinkedDocNumber("");
-                      return;
-                    }
-                    const [docType, id] = val.split(":");
-                    if (docType === "INV") {
-                      const inv = documentsList.invoices?.find((i: any) => i.id === id);
-                      if (inv) {
-                        setLinkedDocType("INVOICE");
-                        setLinkedDocNumber(inv.number);
-                        setVPartyName(inv.clientName);
-                        if (inv.due > 0) setVAmount(String(inv.due));
-                        setVDescription(`Payment for Invoice ${inv.number}${inv.doNumber ? ` (DO: ${inv.doNumber})` : ""}`);
-                        setVIsAdvance(false);
-                      }
-                    } else if (docType === "DO") {
-                      const d = documentsList.deliveryOrders?.find((i: any) => i.id === id);
-                      if (d) {
-                        setLinkedDocType("DO");
-                        setLinkedDocNumber(d.number);
-                        setVPartyName(d.clientName);
-                        setVDescription(`Payment against Delivery Order ${d.number}`);
-                      }
-                    } else if (docType === "PO") {
-                      const po = documentsList.purchaseOrders?.find((p: any) => p.id === id);
-                      if (po) {
-                        setLinkedDocType("PO");
-                        setLinkedDocNumber(po.number);
-                        setVPartyId(po.vendorId);
-                        setVPartyName(po.vendorName);
-                        if (po.total > 0) setVAmount(String(po.total));
-                        setVDescription(`Payment against Purchase Order ${po.number}`);
-                      }
-                    } else if (docType === "SRV") {
-                      const c = documentsList.complaints?.find((i: any) => i.id === id);
-                      if (c) {
-                        setLinkedDocType("COMPLAINT");
-                        setLinkedDocNumber(c.number);
-                        setVPartyName(c.customerName);
-                        if (c.amount > 0) setVAmount(String(c.amount));
-                        setVDescription(`Service payment for Complaint ${c.number}`);
-                        setVIsAdvance(false);
-                      }
+                    if (val.startsWith("PARTY:")) {
+                      const [, pType, pId, pName] = val.split(":");
+                      setTxnSourceType("PARTY");
+                      setTxnSourcePartyType(pType as any);
+                      setTxnSourcePartyId(pId);
+                      setTxnSourcePartyName(pName);
+                    } else if (val.startsWith("GL:")) {
+                      const accName = val.replace("GL:", "");
+                      setTxnSourceType("GENERAL");
+                      setTxnSourceGeneralAccount(accName);
+                      setTxnSourcePartyId("");
+                      setTxnSourcePartyName("");
                     }
                   }}
                 >
-                  <option value="">-- No Specific Document Linked (General Advance Deposit) --</option>
-                  {entryCategory === "RECEIVE_CUSTOMER" && (
-                    <>
-                      <optgroup label="Recent Invoices (Unpaid / Partial)">
-                        {documentsList.invoices
-                          ?.filter((inv: any) => !vPartyName || inv.clientName.toLowerCase().includes(vPartyName.toLowerCase()))
-                          .map((inv: any) => (
-                            <option key={inv.id} value={`INV:${inv.id}`}>
-                              📄 {inv.number} - {inv.clientName} (Total: PKR {inv.total.toLocaleString()} | Due: PKR {inv.due.toLocaleString()})
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="Delivery Orders (DO)">
-                        {documentsList.deliveryOrders
-                          ?.filter((d: any) => !vPartyName || d.clientName.toLowerCase().includes(vPartyName.toLowerCase()))
-                          .map((d: any) => (
-                            <option key={d.id} value={`DO:${d.id}`}>
-                              🚚 {d.number} - {d.clientName} ({d.status})
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="Service Complaints">
-                        {documentsList.complaints
-                          ?.filter((c: any) => !vPartyName || c.customerName.toLowerCase().includes(vPartyName.toLowerCase()))
-                          .map((c: any) => (
-                            <option key={c.id} value={`SRV:${c.id}`}>
-                              🛠️ {c.number} - {c.customerName} ({c.status} | PKR {c.amount.toLocaleString()})
-                            </option>
-                          ))}
-                      </optgroup>
-                    </>
+                  <optgroup label="🏛️ Liquid Accounts (Bank & Cash)">
+                    <option value="GL:Bank Account (Meezan Bank)">Bank Account (Meezan Bank)</option>
+                    <option value="GL:Bank Account (HBL)">Bank Account (HBL)</option>
+                    <option value="GL:Cash in Hand">Cash in Hand</option>
+                  </optgroup>
+
+                  <optgroup label="📈 Revenue & Income">
+                    <option value="GL:Sales Revenue">Sales Revenue (AC Units & Goods)</option>
+                    <option value="GL:Service & Maintenance Income">Service & Maintenance Revenue</option>
+                  </optgroup>
+
+                  <optgroup label="💼 Operating Expenses">
+                    <option value="GL:Office Rent & Utilities">Office Rent & Utilities</option>
+                    <option value="GL:Salary & Wage Expense">Salary & Wage Expense</option>
+                    <option value="GL:Logistics & Carriage Outward">Logistics & Carriage Outward</option>
+                    <option value="GL:General & Administrative Expense">General & Administrative Expense</option>
+                  </optgroup>
+
+                  {partiesList.customers?.length > 0 && (
+                    <optgroup label="👥 Customer Accounts (Party)">
+                      {partiesList.customers.map((c: any) => (
+                        <option key={c.id || c.name} value={`PARTY:CUSTOMER:${c.id || ""}:${c.name}`}>
+                          Customer: {c.name} {c.phone ? `(${c.phone})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
                   )}
 
-                  {entryCategory === "PAY_VENDOR" && (
-                    <optgroup label="Purchase Orders (PO)">
-                      {documentsList.purchaseOrders
-                        ?.filter((po: any) => !vPartyId || po.vendorId === vPartyId)
-                        .map((po: any) => (
-                          <option key={po.id} value={`PO:${po.id}`}>
-                            📦 {po.number} - {po.vendorName} (Total: PKR {po.total.toLocaleString()} | Status: {po.status})
+                  {partiesList.vendors?.length > 0 && (
+                    <optgroup label="🏢 Vendor Accounts (Party)">
+                      {partiesList.vendors.map((v: any) => (
+                        <option key={v.id || v.name} value={`PARTY:VENDOR:${v.id || ""}:${v.name}`}>
+                          Vendor: {v.name} {v.phone ? `(${v.phone})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {partiesList.employees?.length > 0 && (
+                    <optgroup label="👤 Staff / Employees (Party)">
+                      {partiesList.employees.map((e: any) => (
+                        <option key={e.id || e.name} value={`PARTY:EMPLOYEE:${e.id || ""}:${e.name}`}>
+                          Staff: {e.name} {e.position ? `(${e.position})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {accountsData
+                    .filter(
+                      (a) =>
+                        ![
+                          "Cash in Hand",
+                          "Bank Account (Meezan Bank)",
+                          "Bank Account (HBL)",
+                          "Sales Revenue",
+                          "Service & Maintenance Income",
+                          "Office Rent & Utilities",
+                          "Salary & Wage Expense",
+                          "Logistics & Carriage Outward",
+                          "General & Administrative Expense",
+                          "Accounts Receivable (Trade Debtors)",
+                          "Accounts Payable (Trade Creditors)",
+                          "Employee Advance",
+                        ].includes(a.name)
+                    )
+                    .length > 0 && (
+                    <optgroup label="📑 Other General Accounts">
+                      {accountsData
+                        .filter(
+                          (a) =>
+                            ![
+                              "Cash in Hand",
+                              "Bank Account (Meezan Bank)",
+                              "Bank Account (HBL)",
+                              "Sales Revenue",
+                              "Service & Maintenance Income",
+                              "Office Rent & Utilities",
+                              "Salary & Wage Expense",
+                              "Logistics & Carriage Outward",
+                              "General & Administrative Expense",
+                              "Accounts Receivable (Trade Debtors)",
+                              "Accounts Payable (Trade Creditors)",
+                              "Employee Advance",
+                            ].includes(a.name)
+                        )
+                        .map((acc) => (
+                          <option key={acc.name} value={`GL:${acc.name}`}>
+                            {acc.name} ({acc.type})
                           </option>
                         ))}
                     </optgroup>
                   )}
                 </select>
               </div>
-            )}
+            </div>
 
-            {/* SECTION 3: Amount, Cheque & Narration */}
-            <div className="bg-slate-50/80 dark:bg-slate-950/70 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4">
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest block">
-                3. Amount & Narration
-              </span>
+            {/* Step 5: Narration & Document Linking */}
+            <div className="space-y-4 p-5 rounded-2xl bg-slate-50/80 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800">
+              <label className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">5</span>
+                <span>Narration & Reference</span>
+              </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Amount Input */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs">
-                      <Coins className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Amount in PKR</span>
-                    </label>
-                    {vAmount && Number(vAmount) > 0 && (
-                      <span className="text-[10px] font-mono font-bold text-emerald-600">
-                        PKR {Number(vAmount).toLocaleString()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-xs text-slate-400">
-                      PKR
-                    </span>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      placeholder="e.g. 50,000"
-                      className="w-full pl-12 pr-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-lg font-mono font-black text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                      value={vAmount}
-                      onChange={(e) => setVAmount(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Quick Amount Chips */}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[10000, 25000, 50000, 100000, 500000].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setVAmount(String(amt))}
-                        className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
-                      >
-                        +{amt >= 1000 ? `${amt / 1000}k` : amt}
-                      </button>
-                    ))}
-                    {vAmount && (
-                      <button
-                        type="button"
-                        onClick={() => setVAmount("")}
-                        className="px-2 py-0.5 rounded-lg text-[10px] font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Narration / Reason <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Online transfer received for Project Ducting Phase 1"
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 transition-all"
+                    value={txnNarration}
+                    onChange={(e) => setTxnNarration(e.target.value)}
+                  />
                 </div>
 
-                {/* Reference / Cheque # */}
                 <div>
-                  <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Cheque / Online Reference # (Optional)</span>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Cheque / Reference # (Optional)
                   </label>
                   <input
                     type="text"
                     placeholder="e.g. CHQ-99120 or Online Ref / TXN-ID"
-                    className="w-full px-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                    value={vChequeNumber}
-                    onChange={(e) => setVChequeNumber(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-blue-500 transition-all"
+                    value={txnReferenceNumber}
+                    onChange={(e) => setTxnReferenceNumber(e.target.value)}
                   />
-                </div>
-              </div>
-
-              {/* Narration Input */}
-              <div>
-                <label className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-xs mb-1.5">
-                  <Info className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Narration / Reason</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 50% advance for 10x Inverter units via bank transfer"
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
-                  value={vDescription}
-                  onChange={(e) => setVDescription(e.target.value)}
-                />
-
-                {/* Quick Suggestion Chips */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {[
-                    "Advance Payment Received",
-                    "Invoice Full Settlement",
-                    "Supplier Advance for Raw Materials",
-                    "Monthly Office Rent & Utilities",
-                    "Staff Fuel & Travel Allowance",
-                  ].map((sugg) => (
-                    <button
-                      key={sugg}
-                      type="button"
-                      onClick={() => setVDescription(sugg)}
-                      className="px-2 py-0.5 rounded-lg text-[10px] bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    >
-                      {sugg}
-                    </button>
-                  ))}
                 </div>
               </div>
             </div>
 
-            {/* FORM ACTIONS & BOTTOM SUBMIT CTA */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-mono font-bold">
-                  {journalPreview.voucherType}
+            {/* LIVE DOUBLE-ENTRY PREVIEW CARD */}
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-5 rounded-2xl shadow-md border border-indigo-900/60 space-y-3">
+              <div className="flex items-center justify-between border-b border-indigo-800/60 pb-2">
+                <span className="text-xs font-black uppercase tracking-widest text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Live Double-Entry Balanced Journal Preview</span>
                 </span>
-                <span>
-                  Posting: <strong className="text-slate-800 dark:text-slate-200">{journalPreview.debitAccount}</strong> ➔ <strong className="text-slate-800 dark:text-slate-200">{journalPreview.creditAccount}</strong>
+                <span className="text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                  Balanced Double-Entry ✅
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVAmount("");
-                    setVChequeNumber("");
-                    setVDescription("");
-                    setLinkedDocId("");
-                    setLinkedDocNumber("");
-                  }}
-                  className="px-5 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  Reset
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 space-y-1">
+                  <span className="text-[10px] font-black uppercase text-emerald-400 block">DEBIT LINE</span>
+                  <div className="font-bold text-white truncate">
+                    {journalPreview.debitAccount}
+                  </div>
+                  <div className="text-sm font-black text-emerald-400">
+                    PKR {txnAmount && Number(txnAmount) > 0 ? Number(txnAmount).toLocaleString() : "0"}
+                  </div>
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmittingEntry || !vAmount || Number(vAmount) <= 0}
-                  className="flex-1 sm:flex-none px-8 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-2 transform active:scale-98 cursor-pointer"
-                >
-                  {isSubmittingEntry ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4" />
-                  )}
-                  <span>{isSubmittingEntry ? "Posting Transaction..." : "✓ Save Entry to Financial Ledger"}</span>
-                </button>
+                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60 space-y-1">
+                  <span className="text-[10px] font-black uppercase text-blue-400 block">CREDIT LINE</span>
+                  <div className="font-bold text-white truncate">
+                    {journalPreview.creditAccount}
+                  </div>
+                  <div className="text-sm font-black text-blue-400">
+                    PKR {txnAmount && Number(txnAmount) > 0 ? Number(txnAmount).toLocaleString() : "0"}
+                  </div>
+                </div>
               </div>
+
+              <p className="text-[10px] text-slate-400 font-sans">
+                Saving this entry automatically creates 1 balanced <code>JournalEntry</code> with 2 <code>JournalLines</code> and updates the permanent audit trail.
+              </p>
+            </div>
+
+            {/* FORM ACTIONS */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxnAmount("");
+                  setTxnReferenceNumber("");
+                  setTxnNarration("");
+                }}
+                className="px-5 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Reset
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSubmittingEntry || !txnAmount || Number(txnAmount) <= 0}
+                className="px-8 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-98 cursor-pointer"
+              >
+                {isSubmittingEntry ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>{isSubmittingEntry ? "Posting Transaction..." : "✓ Save & Post Transaction"}</span>
+              </button>
             </div>
           </form>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: ALL LEDGER ENTRIES LIST                                            */}
+      {/* TAB 3: UNIVERSAL GENERAL LEDGER                                            */}
       {/* ========================================================================= */}
       {activeSection === "entries" && (
         <div className="space-y-5 animate-fadeIn">
+          {/* Universal General Ledger Balance Verification Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl border border-indigo-800/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-black text-white">Universal General Ledger</h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${glTotals.isBalanced ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-rose-500/20 text-rose-300 border border-rose-500/40"}`}>
+                  {glTotals.isBalanced ? "Sum(Debit) == Sum(Credit) Balanced ✅" : "Out of Balance ⚠️"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Chronological record of all journal transactions company-wide with double-entry audit lines.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80 text-xs font-mono">
+              <div>
+                <span className="text-[10px] uppercase text-emerald-400 block font-bold">Total Debits</span>
+                <span className="text-sm font-black text-emerald-400">PKR {Number(glTotals.totalDebit || 0).toLocaleString()}</span>
+              </div>
+              <div className="h-6 w-px bg-slate-700"></div>
+              <div>
+                <span className="text-[10px] uppercase text-blue-400 block font-bold">Total Credits</span>
+                <span className="text-sm font-black text-blue-400">PKR {Number(glTotals.totalCredit || 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Filter and Search Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -2272,116 +2172,131 @@ function FinancialsPageContent() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search vouchers, parties, accounts..."
+                  placeholder="Search entries, narration, accounts..."
                   className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-64 focus:ring-2 focus:ring-blue-500"
-                  value={voucherSearch}
-                  onChange={(e) => setVoucherSearch(e.target.value)}
+                  value={glSearch}
+                  onChange={(e) => setGlSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && fetchGeneralLedger()}
                 />
               </div>
 
               <select
                 className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500"
-                value={voucherFilterType}
-                onChange={(e) => setVoucherFilterType(e.target.value)}
+                value={glSourceType}
+                onChange={(e) => {
+                  setGlSourceType(e.target.value);
+                  setTimeout(fetchGeneralLedger, 50);
+                }}
               >
-                <option value="">All Transaction Types</option>
-                <option value="CRV">Cash Receipts (CRV)</option>
-                <option value="BRV">Bank Receipts (BRV)</option>
-                <option value="CPV">Cash Payments (CPV)</option>
-                <option value="BPV">Bank Payments (BPV)</option>
-                <option value="EAV">Employee Advances (EAV)</option>
-                <option value="CV">Bank Transfers (CV)</option>
-                <option value="JV">Journal Vouchers (JV)</option>
+                <option value="">All Source Types</option>
+                <option value="INVOICE">Invoices</option>
+                <option value="VOUCHER">Vouchers (CRV / BPV / JV)</option>
+                <option value="GRN">Goods Received (GRN)</option>
+                <option value="PAYROLL">Payroll</option>
+                <option value="MANUAL">Manual Adjustments</option>
               </select>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={fetchVouchers}
-                className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs transition-colors"
-                title="Refresh Ledger"
+                onClick={fetchGeneralLedger}
+                className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1.5 font-bold"
+                title="Refresh General Ledger"
               >
-                <RefreshCw className={`w-4 h-4 ${vouchersLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-4 h-4 ${glLoading ? "animate-spin" : ""}`} />
+                <span>Refresh</span>
               </button>
 
               <button
                 onClick={() => setActiveSection("record")}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Record Entry</span>
+                <PlusCircle className="w-4 h-4" />
+                <span>+ Add Transaction</span>
               </button>
             </div>
           </div>
 
-          {/* Ledger Table */}
+          {/* General Ledger Table */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50/90 dark:bg-slate-950/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="p-3.5">Ref #</th>
                     <th className="p-3.5">Date</th>
-                    <th className="p-3.5">Type</th>
-                    <th className="p-3.5">Party Name</th>
-                    <th className="p-3.5">Debit (Destination)</th>
-                    <th className="p-3.5">Credit (Source)</th>
-                    <th className="p-3.5 text-right">Amount (PKR)</th>
-                    <th className="p-3.5">Method</th>
-                    <th className="p-3.5">Reason / Narration</th>
+                    <th className="p-3.5">Source / Ref</th>
+                    <th className="p-3.5">Narration / Description</th>
+                    <th className="p-3.5">Account & Party Lines</th>
+                    <th className="p-3.5 text-right text-emerald-600 dark:text-emerald-400">Debit (PKR)</th>
+                    <th className="p-3.5 text-right text-blue-600 dark:text-blue-400">Credit (PKR)</th>
+                    <th className="p-3.5 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {vouchersLoading ? (
+                  {glLoading ? (
                     <tr>
-                      <td colSpan={9} className="p-12 text-center text-slate-400">
+                      <td colSpan={7} className="p-12 text-center text-slate-400">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
-                        Loading ledger entries...
+                        Loading general ledger transactions...
                       </td>
                     </tr>
-                  ) : vouchers.length > 0 ? (
-                    vouchers.map((v) => (
-                      <tr key={v.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-3.5 font-mono font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
-                          {v.voucherNumber || v.referenceId || "ENTRY"}
+                  ) : generalLedgerEntries.length > 0 ? (
+                    generalLedgerEntries.map((entry) => (
+                      <tr key={entry.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400 align-top">
+                          {new Date(entry.entryDate).toLocaleDateString("en-GB").replace(/\//g, "-")}
                         </td>
-                        <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400">
-                          {new Date(v.entryDate).toLocaleDateString("en-GB").replace(/\//g, "-")}
-                        </td>
-                        <td className="p-3.5">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                              v.voucherType?.startsWith("CR") || v.voucherType?.startsWith("BR")
-                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                                : v.voucherType?.startsWith("CP") || v.voucherType?.startsWith("BP")
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                : v.voucherType === "EAV"
-                                ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
-                                : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                            }`}
-                          >
-                            {v.voucherType || v.referenceType}
+                        <td className="p-3.5 align-top">
+                          <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 block w-fit mb-1">
+                            {entry.sourceType}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-400 truncate block max-w-[120px]" title={entry.sourceId || ""}>
+                            {entry.sourceId ? `#${entry.sourceId.substring(0, 10)}` : "-"}
                           </span>
                         </td>
-                        <td className="p-3.5 font-bold text-slate-900 dark:text-white">{v.partyName || "-"}</td>
-                        <td className="p-3.5 font-medium text-slate-700 dark:text-slate-300">{v.debitAccount}</td>
-                        <td className="p-3.5 font-medium text-slate-700 dark:text-slate-300">{v.creditAccount}</td>
-                        <td className="p-3.5 text-right font-mono font-black text-slate-900 dark:text-white whitespace-nowrap">
-                          PKR {Number(v.amount).toLocaleString()}
+                        <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200 max-w-xs align-top">
+                          {entry.narration}
                         </td>
-                        <td className="p-3.5 font-mono text-[10px] text-slate-500 whitespace-nowrap">
-                          {v.paymentMethod || "CASH"}
+                        <td className="p-3.5 align-top space-y-1.5">
+                          {entry.lines?.map((line: any) => (
+                            <div key={line.id} className="flex items-center justify-between gap-3 text-[11px] font-mono">
+                              <span className="text-slate-700 dark:text-slate-300">
+                                {line.accountName}
+                                {line.partyName && (
+                                  <span className="ml-1 text-[10px] font-sans px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold">
+                                    {line.partyName}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ))}
                         </td>
-                        <td className="p-3.5 text-slate-600 dark:text-slate-400 max-w-[240px] truncate" title={v.description}>
-                          {v.description}
+                        <td className="p-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 align-top space-y-1.5">
+                          {entry.lines?.map((line: any) => (
+                            <div key={line.id}>
+                              {line.debit > 0 ? `PKR ${line.debit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
+                            </div>
+                          ))}
+                        </td>
+                        <td className="p-3.5 text-right font-mono font-bold text-blue-600 dark:text-blue-400 align-top space-y-1.5">
+                          {entry.lines?.map((line: any) => (
+                            <div key={line.id}>
+                              {line.credit > 0 ? `PKR ${line.credit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
+                            </div>
+                          ))}
+                        </td>
+                        <td className="p-3.5 text-center align-top">
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                            Balanced
+                          </span>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={9} className="p-12 text-center text-slate-400">
-                        No transactions found. Click <strong>"+ Record Entry"</strong> to add one.
+                      <td colSpan={7} className="p-12 text-center text-slate-400">
+                        No general ledger entries found. Click <strong>"+ Add Transaction"</strong> to post one.
                       </td>
                     </tr>
                   )}
@@ -2393,100 +2308,161 @@ function FinancialsPageContent() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 4: BANK & CASH BALANCES (CHART OF ACCOUNTS)                           */}
+      {/* TAB 4: FINANCIAL ACCOUNTS & CHART OF ACCOUNTS                             */}
       {/* ========================================================================= */}
       {activeSection === "accounts" && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Visual Bank & Cash Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-6 rounded-3xl shadow-lg shadow-emerald-500/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Cash in Hand</span>
-                <PiggyBank className="w-5 h-5 opacity-80" />
+          {/* Party Financial Accounts Section */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  Financial Accounts (Customers, Vendors & Staff)
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Dedicated financial accounts for every client, supplier, and employee with running balances.
+                </p>
               </div>
-              <div className="text-2xl font-black font-mono">
-                PKR {keyMetrics.cashInHand.toLocaleString()}
+
+              {/* Sub-Tabs: All | Customers | Vendors | Staff */}
+              <div className="inline-flex bg-slate-100 dark:bg-slate-800/90 p-1.5 rounded-2xl text-xs font-bold gap-1">
+                {(["all", "customers", "vendors", "employees"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setPartyAccountTab(tab)}
+                    className={`px-3 py-1.5 rounded-xl transition-all capitalize font-bold ${
+                      partyAccountTab === tab
+                        ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                    }`}
+                  >
+                    {tab === "all" ? "All Accounts" : tab}
+                  </button>
+                ))}
               </div>
-              <p className="text-[11px] opacity-75">Counter vault & petty cash available</p>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-3xl shadow-lg shadow-blue-500/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Bank Balances (Meezan & HBL)</span>
-                <Landmark className="w-5 h-5 opacity-80" />
+            {/* Filter Search */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search party financial accounts by name, phone..."
+                  className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-full focus:ring-2 focus:ring-blue-500"
+                  value={partyAccountSearch}
+                  onChange={(e) => setPartyAccountSearch(e.target.value)}
+                />
               </div>
-              <div className="text-2xl font-black font-mono">
-                PKR {keyMetrics.bankBalance.toLocaleString()}
-              </div>
-              <p className="text-[11px] opacity-75">Corporate online accounts liquidity</p>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-600 to-violet-700 text-white p-6 rounded-3xl shadow-lg shadow-purple-500/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Receivables (AR)</span>
-                <Receipt className="w-5 h-5 opacity-80" />
-              </div>
-              <div className="text-2xl font-black font-mono">
-                PKR {keyMetrics.receivables.toLocaleString()}
-              </div>
-              <p className="text-[11px] opacity-75">Trade debtors & uncollected invoices</p>
-            </div>
-          </div>
-
-          {/* Full Chart of Accounts Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Landmark className="w-4 h-4 text-emerald-600" />
-                Chart of Accounts Ledger Summary
-              </h3>
-              <span className="text-xs text-slate-400 font-medium">Standard Double-Entry Posting</span>
-            </div>
-
+            {/* Accounts Table */}
             <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
                   <tr>
-                    <th className="p-3.5">Account Code & Name</th>
-                    <th className="p-3.5">Classification</th>
-                    <th className="p-3.5 text-right text-rose-600 dark:text-rose-400">Total Inflow (Debits)</th>
-                    <th className="p-3.5 text-right text-emerald-600 dark:text-emerald-400">Total Outflow (Credits)</th>
-                    <th className="p-3.5 text-right font-black">Net Available Balance (PKR)</th>
+                    <th className="p-3.5">Account / Party Name</th>
+                    <th className="p-3.5">Party Type</th>
+                    <th className="p-3.5">Contact / Phone</th>
+                    <th className="p-3.5 text-right text-rose-600 dark:text-rose-400">Total Debits (PKR)</th>
+                    <th className="p-3.5 text-right text-emerald-600 dark:text-emerald-400">Total Credits (PKR)</th>
+                    <th className="p-3.5 text-right font-black">Running Balance (PKR)</th>
+                    <th className="p-3.5 text-center">Status</th>
+                    <th className="p-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {accountsData.map((acc) => (
-                    <tr key={acc.name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3.5 font-bold text-slate-900 dark:text-white">
-                        <span className="font-mono text-blue-600 mr-2 text-[11px]">#{acc.code || "1000"}</span>
-                        {acc.name}
-                      </td>
-                      <td className="p-3.5">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                            acc.type === "ASSET"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              : acc.type === "LIABILITY"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                              : acc.type === "REVENUE"
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                              : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                          }`}
-                        >
-                          {acc.type}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-                        {acc.totalDebit > 0 ? `PKR ${acc.totalDebit.toLocaleString()}` : "-"}
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-                        {acc.totalCredit > 0 ? `PKR ${acc.totalCredit.toLocaleString()}` : "-"}
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-black text-slate-900 dark:text-white">
-                        PKR {acc.balance.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
+                  {((partyAccountTab === "all"
+                    ? partyAccountsList.all
+                    : partyAccountTab === "customers"
+                    ? partyAccountsList.customers
+                    : partyAccountTab === "vendors"
+                    ? partyAccountsList.vendors
+                    : partyAccountsList.employees) || [])
+                    .filter((p: any) =>
+                      !partyAccountSearch ||
+                      p.name.toLowerCase().includes(partyAccountSearch.toLowerCase()) ||
+                      (p.phone && p.phone.includes(partyAccountSearch))
+                    )
+                    .map((party: any) => (
+                      <tr key={party.id || party.name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5 font-bold text-slate-900 dark:text-white">
+                          {party.name}
+                        </td>
+                        <td className="p-3.5">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                              party.partyType === "CUSTOMER"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                                : party.partyType === "VENDOR"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                            }`}
+                          >
+                            {party.partyType}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono text-slate-600 dark:text-slate-400">
+                          {party.phone || "-"}
+                        </td>
+                        <td className="p-3.5 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+                          {party.totalDebit > 0 ? `PKR ${party.totalDebit.toLocaleString()}` : "-"}
+                        </td>
+                        <td className="p-3.5 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+                          {party.totalCredit > 0 ? `PKR ${party.totalCredit.toLocaleString()}` : "-"}
+                        </td>
+                        <td className="p-3.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                          PKR {party.balance.toLocaleString()}
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[9.5px] font-bold ${
+                              party.balance > 0
+                                ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                                : party.balance < 0
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                            }`}
+                          >
+                            {party.statusLabel || "Settled"}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const token = localStorage.getItem("token") || "";
+                                const url = `/api/pdf?type=soa&partyType=${party.partyType}&partyId=${party.id || ""}&partyName=${encodeURIComponent(
+                                  party.name
+                                )}&startDate=2024-01-01&endDate=${new Date().toISOString().split("T")[0]}&inline=true&token=${token}`;
+                                window.open(url, "_blank");
+                              }}
+                              title="Download Official Statement PDF"
+                              className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1"
+                            >
+                              <Download className="w-3.5 h-3.5 text-slate-500" />
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPartyType(party.partyType);
+                                setSelectedPartyName(party.name);
+                                setSelectedPartyId(party.id);
+                                fetchPartyLedger(party.name, party.id);
+                                setActiveSection("statements");
+                              }}
+                              className="px-3 py-1 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-600 dark:text-blue-400 font-bold rounded-lg text-xs transition-colors"
+                            >
+                              View Statement ➔
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

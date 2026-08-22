@@ -6,6 +6,7 @@ import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import CustomerSelect from "@/components/shared/CustomerSelect";
+import ProductSelect from "@/components/shared/ProductSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -118,6 +119,7 @@ function SalesPageContent() {
   // Standalone Invoice State
   const [clientName, setClientName] = useState("");
   const [isGst, setIsGst] = useState(true);
+  const [postingOption, setPostingOption] = useState<"CUSTOMER_LEDGER" | "GENERAL_LEDGER" | "NO_LEDGER">("CUSTOMER_LEDGER");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [selectedComplaintId, setSelectedComplaintId] = useState("");
@@ -146,6 +148,20 @@ function SalesPageContent() {
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [doPoNumber, setDoPoNumber] = useState("");
   const [selectedDoInvoiceId, setSelectedDoInvoiceId] = useState("");
+
+  // Edit Delivery Order State
+  const [isEditDoOpen, setIsEditDoOpen] = useState(false);
+  const [editingDo, setEditingDo] = useState<any>(null);
+  const [editDoClientName, setEditDoClientName] = useState("");
+  const [editDoClientPhone, setEditDoClientPhone] = useState("");
+  const [editDoAddress, setEditDoAddress] = useState("");
+  const [editDoNotes, setEditDoNotes] = useState("");
+  const [editDoThrough, setEditDoThrough] = useState("");
+  const [editDoVehicle, setEditDoVehicle] = useState("");
+  const [editDoPoNumber, setEditDoPoNumber] = useState("");
+  const [editDoStatus, setEditDoStatus] = useState("DISPATCHED");
+  const [editDoLines, setEditDoLines] = useState<any[]>([]);
+  const [editDoError, setEditDoError] = useState("");
 
   // Payment State
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -472,6 +488,7 @@ function SalesPageContent() {
       subjectHeading,
       subjectDescription,
       isGst,
+      postingOption,
     };
 
     try {
@@ -493,6 +510,7 @@ function SalesPageContent() {
       setSubjectHeading("");
       setSubjectDescription("");
       setIsGst(true);
+      setPostingOption("CUSTOMER_LEDGER");
       setInvLines([{ productId: "", description: "", quantity: "1", salesPrice: "", extraFields: {} }]);
       fetchData();
     } catch (err: any) {
@@ -578,6 +596,89 @@ function SalesPageContent() {
     } catch (err: any) {
       setDoError(err.message);
       toast({ title: "DO Creation Failed", message: err.message, type: "error" });
+    }
+  };
+
+  const handleOpenEditDo = (doRec: any) => {
+    setEditingDo(doRec);
+    setEditDoClientName(doRec.clientName || "");
+    setEditDoClientPhone(doRec.clientPhone || "");
+    setEditDoAddress(doRec.deliveryAddress || "");
+    setEditDoNotes(doRec.notes || "");
+    setEditDoThrough(doRec.through || "");
+    setEditDoVehicle(doRec.vehicle || "");
+    setEditDoPoNumber(doRec.poNumber || "");
+    setEditDoStatus(doRec.status || "DISPATCHED");
+    if (doRec.lineItems && doRec.lineItems.length > 0) {
+      setEditDoLines(
+        doRec.lineItems.map((l: any) => ({
+          productId: l.productId || "",
+          description: l.description || "",
+          quantity: String(l.quantity || 1),
+          salesPrice: String(l.salesPrice || 0),
+        }))
+      );
+    } else {
+      setEditDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "0" }]);
+    }
+    setEditDoError("");
+    setIsEditDoOpen(true);
+  };
+
+  const handleEditDoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDo) return;
+    setEditDoError("");
+
+    const formattedLines = editDoLines
+      .filter((l) => l.productId || (l.description && l.description.trim()))
+      .map((l) => ({
+        productId: l.productId || null,
+        description: l.description || "",
+        quantity: parseInt(l.quantity) || 1,
+        salesPrice: Number(l.salesPrice) || 0,
+      }));
+
+    if (formattedLines.length === 0) {
+      const errMsg = "Please add at least one line item with a catalog product or description.";
+      setEditDoError(errMsg);
+      toast({ title: "Line Items Required", message: errMsg, type: "warning" });
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/sales/do/${editingDo.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          clientName: editDoClientName.trim(),
+          clientPhone: editDoClientPhone.trim(),
+          deliveryAddress: editDoAddress.trim(),
+          notes: editDoNotes,
+          through: editDoThrough,
+          vehicle: editDoVehicle,
+          poNumber: editDoPoNumber.trim() || undefined,
+          status: editDoStatus,
+          lineItems: formattedLines,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const errMsg = data.error || "Failed to update Delivery Order";
+        setEditDoError(errMsg);
+        throw new Error(errMsg);
+      }
+
+      toast({ title: "Delivery Order Updated", message: "Delivery Order updated and stock reconciled.", type: "success" });
+      setIsEditDoOpen(false);
+      setEditingDo(null);
+      setEditDoError("");
+      fetchData();
+    } catch (err: any) {
+      setEditDoError(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
     }
   };
 
@@ -1252,6 +1353,14 @@ function SalesPageContent() {
                         <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(doRec.date).toLocaleDateString()}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditDo(doRec)}
+                              className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 rounded text-amber-600 dark:text-amber-400 transition-all"
+                              title="Edit Delivery Order"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
                             <a
                               href={`/sales/do/${doRec.id}/pdf`}
                               target="_blank"
@@ -1590,6 +1699,62 @@ function SalesPageContent() {
                 </div>
               </div>
 
+              {/* 3-Way Ledger Posting Selector */}
+              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  📊 Financial Ledger Posting Choice
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPostingOption("CUSTOMER_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      postingOption === "CUSTOMER_LEDGER"
+                        ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-200 font-bold ring-1 ring-blue-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between mb-0.5">
+                      <span>👤 Customer Ledger</span>
+                      {postingOption === "CUSTOMER_LEDGER" && <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-mono">Default</span>}
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Posts to client's financial account and general ledger.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPostingOption("GENERAL_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      postingOption === "GENERAL_LEDGER"
+                        ? "bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-1 ring-amber-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold mb-0.5">🏢 General Ledger Only</div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Updates company totals without affecting customer's balance.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPostingOption("NO_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      postingOption === "NO_LEDGER"
+                        ? "bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-900 dark:text-rose-200 font-bold ring-1 ring-rose-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold mb-0.5">📄 No Ledger Posting</div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Paperwork / Formality only. Zero accounting entries.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
               {/* Subject Heading & Description */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-1">
@@ -1676,13 +1841,13 @@ function SalesPageContent() {
                           }}
                         />
                       ) : (
-                        <select
-                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                        <ProductSelect
+                          products={products}
                           value={line.productId}
-                          onChange={(e) => {
+                          placeholder="Search product name or SKU in stock..."
+                          onChange={(p) => {
                             const updated = [...invLines];
-                            updated[index].productId = e.target.value;
-                            const p = products.find((pr) => pr.id === e.target.value);
+                            updated[index].productId = p ? p.id : "";
                             if (p) {
                               updated[index].description = p.name;
                               updated[index].salesPrice = Number(p.salesPrice) > 0 ? String(p.salesPrice) : String(Number(p.averageCost) * 1.25);
@@ -1692,12 +1857,7 @@ function SalesPageContent() {
                             }
                             setInvLines(updated);
                           }}
-                        >
-                          <option value="">Choose Catalog Product...</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>{p.sku} - {p.name}</option>
-                          ))}
-                        </select>
+                        />
                       )}
 
                       {/* Manual Description */}
@@ -2016,22 +2176,19 @@ function SalesPageContent() {
                     return (
                       <div key={index} className={`grid grid-cols-1 sm:grid-cols-3 gap-2 items-start p-3 rounded-xl transition-all ${isOverStock ? "bg-rose-50/70 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800" : "bg-slate-50 dark:bg-slate-950"}`}>
                         <div>
-                          <select
-                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                          <ProductSelect
+                            products={products}
                             value={line.productId}
-                            onChange={(e) => {
+                            placeholder="Search stock item or SKU..."
+                            showStockBadge={true}
+                            onChange={(p) => {
                               const updated = [...doLines];
-                              updated[index].productId = e.target.value;
-                              const p = products.find((pr) => pr.id === e.target.value);
+                              updated[index].productId = p ? p.id : "";
                               if (p) updated[index].description = p.name;
+                              else updated[index].description = "";
                               setDoLines(updated);
                             }}
-                          >
-                            <option value="">Choose Catalog Product...</option>
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>{p.sku} - {p.name} (Stock: {p.onHandQty})</option>
-                            ))}
-                          </select>
+                          />
 
                           {selectedProd && (
                             <div className="mt-1 flex items-center justify-between text-[11px] px-1">
@@ -2123,6 +2280,272 @@ function SalesPageContent() {
                   className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
                 >
                   Submit & Dispatch DO
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT DELIVERY ORDER MODAL ==================== */}
+      {mounted && isEditDoOpen && editingDo && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Edit2 className="w-5 h-5 text-amber-500" />
+                  <span>Edit Delivery Order ({editingDo.doNumber})</span>
+                </h3>
+                <span className="text-xs font-mono font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-800">
+                  {editingDo.status}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditDoOpen(false);
+                  setEditingDo(null);
+                  setEditDoError("");
+                }}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Modify delivery details, line items, or status. Changes to catalog items automatically update and reconcile physical stock inventory.
+            </p>
+
+            {/* Inline Error Alert Banner */}
+            {editDoError && (
+              <div className="bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-200 p-4 rounded-xl flex items-start gap-3 text-xs mb-5 shadow-sm">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-extrabold text-sm text-rose-900 dark:text-rose-100">Update Error / Stock Warning</p>
+                  <p className="mt-1 font-semibold leading-relaxed">{editDoError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditDoError("")}
+                  className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-base font-black px-1"
+                  title="Dismiss error"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleEditDoSubmit} className="space-y-4">
+              {/* Customer Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <CustomerSelect
+                    label="Recipient Customer / Client"
+                    value={editDoClientName}
+                    phoneValue={editDoClientPhone}
+                    addressValue={editDoAddress}
+                    includeVendors={true}
+                    onChange={(c) => {
+                      setEditDoClientName(c.name);
+                      if (c.phone) setEditDoClientPhone(c.phone);
+                      if (c.address) setEditDoAddress(c.address);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. +923331112222"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
+                    value={editDoClientPhone}
+                    onChange={(e) => setEditDoClientPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Delivery Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start mt-4">
+                <div>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Delivery Address</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Warehouse 14, Karachi"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editDoAddress}
+                    onChange={(e) => setEditDoAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Through (Transport)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. BUS, Cargo, Courier"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editDoThrough}
+                    onChange={(e) => setEditDoThrough(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Vehicle / Carrier</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Toyota Hilux, Bus"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editDoVehicle}
+                    onChange={(e) => setEditDoVehicle(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Link PO & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start mt-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Ref PO Number (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Type PO number..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono shadow-sm"
+                    value={editDoPoNumber}
+                    onChange={(e) => setEditDoPoNumber(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Delivery Order Status</label>
+                  <select
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold shadow-sm"
+                    value={editDoStatus}
+                    onChange={(e) => setEditDoStatus(e.target.value)}
+                  >
+                    <option value="DISPATCHED">DISPATCHED (Stock deducted)</option>
+                    <option value="DELIVERED">DELIVERED (Confirmed at site)</option>
+                    <option value="DRAFT">DRAFT (Pending dispatch)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* DO Lines */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">DO Line Items</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditDoLines([...editDoLines, { productId: "", description: "", quantity: "1", salesPrice: "0" }])}
+                    className="text-xs text-emerald-500 hover:underline font-bold"
+                  >
+                    + Add Product Line
+                  </button>
+                </div>
+
+                <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
+                  {editDoLines.map((line, index) => {
+                    const selectedProd = products.find((pr) => pr.id === line.productId);
+                    return (
+                      <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-start p-3 rounded-xl bg-slate-50 dark:bg-slate-950">
+                        <div>
+                          <ProductSelect
+                            products={products}
+                            value={line.productId}
+                            placeholder="Search stock item or SKU..."
+                            showStockBadge={true}
+                            onChange={(p) => {
+                              const updated = [...editDoLines];
+                              updated[index].productId = p ? p.id : "";
+                              if (p) updated[index].description = p.name;
+                              else updated[index].description = "";
+                              setEditDoLines(updated);
+                            }}
+                          />
+
+                          {selectedProd && (
+                            <div className="mt-1 flex items-center justify-between text-[11px] px-1">
+                              <span className="text-slate-500">
+                                In Stock:{" "}
+                                <strong className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                  {selectedProd.onHandQty ?? 0} {selectedProd.unit || "Nos"}
+                                </strong>
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="Manual Description"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                          value={line.description}
+                          onChange={(e) => {
+                            const updated = [...editDoLines];
+                            updated[index].description = e.target.value;
+                            setEditDoLines(updated);
+                          }}
+                        />
+
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            required
+                            min="1"
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold"
+                            value={line.quantity}
+                            onChange={(e) => {
+                              const updated = [...editDoLines];
+                              updated[index].quantity = e.target.value;
+                              setEditDoLines(updated);
+                            }}
+                          />
+                          {editDoLines.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setEditDoLines(editDoLines.filter((_, i) => i !== index))}
+                              className="text-xs text-rose-500 font-bold hover:underline shrink-0"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Dispatch Driver / Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Shipment dispatched via Suzuki Carry, driver contact: Mr. Asif"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                  value={editDoNotes}
+                  onChange={(e) => setEditDoNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditDoOpen(false);
+                    setEditingDo(null);
+                    setEditDoError("");
+                  }}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Changes & Update DO</span>
                 </button>
               </div>
             </form>
@@ -3232,15 +3655,29 @@ function SalesPageContent() {
                               </td>
                               <td className="p-3 text-slate-500 truncate max-w-xs">{d.deliveryAddress}</td>
                               <td className="p-3 text-center">
-                                <a
-                                  href={`/api/pdf?type=do&id=${d.id}&inline=true`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>View</span>
-                                </a>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCustomerDossierOpen(false);
+                                      handleOpenEditDo(d);
+                                    }}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                    title="Edit Delivery Order"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <a
+                                    href={`/api/pdf?type=do&id=${d.id}&inline=true`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </a>
+                                </div>
                               </td>
                             </tr>
                           ))}

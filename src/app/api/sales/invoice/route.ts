@@ -81,6 +81,7 @@ export async function POST(req: Request) {
       subjectHeading,
       subjectDescription,
       isGst,
+      postingOption,
     } = await req.json();
 
     const finalClientName = (clientName || "").trim();
@@ -272,108 +273,115 @@ export async function POST(req: Request) {
 
       // Removed stock deduction: Stock is now handled exclusively by Delivery Orders.
 
-      // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
-      await recordLedgerEntry(tx, {
-        description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}`,
-        debitAccount: "Accounts Receivable (Trade Debtors)",
-        creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
-        amount: subtotalAmount,
-        referenceType: "INVOICE",
-        referenceId: createdInvoice.id,
-        partyType: "CUSTOMER",
-        partyId: resolvedCustomerId,
-        partyName: finalClientName,
-        voucherType: "INV",
-        voucherNumber: invoiceNumber,
-      });
+      // Determine posting option: "CUSTOMER_LEDGER" | "GENERAL_LEDGER" | "NO_LEDGER"
+      const selectedPosting = postingOption || "CUSTOMER_LEDGER";
+      const isPartyPosting = selectedPosting === "CUSTOMER_LEDGER";
+      const isNoLedger = selectedPosting === "NO_LEDGER";
 
-      if (taxAmount > 0) {
+      // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
+      if (!isNoLedger) {
         await recordLedgerEntry(tx, {
-          description: `Sales Tax for Invoice ${invoiceNumber}`,
+          description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
-          creditAccount: "Sales Tax Payable",
-          amount: taxAmount,
+          creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
+          amount: subtotalAmount,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
-          partyType: "CUSTOMER",
-          partyId: resolvedCustomerId,
-          partyName: finalClientName,
+          partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+          partyId: isPartyPosting ? resolvedCustomerId : null,
+          partyName: isPartyPosting ? finalClientName : null,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
         });
-      }
 
-      // Native Double-Entry Journal: Revenue & Tax grouped together
-      const revenueLines = [
-        {
-          accountName: "Accounts Receivable (Trade Debtors)",
-          partyId: resolvedCustomerId,
-          debit: finalTotalAmount,
-          credit: 0,
-        },
-        {
-          accountName: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
-          partyId: null,
-          debit: 0,
-          credit: subtotalAmount,
-        },
-      ];
-      if (taxAmount > 0) {
-        revenueLines.push({
-          accountName: "Sales Tax Payable",
-          partyId: null,
-          debit: 0,
-          credit: taxAmount,
-        });
-      }
+        if (taxAmount > 0) {
+          await recordLedgerEntry(tx, {
+            description: `Sales Tax for Invoice ${invoiceNumber}`,
+            debitAccount: "Accounts Receivable (Trade Debtors)",
+            creditAccount: "Sales Tax Payable",
+            amount: taxAmount,
+            referenceType: "INVOICE",
+            referenceId: createdInvoice.id,
+            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+            partyId: isPartyPosting ? resolvedCustomerId : null,
+            partyName: isPartyPosting ? finalClientName : null,
+            voucherType: "INV",
+            voucherNumber: invoiceNumber,
+          });
+        }
 
-      await postJournalEntry(tx, {
-        entryDate: new Date(date || Date.now()),
-        narration: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}`,
-        sourceType: "INVOICE",
-        sourceId: createdInvoice.id,
-        idempotencyKey: `INVOICE:${createdInvoice.id}:revenue`,
-        lines: revenueLines,
-      });
+        // Native Double-Entry Journal: Revenue & Tax grouped together
+        const revenueLines = [
+          {
+            accountName: "Accounts Receivable (Trade Debtors)",
+            partyId: isPartyPosting ? resolvedCustomerId : null,
+            debit: finalTotalAmount,
+            credit: 0,
+          },
+          {
+            accountName: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
+            partyId: null,
+            debit: 0,
+            credit: subtotalAmount,
+          },
+        ];
+        if (taxAmount > 0) {
+          revenueLines.push({
+            accountName: "Sales Tax Payable",
+            partyId: null,
+            debit: 0,
+            credit: taxAmount,
+          });
+        }
 
-      // General Ledger COGS entries (Debit COGS / Credit Inventory Asset)
-      if (totalCogs > 0) {
-        await recordLedgerEntry(tx, {
-          description: `COGS release for Invoice ${invoiceNumber}`,
-          debitAccount: "Cost of Goods Sold",
-          creditAccount: "Inventory Asset",
-          amount: totalCogs,
-          referenceType: "INVOICE",
-          referenceId: createdInvoice.id,
-          partyType: "CUSTOMER",
-          partyId: resolvedCustomerId,
-          partyName: finalClientName,
-          voucherType: "COGS",
-          voucherNumber: invoiceNumber,
-        });
-
-        // Native Double-Entry Journal: COGS separate
         await postJournalEntry(tx, {
           entryDate: new Date(date || Date.now()),
-          narration: `COGS release for Invoice ${invoiceNumber}`,
+          narration: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           sourceType: "INVOICE",
           sourceId: createdInvoice.id,
-          idempotencyKey: `INVOICE:${createdInvoice.id}:cogs`,
-          lines: [
-            {
-              accountName: "Cost of Goods Sold",
-              partyId: null,
-              debit: totalCogs,
-              credit: 0,
-            },
-            {
-              accountName: "Inventory Asset",
-              partyId: null,
-              debit: 0,
-              credit: totalCogs,
-            },
-          ],
+          idempotencyKey: `INVOICE:${createdInvoice.id}:revenue`,
+          lines: revenueLines,
         });
+
+        // General Ledger COGS entries (Debit COGS / Credit Inventory Asset)
+        if (totalCogs > 0) {
+          await recordLedgerEntry(tx, {
+            description: `COGS release for Invoice ${invoiceNumber}`,
+            debitAccount: "Cost of Goods Sold",
+            creditAccount: "Inventory Asset",
+            amount: totalCogs,
+            referenceType: "INVOICE",
+            referenceId: createdInvoice.id,
+            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+            partyId: isPartyPosting ? resolvedCustomerId : null,
+            partyName: isPartyPosting ? finalClientName : null,
+            voucherType: "COGS",
+            voucherNumber: invoiceNumber,
+          });
+
+          // Native Double-Entry Journal: COGS separate
+          await postJournalEntry(tx, {
+            entryDate: new Date(date || Date.now()),
+            narration: `COGS release for Invoice ${invoiceNumber}`,
+            sourceType: "INVOICE",
+            sourceId: createdInvoice.id,
+            idempotencyKey: `INVOICE:${createdInvoice.id}:cogs`,
+            lines: [
+              {
+                accountName: "Cost of Goods Sold",
+                partyId: null,
+                debit: totalCogs,
+                credit: 0,
+              },
+              {
+                accountName: "Inventory Asset",
+                partyId: null,
+                debit: 0,
+                credit: totalCogs,
+              },
+            ],
+          });
+        }
       }
 
       // Process payments if provided
@@ -393,44 +401,46 @@ export async function POST(req: Request) {
             },
           });
 
-          // Ledger Entry for payment receipt (Debit Cash-Bank / Credit Accounts Receivable)
-          await recordLedgerEntry(tx, {
-            description: `Payment received against Invoice ${invoiceNumber} via ${pMethod}`,
-            debitAccount: liquidAcc,
-            creditAccount: "Accounts Receivable (Trade Debtors)",
-            amount: pAmount,
-            referenceType: "INVOICE",
-            referenceId: createdInvoice.id,
-            partyType: "CUSTOMER",
-            partyId: resolvedCustomerId,
-            partyName: finalClientName,
-            voucherType: isBank ? "BRV" : "CRV",
-            voucherNumber: invoiceNumber,
-            paymentMethod: pMethod,
-          });
+          if (!isNoLedger) {
+            // Ledger Entry for payment receipt (Debit Cash-Bank / Credit Accounts Receivable)
+            await recordLedgerEntry(tx, {
+              description: `Payment received against Invoice ${invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+              debitAccount: liquidAcc,
+              creditAccount: "Accounts Receivable (Trade Debtors)",
+              amount: pAmount,
+              referenceType: "INVOICE",
+              referenceId: createdInvoice.id,
+              partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+              partyId: isPartyPosting ? resolvedCustomerId : null,
+              partyName: isPartyPosting ? finalClientName : null,
+              voucherType: isBank ? "BRV" : "CRV",
+              voucherNumber: invoiceNumber,
+              paymentMethod: pMethod,
+            });
 
-          // Native Double-Entry Journal: Payment separate
-          await postJournalEntry(tx, {
-            entryDate: new Date(date || Date.now()),
-            narration: `Payment received against Invoice ${invoiceNumber} via ${pMethod}`,
-            sourceType: "INVOICE",
-            sourceId: createdInvoice.id,
-            idempotencyKey: `INVOICE:${createdInvoice.id}:payment:${createdPayment.id}`,
-            lines: [
-              {
-                accountName: mapPaymentMethodToAccount(pMethod),
-                partyId: null,
-                debit: pAmount,
-                credit: 0,
-              },
-              {
-                accountName: "Accounts Receivable (Trade Debtors)",
-                partyId: resolvedCustomerId,
-                debit: 0,
-                credit: pAmount,
-              },
-            ],
-          });
+            // Native Double-Entry Journal: Payment separate
+            await postJournalEntry(tx, {
+              entryDate: new Date(date || Date.now()),
+              narration: `Payment received against Invoice ${invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+              sourceType: "INVOICE",
+              sourceId: createdInvoice.id,
+              idempotencyKey: `INVOICE:${createdInvoice.id}:payment:${createdPayment.id}`,
+              lines: [
+                {
+                  accountName: mapPaymentMethodToAccount(pMethod),
+                  partyId: null,
+                  debit: pAmount,
+                  credit: 0,
+                },
+                {
+                  accountName: "Accounts Receivable (Trade Debtors)",
+                  partyId: isPartyPosting ? resolvedCustomerId : null,
+                  debit: 0,
+                  credit: pAmount,
+                },
+              ],
+            });
+          }
         }
       }
 
