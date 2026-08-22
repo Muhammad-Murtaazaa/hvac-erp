@@ -363,6 +363,154 @@ function SearchablePartyCombobox({
   );
 }
 
+/* ========================================================================= */
+/* SEARCHABLE ACCOUNT SELECTOR (TYPE ANY CUSTOM ACCOUNT OR SEARCH SUGGESTIONS)*/
+/* ========================================================================= */
+function SearchableAccountCombobox({
+  value,
+  onChange,
+  placeholder = "Type or search account name (e.g. Bank Account, Cash in Hand, Expenses)...",
+  suggestions = [
+    "Cash in Hand",
+    "Bank Account",
+    "Sales Revenue",
+    "Service & Maintenance Revenue",
+    "Operating Expenses",
+    "Office Rent & Utilities",
+    "Salary & Wage Expense",
+    "Owner Capital / Equity",
+    "General & Administrative Expense",
+    "Logistics & Carriage Outward",
+    "General Expense",
+  ],
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  suggestions?: string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = (value || "").toLowerCase().trim();
+    if (!q) return suggestions;
+    return suggestions.filter((s) => s.toLowerCase().includes(q));
+  }, [suggestions, value]);
+
+  const exactMatch = useMemo(() => {
+    const q = (value || "").toLowerCase().trim();
+    if (!q) return null;
+    return suggestions.find((s) => s.toLowerCase() === q);
+  }, [suggestions, value]);
+
+  return (
+    <div className="relative w-full space-y-1.5" ref={dropdownRef}>
+      <div className="relative flex items-center">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
+        <input
+          ref={inputRef}
+          type="text"
+          required
+          value={value}
+          placeholder={placeholder}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            onChange(e.target.value);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setIsOpen(false);
+            } else if (e.key === "Enter" && isOpen && filtered.length > 0) {
+              onChange(filtered[0]);
+              setIsOpen(false);
+              e.preventDefault();
+            }
+          }}
+          className="w-full pl-10 pr-9 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-white placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => {
+              onChange("");
+              setIsOpen(true);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-3 p-1 text-slate-400 hover:text-rose-500 rounded transition-colors"
+            title="Clear"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 pointer-events-none" />
+        )}
+      </div>
+
+      {/* Dropdown Floating Popover */}
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-60 overflow-y-auto no-scrollbar p-1.5 space-y-0.5 animate-fadeIn text-xs divide-y divide-slate-100 dark:divide-slate-800/60">
+          {/* Custom entry option if user typed something not in standard suggestions */}
+          {value.trim() && !exactMatch && (
+            <div
+              onClick={() => {
+                onChange(value.trim());
+                setIsOpen(false);
+              }}
+              className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-200 transition-colors cursor-pointer flex items-center justify-between font-bold"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-xs font-black">+</span>
+                <span>Use custom account: &ldquo;{value.trim()}&rdquo;</span>
+              </div>
+              <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-mono">Custom</span>
+            </div>
+          )}
+
+          {/* List of matched suggestions */}
+          {filtered.length > 0 ? (
+            filtered.map((item) => {
+              const isSelected = item.toLowerCase() === (value || "").toLowerCase().trim();
+              return (
+                <div
+                  key={item}
+                  onClick={() => {
+                    onChange(item);
+                    setIsOpen(false);
+                  }}
+                  className={`p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors cursor-pointer flex items-center justify-between ${
+                    isSelected ? "bg-blue-50/70 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold" : "text-slate-700 dark:text-slate-200 font-semibold"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                    <span>{item}</span>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
+                </div>
+              );
+            })
+          ) : !value.trim() ? (
+            <div className="p-3 text-center text-slate-400">Type to search or pick an account</div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FinancialsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1894,33 +2042,15 @@ function FinancialsPageContent() {
                 <span className="text-[11px] text-slate-400">Type any custom account or choose below</span>
               </div>
 
-              {/* Searchable / Editable Text Input with Datalist */}
-              <div className="relative">
-                <input
-                  type="text"
-                  required
-                  list="source-account-suggestions"
-                  placeholder="Type any account name (e.g. Cash, Bank Account, Operating Expenses, etc.)..."
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 shadow-xs"
-                  value={txnSourceGeneralAccount}
-                  onChange={(e) => {
-                    setTxnSourceType("GENERAL");
-                    setTxnSourceGeneralAccount(e.target.value);
-                  }}
-                />
-                <datalist id="source-account-suggestions">
-                  <option value="Cash in Hand" />
-                  <option value="Bank Account" />
-                  <option value="Sales Revenue" />
-                  <option value="Service & Maintenance Revenue" />
-                  <option value="Operating Expenses" />
-                  <option value="Office Rent & Utilities" />
-                  <option value="Salary & Wage Expense" />
-                  <option value="Owner Capital / Equity" />
-                  <option value="General & Administrative Expense" />
-                  <option value="Logistics & Carriage Outward" />
-                </datalist>
-              </div>
+              {/* Real-time Searchable & Editable Combobox Dropdown */}
+              <SearchableAccountCombobox
+                value={txnSourceGeneralAccount}
+                onChange={(val) => {
+                  setTxnSourceType("GENERAL");
+                  setTxnSourceGeneralAccount(val);
+                }}
+                placeholder="Type or search account name (e.g. Bank Account, Cash in Hand, Expenses)..."
+              />
 
               {/* Simple Easy Quick-Select Option Chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
