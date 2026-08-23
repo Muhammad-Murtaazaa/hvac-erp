@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import { parseInvoiceMetadata } from "./invoiceHelper";
 
 // Setup font paths dynamically using absolute path resolution
 const fontRegularPath = path.resolve("src/assets/fonts/Roboto-Regular.ttf");
@@ -135,6 +136,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
             const fields = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
             if (fields && Object.keys(fields).length > 0) {
               Object.entries(fields).forEach(([key, val]) => {
+                if (key === "unit") return;
                 doc.fontSize(8).fillColor("#6b7280").text(`  • ${key}: ${val}`, 60, y);
                 y += 12;
               });
@@ -148,10 +150,13 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.moveTo(50, y + 5).lineTo(550, y + 5).strokeColor("#e5e7eb").stroke();
       y += 20;
 
-      const subtotal = Math.round(invoiceData.lineItems.reduce((acc: number, item: any) => acc + (item.quantity * Number(item.salesPrice)), 0));
-      const totalAmount = Math.round(Number(invoiceData.totalAmount));
-      const taxAmount = Math.round(Math.max(0, totalAmount - subtotal));
-      const computedTaxRate = subtotal > 0 ? Math.round((taxAmount / subtotal) * 100) : 0;
+      const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
+      const subtotal = meta.subtotalAmount;
+      const discountAmount = meta.discountAmount;
+      const taxableAmount = Math.max(0, subtotal - discountAmount);
+      const taxAmount = meta.taxAmount;
+      const computedTaxRate = meta.taxRate;
+      const totalAmount = meta.totalAmount;
       const amountPaid = Math.round(Number(invoiceData.amountPaid || 0));
       const balance = Math.round(totalAmount - amountPaid);
 
@@ -159,6 +164,13 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.fontSize(10).fillColor("#4b5563");
       doc.text("Subtotal:", 320, y, { width: 140, align: "right" });
       doc.text(subtotal.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+
+      if (discountAmount > 0) {
+        y += 18;
+        doc.fillColor("#b91c1c").text(`Discount (${meta.discountType === "PERCENTAGE" ? `${meta.discountPercent}%` : "Flat"}):`, 320, y, { width: 140, align: "right" });
+        doc.text(`-${discountAmount.toLocaleString("en-US")}`, 475, y, { width: 75, align: "right" });
+        doc.fillColor("#4b5563");
+      }
 
       if (taxAmount > 0) {
         y += 18;
@@ -180,11 +192,11 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.font("Roboto-Bold").fontSize(11).fillColor("#b91c1c").text("Balance Due (PKR):", 320, y, { width: 140, align: "right" });
       doc.text(balance.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
-      if (invoiceData.notes) {
+      if (meta.userNotes) {
         y += 30;
         doc.font("Roboto-Bold").fontSize(10).fillColor("#1f2937").text("Notes:", 50, y);
         y += 15;
-        doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(invoiceData.notes, 50, y, { width: 500 });
+        doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(meta.userNotes, 50, y, { width: 500 });
       }
 
       // Footer notice
@@ -330,6 +342,7 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
             const fields = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
             if (fields && Object.keys(fields).length > 0) {
               Object.entries(fields).forEach(([key, val]) => {
+                if (key === "unit") return;
                 doc.fontSize(8).fillColor("#6b7280").text(`  • ${key}: ${val}`, 60, y);
                 y += 12;
               });

@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
 import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -171,25 +172,77 @@ export async function POST(req: Request) {
           totalCogs += lineCogs;
         }
 
+        let extraFieldsData: any = {};
+        if (item.extraFields) {
+          try {
+            extraFieldsData = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : { ...item.extraFields };
+          } catch (e) {
+            extraFieldsData = {};
+          }
+        }
+        if (item.unit) {
+          extraFieldsData.unit = item.unit;
+        }
+
         lineItemsWithInfo.push({
           productId,
           description: item.description || null,
           quantity: qty,
           salesPrice: Math.round(price),
           cogs: lineCogs,
-          extraFields: item.extraFields ? (typeof item.extraFields === "string" ? item.extraFields : JSON.stringify(item.extraFields)) : null,
+          extraFields: Object.keys(extraFieldsData).length > 0 ? JSON.stringify(extraFieldsData) : null,
         });
       }
 
       subtotalAmount = Math.round(subtotalAmount);
 
+      // Handle Discount
+      const {
+        discountType: reqDiscountType,
+        discountPercent: reqDiscountPercent,
+        discount: reqDiscount,
+        discountAmount: reqDiscountAmount,
+        taxRate: reqTaxRate,
+      } = await req.json().catch(() => ({} as any));
+
+      // Calculate discount amount
+      const discountType: "FIXED" | "PERCENTAGE" = reqDiscountType === "PERCENTAGE" ? "PERCENTAGE" : "FIXED";
+      const discountPercent = Number(reqDiscountPercent || 0);
+      let discountAmount = 0;
+      if (discountType === "PERCENTAGE" && discountPercent > 0 && subtotalAmount > 0) {
+        discountAmount = Math.round(subtotalAmount * (discountPercent / 100));
+      } else {
+        discountAmount = Math.round(Number(reqDiscountAmount ?? reqDiscount ?? 0));
+      }
+      discountAmount = Math.max(0, Math.min(discountAmount, subtotalAmount));
+      const taxableAmount = Math.max(0, subtotalAmount - discountAmount);
+
       // Fetch active sales tax rate setting (defaults to 18)
-      const taxSetting = await tx.systemSetting.findUnique({
-        where: { key: "salesTaxRate" },
+      let salesTaxRate = 18;
+      if (reqTaxRate !== undefined && reqTaxRate !== null && !isNaN(Number(reqTaxRate))) {
+        salesTaxRate = Number(reqTaxRate);
+      } else {
+        const taxSetting = await tx.systemSetting.findUnique({
+          where: { key: "salesTaxRate" },
+        });
+        salesTaxRate = taxSetting ? Number(taxSetting.value) : 18;
+      }
+
+      const taxAmount = isGst !== false ? Math.round(taxableAmount * (salesTaxRate / 100)) : 0;
+      const finalTotalAmount = Math.round(taxableAmount + taxAmount);
+
+      // Format notes payload including discount and tax metadata
+      const formattedNotes = formatInvoiceNotesPayload({
+        userNotes: notes || "",
+        isGst: isGst !== false,
+        taxRate: salesTaxRate,
+        taxAmount,
+        discountType,
+        discountPercent,
+        discountAmount,
+        subtotalAmount,
+        totalAmount: finalTotalAmount,
       });
-      const salesTaxRate = taxSetting ? Number(taxSetting.value) : 18;
-      const taxAmount = isGst !== false ? Math.round(subtotalAmount * (salesTaxRate / 100)) : 0;
-      const finalTotalAmount = Math.round(subtotalAmount + taxAmount);
 
       // If converting from DO, check and verify the DO status
       if (doId) {
@@ -224,7 +277,7 @@ export async function POST(req: Request) {
           status: invoiceStatus,
           totalAmount: finalTotalAmount,
           amountPaid,
-          notes: notes || null,
+          notes: formattedNotes,
           subjectHeading: subjectHeading || null,
           subjectDescription: subjectDescription || null,
           deliveryOrder: doId ? { connect: { id: doId } } : undefined,
@@ -285,7 +338,7 @@ export async function POST(req: Request) {
           description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
-          amount: subtotalAmount,
+          amount: taxableAmount,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
@@ -323,7 +376,7 @@ export async function POST(req: Request) {
             accountName: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
             partyId: null,
             debit: 0,
-            credit: subtotalAmount,
+            credit: taxableAmount,
           },
         ];
         if (taxAmount > 0) {

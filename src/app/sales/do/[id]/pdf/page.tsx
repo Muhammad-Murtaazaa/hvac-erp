@@ -286,13 +286,24 @@ export default function DeliveryOrderPdfPage() {
               </thead>
               <tbody className="divide-y-2 divide-black">
                 {doRecord.lineItems.map((item: any, index: number) => {
+                  let unitName = item.product?.unit;
+                  if (item.extraFields) {
+                    try {
+                      const extra = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
+                      if (extra && extra.unit) {
+                        unitName = extra.unit;
+                      }
+                    } catch (e) {}
+                  }
+                  if (!unitName) unitName = item.unit || "Nos";
+
                   return (
                     <tr key={item.id} className="text-black font-semibold">
                       <td className="p-2 border-r-2 border-black text-center font-bold">{index + 1}</td>
                       <td className="p-2 border-r-2 border-black uppercase font-bold">
                         {item.product?.name || item.description || "Service Item"}
                       </td>
-                      <td className="p-2 border-r-2 border-black text-center font-bold">{item.product?.unit || "Nos"}</td>
+                      <td className="p-2 border-r-2 border-black text-center font-bold">{unitName}</td>
                       <td className="p-2 border-r-2 border-black text-right font-black">
                         {item.quantity}
                       </td>

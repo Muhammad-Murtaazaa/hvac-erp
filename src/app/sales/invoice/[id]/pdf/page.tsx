@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
+import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -77,11 +78,14 @@ export default function InvoicePdfPage() {
     );
   }
 
-  // Calculate pricing
-  const subtotal = Math.round(invoice.lineItems.reduce((acc: number, item: any) => acc + Number(item.quantity) * Number(item.salesPrice), 0));
-  const totalAmount = Math.round(Number(invoice.totalAmount));
-  const taxAmount = Math.round(Math.max(0, totalAmount - subtotal));
-  const computedTaxRate = subtotal > 0 ? Math.round((taxAmount / subtotal) * 100) : 0;
+  // Calculate pricing using metadata
+  const meta = parseInvoiceMetadata(invoice.notes, invoice);
+  const subtotal = meta.subtotalAmount;
+  const discountAmount = meta.discountAmount;
+  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  const taxAmount = meta.taxAmount;
+  const computedTaxRate = meta.taxRate;
+  const totalAmount = meta.totalAmount;
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
@@ -244,12 +248,23 @@ export default function InvoicePdfPage() {
               <tbody className="divide-y-2 divide-black">
                 {invoice.lineItems.map((item: any, index: number) => {
                   const lineTotal = Math.round(Number(item.quantity) * Number(item.salesPrice));
+                  let unitName = item.product?.unit;
+                  if (item.extraFields) {
+                    try {
+                      const extra = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
+                      if (extra && extra.unit) {
+                        unitName = extra.unit;
+                      }
+                    } catch (e) {}
+                  }
+                  if (!unitName) unitName = item.unit || "Nos";
+
                   return (
                     <tr key={item.id} className="text-black font-semibold">
                       <td className="p-2 border-r-2 border-black text-center">{index + 1}</td>
                       <td className="p-2 border-r-2 border-black font-mono font-bold">{item.product?.sku || "SERVICE"}</td>
                       <td className="p-2 border-r-2 border-black font-bold">{item.product?.name || item.description || "Service Item"}</td>
-                      <td className="p-2 border-r-2 border-black text-center">{item.product?.unit || "Nos"}</td>
+                      <td className="p-2 border-r-2 border-black text-center">{unitName}</td>
                       <td className="p-2 border-r-2 border-black text-right font-bold">{item.quantity}</td>
                       <td className="p-2 border-r-2 border-black text-right font-mono font-bold">{Math.round(Number(item.salesPrice)).toLocaleString("en-US")}</td>
                       <td className="p-2 border-r-2 border-black text-right font-mono">-</td>
@@ -268,6 +283,13 @@ export default function InvoicePdfPage() {
                 <span>Sub Total:</span>
                 <span className="font-mono font-bold">{subtotal.toLocaleString("en-US")}</span>
               </div>
+
+              {discountAmount > 0 && (
+                <div className="flex justify-between font-bold text-black">
+                  <span>Discount ({meta.discountType === "PERCENTAGE" ? `${meta.discountPercent}%` : "Flat"}):</span>
+                  <span className="font-mono font-bold">- {discountAmount.toLocaleString("en-US")}</span>
+                </div>
+              )}
 
               {taxAmount > 0 && (
                 <>
@@ -303,11 +325,11 @@ export default function InvoicePdfPage() {
           </div>
 
           {/* Custom Notes / Terms Section at bottom */}
-          {invoice.notes ? (
+          {meta.userNotes ? (
             <div className="mt-4 text-[13px] mb-4">
               <h4 className="font-black text-black mb-1 uppercase tracking-wider">Note.</h4>
               <div className="text-black font-bold whitespace-pre-line leading-relaxed">
-                {invoice.notes}
+                {meta.userNotes}
               </div>
             </div>
           ) : null}

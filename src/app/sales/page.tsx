@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
@@ -125,9 +125,17 @@ function SalesPageContent() {
   const [selectedComplaintId, setSelectedComplaintId] = useState("");
   const [complaints, setComplaints] = useState<any[]>([]);
   const [invLines, setInvLines] = useState<any[]>([
-    { productId: "", description: "", quantity: "1", salesPrice: "", extraFields: {} },
+    { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} },
   ]);
+
+  const availableUnits = useMemo(() => {
+    const defaults = ["Nos", "Mtr", "Rft", "Ft", "Coil", "Kg", "Ltr", "Box", "Set", "Ton", "Pcs", "Sqft", "Job", "Lot", "Trip", "Hrs", "Days", "Month", "Bundle", "Packet", "Cylinder", "Drum", "Roll", "Bag"];
+    const invUnits = (products || []).map((p: any) => p.unit).filter((u: any) => Boolean(u) && typeof u === "string" && u.trim().length > 0);
+    return Array.from(new Set([...invUnits, ...defaults]));
+  }, [products]);
   const [notes, setNotes] = useState("");
+  const [discountType, setDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [discountValue, setDiscountValue] = useState("0");
   const [subjectHeading, setSubjectHeading] = useState("");
   const [subjectDescription, setSubjectDescription] = useState("");
   const [immediatePayment, setImmediatePayment] = useState(false);
@@ -443,12 +451,18 @@ function SalesPageContent() {
     e.preventDefault();
 
     const formattedLines = invLines.map((l) => {
+      const lineUnit = (l.unit || "Nos").trim();
+      const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
+      extraFieldsObj.unit = lineUnit;
+
       if (l.isCustom) {
         return {
           productId: null,
           description: l.customName + (l.description ? " - " + l.description : ""),
           quantity: l.quantity,
           salesPrice: l.salesPrice,
+          unit: lineUnit,
+          extraFields: extraFieldsObj,
         };
       }
       return {
@@ -456,6 +470,8 @@ function SalesPageContent() {
         description: l.description,
         quantity: l.quantity,
         salesPrice: l.salesPrice,
+        unit: lineUnit,
+        extraFields: extraFieldsObj,
       };
     });
 
@@ -464,13 +480,26 @@ function SalesPageContent() {
       return;
     }
 
+    const subtotal = formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0);
+    let discountAmount = 0;
+    const discVal = Number(discountValue) || 0;
+    if (discountType === "PERCENTAGE") {
+      discountAmount = Math.round(subtotal * (discVal / 100));
+    } else {
+      discountAmount = Math.round(discVal);
+    }
+    discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+    const taxable = Math.max(0, subtotal - discountAmount);
+    const taxAmount = isGst ? Math.round(taxable * (salesTaxRate / 100)) : 0;
+    const grandTotal = Math.round(taxable + taxAmount);
+
     const token = localStorage.getItem("token");
     const paymentsList: any[] = [];
     if (applyAdvance && Number(advanceToApply) > 0) {
       paymentsList.push({ amountPaid: Number(advanceToApply), method: "CUSTOMER_ADVANCE" });
     }
     if (immediatePayment) {
-      const remaining = Math.max(0, Math.round(formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0) * (isGst ? (1 + salesTaxRate / 100) : 1)) - (applyAdvance ? Number(advanceToApply) : 0));
+      const remaining = Math.max(0, grandTotal - (applyAdvance ? Number(advanceToApply) : 0));
       if (remaining > 0) {
         paymentsList.push({ amountPaid: remaining, method: payMethod });
       }
@@ -489,6 +518,10 @@ function SalesPageContent() {
       subjectDescription,
       isGst,
       postingOption,
+      discountType,
+      discountPercent: discountType === "PERCENTAGE" ? Number(discountValue) : 0,
+      discountAmount: discountType === "FIXED" ? Number(discountValue) : discountAmount,
+      taxRate: salesTaxRate,
     };
 
     try {
@@ -507,11 +540,13 @@ function SalesPageContent() {
       setClientPhone("");
       setClientAddress("");
       setNotes("");
+      setDiscountType("FIXED");
+      setDiscountValue("0");
       setSubjectHeading("");
       setSubjectDescription("");
       setIsGst(true);
       setPostingOption("CUSTOMER_LEDGER");
-      setInvLines([{ productId: "", description: "", quantity: "1", salesPrice: "", extraFields: {} }]);
+      setInvLines([{ productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
       fetchData();
     } catch (err: any) {
       toast({ title: "Invoice Creation Failed", message: err.message, type: "error" });
@@ -1623,6 +1658,8 @@ function SalesPageContent() {
                             description: `Service Charges (Ticket ${comp.complaintNumber}): ${comp.description}`,
                             quantity: "1",
                             salesPrice: String(comp.amount),
+                            unit: "Job",
+                            isCustom: true,
                             extraFields: {},
                           },
                         ]);
@@ -1798,14 +1835,14 @@ function SalesPageContent() {
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setInvLines([...invLines, { productId: "", description: "", quantity: "1", salesPrice: "", isCustom: false, extraFields: {} }])}
+                      onClick={() => setInvLines([...invLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
                       className="text-xs text-blue-500 hover:underline font-bold"
                     >
                       + Add Catalog Row
                     </button>
                     <button
                       type="button"
-                      onClick={() => setInvLines([...invLines, { productId: "", description: "", quantity: "1", salesPrice: "", isCustom: true, extraFields: {} }])}
+                      onClick={() => setInvLines([...invLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
                       className="text-xs text-emerald-500 hover:underline font-bold"
                     >
                       + Add Custom Row
@@ -1813,97 +1850,141 @@ function SalesPageContent() {
                   </div>
                 </div>
 
+                <datalist id="inv-unit-options">
+                  {availableUnits.map((u: string) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </datalist>
+
                 <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
                   {/* Grid Headers */}
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
-                    <div>Catalog Product</div>
-                    <div>Description / Service</div>
-                    <div>Quantity</div>
-                    <div>Price (PKR)</div>
-                    <div className="text-center">Action</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
+                    <div className="sm:col-span-3">Catalog / Custom Item</div>
+                    <div className="sm:col-span-3">Description / Service</div>
+                    <div className="sm:col-span-2">Unit</div>
+                    <div className="sm:col-span-1">Qty</div>
+                    <div className="sm:col-span-2">Price (PKR)</div>
+                    <div className="sm:col-span-1 text-center">Action</div>
                   </div>
 
                   {invLines.map((line, index) => (
-                    <div key={index} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
                       {/* Catalog Select OR Custom Item Name */}
-                      {line.isCustom ? (
+                      <div className="sm:col-span-3">
+                        {line.isCustom ? (
+                          <input
+                            type="text"
+                            required
+                            placeholder="Custom Item Name"
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={line.customName || ""}
+                            onChange={(e) => {
+                              const updated = [...invLines];
+                              updated[index].customName = e.target.value;
+                              updated[index].description = e.target.value;
+                              setInvLines(updated);
+                            }}
+                          />
+                        ) : (
+                          <ProductSelect
+                            products={products}
+                            value={line.productId}
+                            placeholder="Search product name or SKU..."
+                            onChange={(p) => {
+                              const updated = [...invLines];
+                              updated[index].productId = p ? p.id : "";
+                              if (p) {
+                                updated[index].description = p.name;
+                                updated[index].unit = p.unit || "Nos";
+                                const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
+                                updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                              } else {
+                                updated[index].description = "";
+                                updated[index].unit = "Nos";
+                                updated[index].salesPrice = "";
+                              }
+                              setInvLines(updated);
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Manual Description */}
+                      <div className="sm:col-span-3">
                         <input
                           type="text"
-                          required
-                          placeholder="Custom Item Name"
-                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                          value={line.customName || ""}
+                          placeholder="Description (Service name)"
+                          required={!line.isCustom}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                          value={line.isCustom ? (line.description === line.customName ? "" : line.description) : line.description}
                           onChange={(e) => {
                             const updated = [...invLines];
-                            updated[index].customName = e.target.value;
                             updated[index].description = e.target.value;
                             setInvLines(updated);
                           }}
                         />
-                      ) : (
-                        <ProductSelect
-                          products={products}
-                          value={line.productId}
-                          placeholder="Search product name or SKU in stock..."
-                          onChange={(p) => {
+                      </div>
+
+                      {/* Unit */}
+                      <div className="sm:col-span-2">
+                        <input
+                          type="text"
+                          list="inv-unit-options"
+                          placeholder="Unit (e.g. Nos, Mtr)"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.unit ?? ""}
+                          onChange={(e) => {
                             const updated = [...invLines];
-                            updated[index].productId = p ? p.id : "";
-                            if (p) {
-                              updated[index].description = p.name;
-                              updated[index].salesPrice = Number(p.salesPrice) > 0 ? String(p.salesPrice) : String(Number(p.averageCost) * 1.25);
-                            } else {
-                              updated[index].description = "";
-                              updated[index].salesPrice = "";
-                            }
+                            updated[index].unit = e.target.value;
                             setInvLines(updated);
                           }}
                         />
-                      )}
+                      </div>
 
-                      {/* Manual Description */}
-                      <input
-                        type="text"
-                        placeholder="Description (Service name)"
-                        required={!line.isCustom}
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                        value={line.isCustom ? (line.description === line.customName ? "" : line.description) : line.description}
-                        onChange={(e) => {
-                          const updated = [...invLines];
-                          updated[index].description = e.target.value;
-                          setInvLines(updated);
-                        }}
-                      />
+                      {/* Quantity */}
+                      <div className="sm:col-span-1">
+                        <input
+                          type="number"
+                          placeholder="Qty"
+                          required
+                          min="1"
+                          step="any"
+                          onFocus={(e) => e.target.select()}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            const updated = [...invLines];
+                            updated[index].quantity = e.target.value;
+                            setInvLines(updated);
+                          }}
+                        />
+                      </div>
 
-                      <input
-                        type="number"
-                        placeholder="Qty"
-                        required
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                        value={line.quantity}
-                        onChange={(e) => {
-                          const updated = [...invLines];
-                          updated[index].quantity = e.target.value;
-                          setInvLines(updated);
-                        }}
-                      />
+                      {/* Price */}
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          placeholder="Price (PKR)"
+                          required
+                          min="0"
+                          step="any"
+                          onFocus={(e) => e.target.select()}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.salesPrice}
+                          onChange={(e) => {
+                            const updated = [...invLines];
+                            updated[index].salesPrice = e.target.value;
+                            setInvLines(updated);
+                          }}
+                        />
+                      </div>
 
-                      <input
-                        type="number"
-                        placeholder="Price (PKR)"
-                        required
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                        value={line.salesPrice}
-                        onChange={(e) => {
-                          const updated = [...invLines];
-                          updated[index].salesPrice = e.target.value;
-                          setInvLines(updated);
-                        }}
-                      />
-
-                      <div className="flex items-center justify-between">
-                        {/* Custom Columns JSON Placeholder info */}
-                        <span className="text-[10px] text-slate-400">{line.isCustom ? "Custom Row" : "Standard columns"}</span>
-                        {invLines.length > 1 && (
+                      {/* Action */}
+                      <div className="sm:col-span-1 flex items-center justify-between sm:justify-center">
+                        <span className="text-[10px] text-slate-400 sm:hidden">{line.isCustom ? "Custom Row" : "Catalog"}</span>
+                        {invLines.length > 1 ? (
                           <button
                             type="button"
                             onClick={() => setInvLines(invLines.filter((_, i) => i !== index))}
@@ -1911,12 +1992,130 @@ function SalesPageContent() {
                           >
                             Remove
                           </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 hidden sm:inline">{line.isCustom ? "Custom" : "Catalog"}</span>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* GST & Discount Settings and Live Calculation Breakdown */}
+              {(() => {
+                const subtotal = invLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(discountValue) || 0;
+                if (discountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = isGst ? Math.round(taxable * (salesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+
+                return (
+                  <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80">
+                    {/* Configuration Row: Discount & GST Controls */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                      {/* Discount Mode */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Discount (Flat PKR or %)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={discountType}
+                            onChange={(e) => setDiscountType(e.target.value as any)}
+                          >
+                            <option value="FIXED">Flat (PKR)</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                          <div className="relative flex-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max={discountType === "PERCENTAGE" ? "100" : undefined}
+                              placeholder={discountType === "PERCENTAGE" ? "e.g. 10%" : "e.g. 5000"}
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              value={discountValue}
+                              onChange={(e) => setDiscountValue(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* GST / Sales Tax Mode */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Sales Tax (GST) Option
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold flex-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={isGst ? "GST" : "NON_GST"}
+                            onChange={(e) => setIsGst(e.target.value === "GST")}
+                          >
+                            <option value="GST">GST Registered ({salesTaxRate}% Tax)</option>
+                            <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                          </select>
+                          {isGst && (
+                            <div className="flex items-center gap-1 w-28">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="Tax %"
+                                className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                                value={salesTaxRate}
+                                onChange={(e) => setSalesTaxRate(Number(e.target.value) || 0)}
+                              />
+                              <span className="font-bold text-xs text-slate-400">%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Breakdown */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-slate-500 font-semibold">
+                        <span>Gross Line Total (Subtotal):</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {subtotal.toLocaleString()}</span>
+                      </div>
+
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-rose-500 font-semibold">
+                          <span>
+                            Discount ({discountType === "PERCENTAGE" ? `${discountValue}%` : "Flat"}):
+                          </span>
+                          <span className="font-mono font-bold">- PKR {discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-semibold">
+                        <span>Net Taxable Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {taxable.toLocaleString()}</span>
+                      </div>
+
+                      {isGst && (
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Sales Tax ({salesTaxRate}% GST):</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {tax.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-sm font-black text-blue-600 dark:text-blue-400 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <span>Final Invoice Total:</span>
+                        <span className="font-mono">PKR {grandTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Apply Customer Advance Deposit */}
               <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-2">
