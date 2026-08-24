@@ -51,6 +51,8 @@ import {
   FileCheck,
   CheckCheck,
   ChevronDown,
+  ChevronUp,
+  Zap,
   FileSpreadsheet,
   ShieldCheck,
   Tag,
@@ -516,8 +518,8 @@ function FinancialsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  // Top Section Mode: "accounts" | "record" | "entries" | "statements" | "overview"
-  const [activeSection, setActiveSection] = useState<"statements" | "record" | "entries" | "accounts" | "overview">("accounts");
+  // Top Section Mode: "overview" | "record" | "entries" | "statements" | "accounts"
+  const [activeSection, setActiveSection] = useState<"statements" | "record" | "entries" | "accounts" | "overview">("overview");
 
   // Timeframe presets for Overview
   const [timeframe, setTimeframe] = useState<"30d" | "this_month" | "quarter" | "ytd" | "all" | "custom">("30d");
@@ -581,6 +583,103 @@ function FinancialsPageContent() {
   const [glSourceType, setGlSourceType] = useState("");
   const [glStartDate, setGlStartDate] = useState("");
   const [glEndDate, setGlEndDate] = useState("");
+  const [ledgerViewMode, setLedgerViewMode] = useState<"simple" | "accounting">("simple");
+  const [glDirectionFilter, setGlDirectionFilter] = useState<"ALL" | "DEBIT" | "CREDIT">("ALL");
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+
+  // Helper to extract clean single-line details for Simple Ledger
+  const getSimpleLedgerDetails = (entry: any) => {
+    const d = new Date(entry.entryDate);
+    const dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    const partyLine = entry.lines?.find((l: any) => l.partyName);
+    const partyName = partyLine?.partyName || null;
+    const partyType = partyLine?.partyType || null;
+
+    const mainAccount = partyName
+      ? partyLine.accountName
+      : entry.lines?.find((l: any) => !l.accountName?.toLowerCase().includes("cost of goods") && !l.accountName?.toLowerCase().includes("tax"))?.accountName || entry.lines?.[0]?.accountName || "General Account";
+
+    let direction: "DEBIT" | "CREDIT" = "DEBIT";
+    let amount = entry.totalDebit || entry.totalCredit || 0;
+
+    if (partyLine) {
+      if (partyLine.debit > 0) {
+        direction = "DEBIT";
+        amount = partyLine.debit;
+      } else if (partyLine.credit > 0) {
+        direction = "CREDIT";
+        amount = partyLine.credit;
+      }
+    } else {
+      const activeLine = entry.lines?.find((l: any) => l.debit > 0 || l.credit > 0);
+      if (activeLine) {
+        if (activeLine.debit > 0) {
+          direction = "DEBIT";
+          amount = activeLine.debit;
+        } else {
+          direction = "CREDIT";
+          amount = activeLine.credit;
+        }
+      }
+    }
+
+    let sourceLabel = entry.sourceType || "VOUCHER";
+    let sourceBadgeBg = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700";
+    if (entry.sourceType === "INVOICE") {
+      sourceLabel = "Invoice";
+      sourceBadgeBg = "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800";
+    } else if (entry.sourceType === "VOUCHER") {
+      sourceLabel = "Voucher";
+      sourceBadgeBg = "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800";
+    } else if (entry.sourceType === "GRN") {
+      sourceLabel = "Purchase (GRN)";
+      sourceBadgeBg = "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800";
+    } else if (entry.sourceType === "PAYROLL") {
+      sourceLabel = "Payroll";
+      sourceBadgeBg = "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800";
+    }
+
+    return {
+      dateStr,
+      timeStr,
+      partyName,
+      partyType,
+      mainAccount,
+      direction,
+      amount,
+      sourceLabel,
+      sourceBadgeBg,
+    };
+  };
+
+  const simpleLedgerEntries = useMemo(() => {
+    return generalLedgerEntries.map((entry) => ({
+      entry,
+      details: getSimpleLedgerDetails(entry),
+    }));
+  }, [generalLedgerEntries]);
+
+  const displayedLedgerList = useMemo(() => {
+    if (glDirectionFilter === "ALL") return simpleLedgerEntries;
+    return simpleLedgerEntries.filter((item) => item.details.direction === glDirectionFilter);
+  }, [simpleLedgerEntries, glDirectionFilter]);
+
+  const simpleStats = useMemo(() => {
+    let debits = 0;
+    let credits = 0;
+    simpleLedgerEntries.forEach(({ details }) => {
+      if (details.direction === "DEBIT") debits += details.amount;
+      else credits += details.amount;
+    });
+    return {
+      count: simpleLedgerEntries.length,
+      totalDebits: debits,
+      totalCredits: credits,
+      net: debits - credits,
+    };
+  }, [simpleLedgerEntries]);
 
   // ================= SIMPLIFIED 2-ACCOUNT DEBIT/CREDIT ENTRY STATE =================
   const [txnAccountType, setTxnAccountType] = useState<"PARTY" | "GENERAL">("PARTY");
@@ -1289,18 +1388,15 @@ function FinancialsPageContent() {
         <div className="flex items-center overflow-x-auto no-scrollbar border-t border-slate-100 dark:border-slate-800/80 pt-4">
           <div className="inline-flex bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 gap-1.5 shadow-inner">
             <button
-              onClick={() => setActiveSection("accounts")}
+              onClick={() => setActiveSection("overview")}
               className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                activeSection === "accounts"
+                activeSection === "overview"
                   ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
                   : "hover:text-slate-900 dark:hover:text-white"
               }`}
             >
-              <Scale className="w-4 h-4 text-blue-500" />
-              <span>Financial Accounts</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                Parties
-              </span>
+              <TrendingUp className="w-4 h-4 text-blue-500" />
+              <span>Financial Insights & Analytics</span>
             </button>
 
             <button
@@ -1328,38 +1424,6 @@ function FinancialsPageContent() {
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold">
                 Balanced Dr=Cr
               </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveSection("statements");
-                if (partiesList.customers?.length > 0 && !selectedPartyName) {
-                  setSelectedPartyName(partiesList.customers[0].name);
-                }
-              }}
-              className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                activeSection === "statements"
-                  ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
-                  : "hover:text-slate-900 dark:hover:text-white"
-              }`}
-            >
-              <FileText className="w-4 h-4 text-purple-500" />
-              <span>Party Statements</span>
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
-                SOA
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveSection("overview")}
-              className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
-                activeSection === "overview"
-                  ? "bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
-                  : "hover:text-slate-900 dark:hover:text-white"
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
-              <span>Analytics & Insights</span>
             </button>
           </div>
         </div>
@@ -2153,18 +2217,64 @@ function FinancialsPageContent() {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: UNIVERSAL GENERAL LEDGER                                            */}
+      {/* TAB 3: UNIVERSAL GENERAL LEDGER & SIMPLE LEDGER                            */}
       {/* ========================================================================= */}
       {activeSection === "entries" && (
         <div className="space-y-5 animate-fadeIn">
-          {/* Filter and Search Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
+          {/* Quick Metrics Bar for Simple View */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Total Transactions
+              </span>
+              <span className="text-xl font-black text-slate-800 dark:text-white">
+                {simpleStats.count} <span className="text-xs font-medium text-slate-400">entries</span>
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
+              <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                <ArrowDownLeft className="w-3.5 h-3.5" />
+                <span>Total Debits (+ Inflow / Billed)</span>
+              </span>
+              <span className="text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                PKR {Math.round(simpleStats.totalDebits).toLocaleString()}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs">
+              <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>Total Credits (- Outflow / Settled)</span>
+              </span>
+              <span className="text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
+                PKR {Math.round(simpleStats.totalCredits).toLocaleString()}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                Net Balance Position
+              </span>
+              <span
+                className={`text-xl font-black font-mono ${
+                  simpleStats.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
+                {simpleStats.net >= 0 ? "+" : ""}PKR {Math.round(simpleStats.net).toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter, Search & View Switcher Bar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search */}
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search entries, narration, accounts..."
+                  placeholder="Search party, narration, ref, account..."
                   className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-64 focus:ring-2 focus:ring-blue-500"
                   value={glSearch}
                   onChange={(e) => setGlSearch(e.target.value)}
@@ -2172,130 +2282,374 @@ function FinancialsPageContent() {
                 />
               </div>
 
+              {/* Source Type Filter */}
               <select
-                className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500"
                 value={glSourceType}
                 onChange={(e) => {
                   setGlSourceType(e.target.value);
                   setTimeout(fetchGeneralLedger, 50);
                 }}
               >
-                <option value="">All Source Types</option>
+                <option value="">All Categories</option>
                 <option value="INVOICE">Invoices</option>
-                <option value="VOUCHER">Vouchers (CRV / BPV / JV)</option>
-                <option value="GRN">Goods Received (GRN)</option>
+                <option value="VOUCHER">Vouchers (Payment/Receipt)</option>
+                <option value="GRN">Purchases (GRN)</option>
                 <option value="PAYROLL">Payroll</option>
-                <option value="MANUAL">Manual Adjustments</option>
+                <option value="MANUAL">Manual Entries</option>
               </select>
+
+              {/* Direction Filter Pills */}
+              <div className="inline-flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 text-xs font-bold gap-1">
+                <button
+                  type="button"
+                  onClick={() => setGlDirectionFilter("ALL")}
+                  className={`px-2.5 py-1 rounded-lg transition-all ${
+                    glDirectionFilter === "ALL"
+                      ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-black"
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGlDirectionFilter("DEBIT")}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    glDirectionFilter === "DEBIT"
+                      ? "bg-emerald-500 text-white shadow-2xs font-black"
+                      : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  }`}
+                >
+                  <ArrowDownLeft className="w-3 h-3" />
+                  <span>Debits (+)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGlDirectionFilter("CREDIT")}
+                  className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                    glDirectionFilter === "CREDIT"
+                      ? "bg-blue-600 text-white shadow-2xs font-black"
+                      : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                  }`}
+                >
+                  <ArrowUpRight className="w-3 h-3" />
+                  <span>Credits (-)</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              {/* View Switcher: Simple vs Double-Entry */}
+              <div className="inline-flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setLedgerViewMode("simple")}
+                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    ledgerViewMode === "simple"
+                      ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-2xs font-black"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Simple Ledger</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLedgerViewMode("accounting")}
+                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    ledgerViewMode === "accounting"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-black"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Double-Entry View</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={fetchGeneralLedger}
-                className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1.5 font-bold"
-                title="Refresh General Ledger"
+                className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs transition-colors flex items-center gap-1.5 font-bold cursor-pointer"
+                title="Refresh Ledger"
               >
                 <RefreshCw className={`w-4 h-4 ${glLoading ? "animate-spin" : ""}`} />
-                <span>Refresh</span>
+                <span className="hidden sm:inline">Refresh</span>
               </button>
 
               <button
                 onClick={() => setActiveSection("record")}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-1.5"
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer transform active:scale-95"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>+ Add Transaction</span>
+                <span>+ Add Entry</span>
               </button>
             </div>
           </div>
 
-          {/* General Ledger Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/90 dark:bg-slate-950/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3.5">Date</th>
-                    <th className="p-3.5">Source / Ref</th>
-                    <th className="p-3.5">Narration / Description</th>
-                    <th className="p-3.5">Account & Party Lines</th>
-                    <th className="p-3.5 text-right text-emerald-600 dark:text-emerald-400">Debit (PKR)</th>
-                    <th className="p-3.5 text-right text-blue-600 dark:text-blue-400">Credit (PKR)</th>
-                    <th className="p-3.5 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {glLoading ? (
+          {/* ========================================================= */}
+          {/* VIEW 1: SUPER SIMPLE LEDGER TABLE                          */}
+          {/* ========================================================= */}
+          {ledgerViewMode === "simple" && (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50/90 dark:bg-slate-950/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
                     <tr>
-                      <td colSpan={7} className="p-12 text-center text-slate-400">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
-                        Loading general ledger transactions...
-                      </td>
+                      <th className="p-3.5 w-36">Date & Time</th>
+                      <th className="p-3.5">Party / Account</th>
+                      <th className="p-3.5">Type & Reference</th>
+                      <th className="p-3.5 max-w-sm">Narration / Reason</th>
+                      <th className="p-3.5 text-center">Type</th>
+                      <th className="p-3.5 text-right">Amount (PKR)</th>
+                      <th className="p-3.5 text-center w-16">Details</th>
                     </tr>
-                  ) : generalLedgerEntries.length > 0 ? (
-                    generalLedgerEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400 align-top">
-                          {new Date(entry.entryDate).toLocaleDateString("en-GB").replace(/\//g, "-")}
-                        </td>
-                        <td className="p-3.5 align-top">
-                          <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 block w-fit mb-1">
-                            {entry.sourceType}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400 truncate block max-w-[120px]" title={entry.sourceId || ""}>
-                            {entry.sourceId ? `#${entry.sourceId.substring(0, 10)}` : "-"}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200 max-w-xs align-top">
-                          {entry.narration}
-                        </td>
-                        <td className="p-3.5 align-top space-y-1.5">
-                          {entry.lines?.map((line: any) => (
-                            <div key={line.id} className="flex items-center justify-between gap-3 text-[11px] font-mono">
-                              <span className="text-slate-700 dark:text-slate-300">
-                                {line.accountName}
-                                {line.partyName && (
-                                  <span className="ml-1 text-[10px] font-sans px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold">
-                                    {line.partyName}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          ))}
-                        </td>
-                        <td className="p-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 align-top space-y-1.5">
-                          {entry.lines?.map((line: any) => (
-                            <div key={line.id}>
-                              {line.debit > 0 ? `PKR ${line.debit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
-                            </div>
-                          ))}
-                        </td>
-                        <td className="p-3.5 text-right font-mono font-bold text-blue-600 dark:text-blue-400 align-top space-y-1.5">
-                          {entry.lines?.map((line: any) => (
-                            <div key={line.id}>
-                              {line.credit > 0 ? `PKR ${line.credit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
-                            </div>
-                          ))}
-                        </td>
-                        <td className="p-3.5 text-center align-top">
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
-                            Balanced
-                          </span>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {glLoading ? (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
+                          Loading ledger transactions...
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="p-12 text-center text-slate-400">
-                        No general ledger entries found. Click <strong>"+ Add Transaction"</strong> to post one.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    ) : displayedLedgerList.length > 0 ? (
+                      displayedLedgerList.map(({ entry, details }) => {
+                        const isExpanded = expandedEntryId === entry.id;
+                        return (
+                          <React.Fragment key={entry.id}>
+                            <tr className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                              {/* Date & Time */}
+                              <td className="p-3.5 whitespace-nowrap align-middle">
+                                <div className="font-bold text-slate-900 dark:text-white">
+                                  {details.dateStr}
+                                </div>
+                                <div className="text-[10.5px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                                  <span>🕒 {details.timeStr}</span>
+                                </div>
+                              </td>
+
+                              {/* Party / Account */}
+                              <td className="p-3.5 align-middle">
+                                {details.partyName ? (
+                                  <div>
+                                    <div className="font-black text-slate-800 dark:text-white flex items-center gap-1.5">
+                                      <span>{details.partyName}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-medium">
+                                      {details.partyType || "Party Account"} • <span className="font-mono">{details.mainAccount}</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div className="font-bold text-slate-700 dark:text-slate-200">
+                                      {details.mainAccount}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">General Ledger Account</div>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Type & Reference */}
+                              <td className="p-3.5 align-middle">
+                                <div className="flex flex-col gap-1">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border w-fit ${details.sourceBadgeBg}`}>
+                                    {details.sourceLabel}
+                                  </span>
+                                  {entry.sourceId && (
+                                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-[130px]" title={entry.sourceId}>
+                                      #{entry.sourceId.substring(0, 14)}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Narration */}
+                              <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200 max-w-sm align-middle leading-relaxed">
+                                {entry.narration}
+                              </td>
+
+                              {/* Type (Debit vs Credit) */}
+                              <td className="p-3.5 text-center align-middle">
+                                {details.direction === "DEBIT" ? (
+                                  <span className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 inline-flex items-center gap-1 shadow-2xs">
+                                    <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Debit</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 inline-flex items-center gap-1 shadow-2xs">
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>Credit</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Amount */}
+                              <td className="p-3.5 text-right font-mono font-black text-sm align-middle whitespace-nowrap">
+                                <span className={details.direction === "DEBIT" ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"}>
+                                  {details.direction === "DEBIT" ? "+" : "-"} PKR {Math.round(details.amount).toLocaleString()}
+                                </span>
+                              </td>
+
+                              {/* Expand Breakdown */}
+                              <td className="p-3.5 text-center align-middle">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedEntryId(isExpanded ? null : entry.id)}
+                                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                                  title="View Account Breakdown"
+                                >
+                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-blue-600" /> : <ChevronDown className="w-4 h-4" />}
+                                </button>
+                              </td>
+                            </tr>
+
+                            {/* Expanded Accounting Breakdown Accordion */}
+                            {isExpanded && (
+                              <tr className="bg-slate-50/80 dark:bg-slate-950/60">
+                                <td colSpan={7} className="p-4 pl-10">
+                                  <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
+                                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-2">
+                                      <span>Double-Entry Account Breakdown</span>
+                                      <span className="text-emerald-600">✓ Balanced Double-Entry</span>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      {entry.lines?.map((line: any) => (
+                                        <div key={line.id} className="flex items-center justify-between text-xs font-mono">
+                                          <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                            <span>• {line.accountName}</span>
+                                            {line.partyName && (
+                                              <span className="text-[10px] font-sans px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold">
+                                                {line.partyName}
+                                              </span>
+                                            )}
+                                          </span>
+                                          <div className="flex items-center gap-4">
+                                            {line.debit > 0 && (
+                                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                                Dr: PKR {line.debit.toLocaleString()}
+                                              </span>
+                                            )}
+                                            {line.credit > 0 && (
+                                              <span className="text-blue-600 dark:text-blue-400 font-bold">
+                                                Cr: PKR {line.credit.toLocaleString()}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                          No transactions found matching your filters. Click <strong>"+ Add Entry"</strong> to record one.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* VIEW 2: TRADITIONAL ACCOUNTING DOUBLE-ENTRY TABLE          */}
+          {/* ========================================================= */}
+          {ledgerViewMode === "accounting" && (
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50/90 dark:bg-slate-950/80 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3.5">Date</th>
+                      <th className="p-3.5">Source / Ref</th>
+                      <th className="p-3.5">Narration / Description</th>
+                      <th className="p-3.5">Account & Party Lines</th>
+                      <th className="p-3.5 text-right text-emerald-600 dark:text-emerald-400">Debit (PKR)</th>
+                      <th className="p-3.5 text-right text-blue-600 dark:text-blue-400">Credit (PKR)</th>
+                      <th className="p-3.5 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {glLoading ? (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                          <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
+                          Loading general ledger transactions...
+                        </td>
+                      </tr>
+                    ) : generalLedgerEntries.length > 0 ? (
+                      generalLedgerEntries.map((entry) => (
+                        <tr key={entry.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400 align-top">
+                            {new Date(entry.entryDate).toLocaleDateString("en-GB").replace(/\//g, "-")}
+                          </td>
+                          <td className="p-3.5 align-top">
+                            <span className="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 block w-fit mb-1">
+                              {entry.sourceType}
+                            </span>
+                            <span className="font-mono text-[10px] text-slate-400 truncate block max-w-[120px]" title={entry.sourceId || ""}>
+                              {entry.sourceId ? `#${entry.sourceId.substring(0, 10)}` : "-"}
+                            </span>
+                          </td>
+                          <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200 max-w-xs align-top">
+                            {entry.narration}
+                          </td>
+                          <td className="p-3.5 align-top space-y-1.5">
+                            {entry.lines?.map((line: any) => (
+                              <div key={line.id} className="flex items-center justify-between gap-3 text-[11px] font-mono">
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  {line.accountName}
+                                  {line.partyName && (
+                                    <span className="ml-1 text-[10px] font-sans px-1.5 py-0.2 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold">
+                                      {line.partyName}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 align-top space-y-1.5">
+                            {entry.lines?.map((line: any) => (
+                              <div key={line.id}>
+                                {line.debit > 0 ? `PKR ${line.debit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
+                              </div>
+                            ))}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-bold text-blue-600 dark:text-blue-400 align-top space-y-1.5">
+                            {entry.lines?.map((line: any) => (
+                              <div key={line.id}>
+                                {line.credit > 0 ? `PKR ${line.credit.toLocaleString()}` : <span className="text-slate-300 dark:text-slate-700">-</span>}
+                              </div>
+                            ))}
+                          </td>
+                          <td className="p-3.5 text-center align-top">
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                              Balanced
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                          No general ledger entries found. Click <strong>"+ Add Entry"</strong> to post one.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -10,6 +10,7 @@ import ProductSelect from "@/components/shared/ProductSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
 function SalesPageContent() {
   const searchParams = useSearchParams();
@@ -142,6 +143,26 @@ function SalesPageContent() {
   const [payMethod, setPayMethod] = useState("CASH");
   const [applyAdvance, setApplyAdvance] = useState(false);
   const [advanceToApply, setAdvanceToApply] = useState("");
+
+  // Edit Commercial Invoice State
+  const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<any>(null);
+  const [editClientName, setEditClientName] = useState("");
+  const [editClientPhone, setEditClientPhone] = useState("");
+  const [editClientAddress, setEditClientAddress] = useState("");
+  const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editIsGst, setEditIsGst] = useState(true);
+  const [editSalesTaxRate, setEditSalesTaxRate] = useState(18);
+  const [editPostingOption, setEditPostingOption] = useState<"CUSTOMER_LEDGER" | "GENERAL_LEDGER" | "NO_LEDGER">("CUSTOMER_LEDGER");
+  const [editSubjectHeading, setEditSubjectHeading] = useState("");
+  const [editSubjectDescription, setEditSubjectDescription] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editDiscountType, setEditDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [editDiscountValue, setEditDiscountValue] = useState("0");
+  const [editInvLines, setEditInvLines] = useState<any[]>([]);
+  const [editInvoiceError, setEditInvoiceError] = useState("");
+  const [submittingEditInvoice, setSubmittingEditInvoice] = useState(false);
 
   // Delivery Order Creation State
   const [doClientName, setDoClientName] = useState("");
@@ -550,6 +571,151 @@ function SalesPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "Invoice Creation Failed", message: err.message, type: "error" });
+    }
+  };
+
+  const handleOpenEditInvoice = (inv: any) => {
+    setEditingInvoice(inv);
+    setEditInvoiceError("");
+    setEditClientName(inv.clientName || "");
+    setEditClientPhone(inv.clientPhone || "");
+    setEditClientAddress(inv.clientAddress || "");
+    setEditCustomerId(inv.customerId || null);
+
+    const d = new Date(inv.date || Date.now());
+    setEditDate(d.toISOString().split("T")[0]);
+
+    const meta = parseInvoiceMetadata(inv.notes, inv);
+    setEditNotes(meta.userNotes || "");
+    setEditIsGst(meta.isGst);
+    setEditSalesTaxRate(meta.taxRate || salesTaxRate || 18);
+    setEditDiscountType(meta.discountType || "FIXED");
+    if (meta.discountType === "PERCENTAGE") {
+      setEditDiscountValue(String(meta.discountPercent || 0));
+    } else {
+      setEditDiscountValue(String(meta.discountAmount || 0));
+    }
+
+    setEditSubjectHeading(inv.subjectHeading || "");
+    setEditSubjectDescription(inv.subjectDescription || "");
+    setEditPostingOption("CUSTOMER_LEDGER");
+
+    if (inv.lineItems && inv.lineItems.length > 0) {
+      const mapped = inv.lineItems.map((l: any) => {
+        let parsedExtra: any = {};
+        if (l.extraFields) {
+          try {
+            parsedExtra = typeof l.extraFields === "string" ? JSON.parse(l.extraFields) : { ...l.extraFields };
+          } catch (e) {
+            parsedExtra = {};
+          }
+        }
+        const unit = parsedExtra.unit || (l.product && l.product.unit) || "Nos";
+        const isCustom = !l.productId;
+        return {
+          id: l.id,
+          productId: l.productId || "",
+          customName: isCustom ? l.description || "" : "",
+          description: l.description || "",
+          quantity: String(l.quantity || 1),
+          salesPrice: String(l.salesPrice || 0),
+          unit: unit,
+          isCustom: isCustom,
+          extraFields: parsedExtra,
+        };
+      });
+      setEditInvLines(mapped);
+    } else {
+      setEditInvLines([
+        { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} },
+      ]);
+    }
+
+    setIsEditInvoiceOpen(true);
+  };
+
+  const handleEditInvoiceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingInvoice) return;
+
+    const formattedLines = editInvLines.map((l) => {
+      const lineUnit = (l.unit || "Nos").trim();
+      const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
+      extraFieldsObj.unit = lineUnit;
+
+      if (l.isCustom) {
+        return {
+          productId: null,
+          description: (l.customName || l.description || "").trim(),
+          quantity: l.quantity,
+          salesPrice: l.salesPrice,
+          unit: lineUnit,
+          extraFields: extraFieldsObj,
+        };
+      }
+      return {
+        productId: l.productId || null,
+        description: (l.description || "").trim(),
+        quantity: l.quantity,
+        salesPrice: l.salesPrice,
+        unit: lineUnit,
+        extraFields: extraFieldsObj,
+      };
+    });
+
+    if (!editClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+      setEditInvoiceError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
+      return;
+    }
+
+    setSubmittingEditInvoice(true);
+    setEditInvoiceError("");
+    const token = localStorage.getItem("token");
+
+    const discVal = Number(editDiscountValue) || 0;
+
+    try {
+      const res = await fetch(`/api/sales/invoice/${editingInvoice.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          customerId: editCustomerId,
+          clientName: editClientName.trim(),
+          clientPhone: editClientPhone.trim(),
+          clientAddress: editClientAddress.trim(),
+          date: editDate ? new Date(editDate) : new Date(editingInvoice.date),
+          lineItems: formattedLines,
+          notes: editNotes,
+          subjectHeading: editSubjectHeading.trim() || null,
+          subjectDescription: editSubjectDescription.trim() || null,
+          isGst: editIsGst,
+          taxRate: editSalesTaxRate,
+          discountType: editDiscountType,
+          discountPercent: editDiscountType === "PERCENTAGE" ? discVal : 0,
+          discountAmount: editDiscountType === "FIXED" ? discVal : 0,
+          postingOption: editPostingOption,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update invoice");
+
+      toast({
+        title: "Invoice Updated",
+        message: `Invoice ${editingInvoice.invoiceNumber} updated successfully without duplicate ledger entries.`,
+        type: "success",
+      });
+
+      setIsEditInvoiceOpen(false);
+      fetchData();
+      if (selectedCustomerDossier) {
+        openCustomerDossier(selectedCustomerDossier);
+      }
+    } catch (err: any) {
+      setEditInvoiceError(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingEditInvoice(false);
     }
   };
 
@@ -1299,7 +1465,15 @@ function SalesPageContent() {
                             <td className="p-3 text-right text-emerald-500 font-semibold">{Math.round(Number(inv.amountPaid)).toLocaleString("en-US")}</td>
                             <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
                             <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-2">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditInvoice(inv)}
+                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 rounded text-amber-600 dark:text-amber-400 transition-all"
+                                  title="Edit Commercial Invoice"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
                                 <a
                                   href={`/sales/invoice/${inv.id}/pdf`}
                                   target="_blank"
@@ -2183,6 +2357,528 @@ function SalesPageContent() {
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10"
                 >
                   Submit Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT STANDALONE INVOICE MODAL ==================== */}
+      {mounted && isEditInvoiceOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    Edit Invoice {editingInvoice?.invoiceNumber}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">Modify billing details, item lines, GST tax or discounts without creating duplicate ledger records.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditInvoiceOpen(false);
+                  setEditInvoiceError("");
+                }}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error banner */}
+            {editInvoiceError && (
+              <div className="bg-rose-50 dark:bg-rose-950/70 border-2 border-rose-400 dark:border-rose-700 text-rose-800 dark:text-rose-200 p-3.5 rounded-xl flex items-start gap-2.5 text-xs mb-4 shadow-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <div className="flex-1 min-w-0 font-semibold">{editInvoiceError}</div>
+                <button
+                  type="button"
+                  onClick={() => setEditInvoiceError("")}
+                  className="text-rose-500 hover:text-rose-700 font-bold px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleEditInvoiceSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <CustomerSelect
+                    label="Customer / Client"
+                    value={editClientName}
+                    phoneValue={editClientPhone}
+                    addressValue={editClientAddress}
+                    includeVendors={true}
+                    onChange={(c) => {
+                      setEditClientName(c.name);
+                      if (c.phone) setEditClientPhone(c.phone);
+                      if (c.address) setEditClientAddress(c.address);
+                      setEditCustomerId(c.id || null);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0300-1234567"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono"
+                    value={editClientPhone}
+                    onChange={(e) => setEditClientPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Date</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Phase 6 DHA, Lahore"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editClientAddress}
+                    onChange={(e) => setEditClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
+                  <select
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={editIsGst ? "GST" : "NON_GST"}
+                    onChange={(e) => setEditIsGst(e.target.value === "GST")}
+                  >
+                    <option value="GST">GST (With Sales Tax)</option>
+                    <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 3-Way Ledger Posting Selector */}
+              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  📊 Financial Ledger Posting Choice
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setEditPostingOption("CUSTOMER_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      editPostingOption === "CUSTOMER_LEDGER"
+                        ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-200 font-bold ring-1 ring-blue-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold flex items-center justify-between mb-0.5">
+                      <span>👤 Customer Ledger</span>
+                      {editPostingOption === "CUSTOMER_LEDGER" && <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-mono">Selected</span>}
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Updates client's financial account and general ledger without duplicate entries.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditPostingOption("GENERAL_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      editPostingOption === "GENERAL_LEDGER"
+                        ? "bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-1 ring-amber-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold mb-0.5">🏢 General Ledger Only</div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Updates company totals without affecting customer's balance.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditPostingOption("NO_LEDGER")}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      editPostingOption === "NO_LEDGER"
+                        ? "bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-900 dark:text-rose-200 font-bold ring-1 ring-rose-500"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="font-bold mb-0.5">📄 No Ledger Posting</div>
+                    <p className="text-[10px] text-slate-500 font-normal">
+                      Paperwork / Formality only. Zero accounting entries.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subject Heading & Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subject Heading</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. AC Installation Services"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editSubjectHeading}
+                    onChange={(e) => setEditSubjectHeading(e.target.value)}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Subject Description</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Complete execution of ducting, copper piping and mounting of outdoor/indoor units."
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editSubjectDescription}
+                    onChange={(e) => setEditSubjectDescription(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Invoice Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Invoice Notes / Remarks</label>
+                <textarea
+                  rows={2}
+                  placeholder="Enter invoice terms, warranty details, payment schedule etc..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                />
+              </div>
+
+              {/* Dynamic Invoice rows */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Invoice Lines</span>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditInvLines([...editInvLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
+                      className="text-xs text-blue-500 hover:underline font-bold"
+                    >
+                      + Add Catalog Row
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditInvLines([...editInvLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      className="text-xs text-emerald-500 hover:underline font-bold"
+                    >
+                      + Add Custom Row
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
+                  {/* Grid Headers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
+                    <div className="sm:col-span-3">Catalog / Custom Item</div>
+                    <div className="sm:col-span-3">Description / Service</div>
+                    <div className="sm:col-span-2">Unit</div>
+                    <div className="sm:col-span-1">Qty</div>
+                    <div className="sm:col-span-2">Price (PKR)</div>
+                    <div className="sm:col-span-1 text-center">Action</div>
+                  </div>
+
+                  {editInvLines.map((line, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                      {/* Catalog Select OR Custom Item Name */}
+                      <div className="sm:col-span-3">
+                        {line.isCustom ? (
+                          <input
+                            type="text"
+                            required
+                            placeholder="Custom Item Name"
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={line.customName || ""}
+                            onChange={(e) => {
+                              const updated = [...editInvLines];
+                              updated[index].customName = e.target.value;
+                              updated[index].description = e.target.value;
+                              setEditInvLines(updated);
+                            }}
+                          />
+                        ) : (
+                          <ProductSelect
+                            products={products}
+                            value={line.productId}
+                            placeholder="Search product name or SKU..."
+                            onChange={(p) => {
+                              const updated = [...editInvLines];
+                              updated[index].productId = p ? p.id : "";
+                              if (p) {
+                                updated[index].description = p.name;
+                                updated[index].unit = p.unit || "Nos";
+                                const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
+                                if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
+                                  updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                                }
+                              } else {
+                                updated[index].description = "";
+                                updated[index].unit = "Nos";
+                              }
+                              setEditInvLines(updated);
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Manual Description */}
+                      <div className="sm:col-span-3">
+                        <input
+                          type="text"
+                          placeholder="Description (Service name)"
+                          required={!line.isCustom}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
+                          value={line.isCustom ? (line.description === line.customName ? "" : line.description) : line.description}
+                          onChange={(e) => {
+                            const updated = [...editInvLines];
+                            updated[index].description = e.target.value;
+                            setEditInvLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      {/* Unit */}
+                      <div className="sm:col-span-2">
+                        <input
+                          type="text"
+                          list="inv-unit-options"
+                          placeholder="Unit (e.g. Nos, Mtr)"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.unit ?? ""}
+                          onChange={(e) => {
+                            const updated = [...editInvLines];
+                            updated[index].unit = e.target.value;
+                            setEditInvLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="sm:col-span-1">
+                        <input
+                          type="number"
+                          placeholder="Qty"
+                          required
+                          min="1"
+                          step="any"
+                          onFocus={(e) => e.target.select()}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            const updated = [...editInvLines];
+                            updated[index].quantity = e.target.value;
+                            setEditInvLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      {/* Price */}
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          placeholder="Price (PKR)"
+                          required
+                          min="0"
+                          step="any"
+                          onFocus={(e) => e.target.select()}
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          value={line.salesPrice}
+                          onChange={(e) => {
+                            const updated = [...editInvLines];
+                            updated[index].salesPrice = e.target.value;
+                            setEditInvLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      {/* Action */}
+                      <div className="sm:col-span-1 flex items-center justify-between sm:justify-center">
+                        <span className="text-[10px] text-slate-400 sm:hidden">{line.isCustom ? "Custom Row" : "Catalog"}</span>
+                        {editInvLines.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditInvLines(editInvLines.filter((_, i) => i !== index))}
+                            className="text-xs text-rose-500 font-bold hover:underline"
+                          >
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 hidden sm:inline">{line.isCustom ? "Custom" : "Catalog"}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* GST & Discount Settings and Live Calculation Breakdown */}
+              {(() => {
+                const subtotal = editInvLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(editDiscountValue) || 0;
+                if (editDiscountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = editIsGst ? Math.round(taxable * (editSalesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+                const paidSoFar = Number(editingInvoice?.amountPaid || 0);
+                const remainingDue = Math.max(0, grandTotal - paidSoFar);
+
+                return (
+                  <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80">
+                    {/* Configuration Row: Discount & GST Controls */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                      {/* Discount Mode */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Discount (Flat PKR or %)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={editDiscountType}
+                            onChange={(e) => setEditDiscountType(e.target.value as any)}
+                          >
+                            <option value="FIXED">Flat (PKR)</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                          <div className="relative flex-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max={editDiscountType === "PERCENTAGE" ? "100" : undefined}
+                              placeholder={editDiscountType === "PERCENTAGE" ? "e.g. 10%" : "e.g. 5000"}
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              value={editDiscountValue}
+                              onChange={(e) => setEditDiscountValue(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* GST / Sales Tax Mode */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Sales Tax (GST) Option
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold flex-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={editIsGst ? "GST" : "NON_GST"}
+                            onChange={(e) => setEditIsGst(e.target.value === "GST")}
+                          >
+                            <option value="GST">GST Registered ({editSalesTaxRate}% Tax)</option>
+                            <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                          </select>
+                          {editIsGst && (
+                            <div className="flex items-center gap-1 w-28">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="Tax %"
+                                className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-right font-semibold font-mono text-xs focus:ring-2 focus:ring-blue-500"
+                                value={editSalesTaxRate}
+                                onChange={(e) => setEditSalesTaxRate(Number(e.target.value) || 0)}
+                              />
+                              <span className="font-bold text-xs text-slate-400">%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Breakdown */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-slate-500 font-semibold">
+                        <span>Gross Line Total (Subtotal):</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {subtotal.toLocaleString()}</span>
+                      </div>
+
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-rose-500 font-semibold">
+                          <span>
+                            Discount ({editDiscountType === "PERCENTAGE" ? `${editDiscountValue}%` : "Flat"}):
+                          </span>
+                          <span className="font-mono font-bold">- PKR {discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-semibold">
+                        <span>Net Taxable Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {taxable.toLocaleString()}</span>
+                      </div>
+
+                      {editIsGst && (
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Sales Tax ({editSalesTaxRate}% GST):</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {tax.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-sm font-black text-blue-600 dark:text-blue-400 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <span>Updated Total Amount:</span>
+                        <span className="font-mono">PKR {grandTotal.toLocaleString()}</span>
+                      </div>
+
+                      {paidSoFar > 0 && (
+                        <div className="flex justify-between items-center text-xs font-bold pt-1 text-emerald-600 dark:text-emerald-400">
+                          <span>Previously Paid (Recorded):</span>
+                          <span className="font-mono">PKR {paidSoFar.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-xs font-extrabold pt-1">
+                        <span className="text-slate-600 dark:text-slate-400">Remaining Balance Due:</span>
+                        <span className={`font-mono ${remainingDue > 0 ? "text-amber-500" : "text-emerald-500"}`}>
+                          PKR {remainingDue.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditInvoiceOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEditInvoice}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-500/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>{submittingEditInvoice ? "Saving Changes..." : "Save Invoice Changes"}</span>
                 </button>
               </div>
             </form>
@@ -3601,15 +4297,28 @@ function SalesPageContent() {
                                   </span>
                                 </td>
                                 <td className="p-3 text-center">
-                                  <a
-                                    href={`/api/pdf?type=invoice&id=${inv.id}&inline=true`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>View</span>
-                                  </a>
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleOpenEditInvoice(inv);
+                                      }}
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                      title="Edit Invoice"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>Edit</span>
+                                    </button>
+                                    <a
+                                      href={`/api/pdf?type=invoice&id=${inv.id}&inline=true`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded text-[10px] font-bold inline-flex items-center gap-1"
+                                    >
+                                      <Eye className="w-3 h-3" />
+                                      <span>View</span>
+                                    </a>
+                                  </div>
                                 </td>
                               </tr>
                             );

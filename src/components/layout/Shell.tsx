@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Box,
@@ -71,8 +71,6 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     items: [
       { name: "Debit / Credit Entry", href: "/financials?tab=record", icon: ArrowLeftRight, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
       { name: "General Ledger", href: "/financials?tab=general-ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Party Ledgers (SOA)", href: "/financials?tab=statements", icon: Receipt, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Financial Accounts", href: "/financials?tab=accounts", icon: Scale, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
       { name: "Financial Insights", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
     ],
   },
@@ -147,6 +145,7 @@ const ALL_MENU_ITEMS: MenuItem[] = [
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -179,17 +178,27 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   };
 
   const isItemActive = (href: string) => {
-    if (typeof window === "undefined") {
-      return pathname === href || (href !== "/dashboard" && pathname.startsWith(href.split("?")[0]));
-    }
-    const currentFullUrl = pathname + window.location.search;
+    const currentSearch = searchParams?.toString() ? `?${searchParams.toString()}` : "";
+    const currentFullUrl = pathname + currentSearch;
+
     if (href.includes("?")) {
-      return currentFullUrl === href || currentFullUrl.startsWith(href);
+      return currentFullUrl === href || currentFullUrl.startsWith(href + "&");
     }
+
     if (href === "/dashboard") {
       return pathname === "/dashboard";
     }
-    return pathname === href || (pathname.startsWith(href) && !window.location.search);
+
+    if (pathname === href) {
+      return !currentSearch;
+    }
+
+    if (pathname.startsWith(href + "/")) {
+      const hasMoreSpecificItem = ALL_MENU_ITEMS.some((other) => other.href === pathname || other.href === currentFullUrl);
+      return !hasMoreSpecificItem && !currentSearch;
+    }
+
+    return false;
   };
 
   // Auto-expand group when navigating to an item inside it
@@ -200,7 +209,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         setOpenGroups((prev) => ({ ...prev, [group.id]: true }));
       }
     });
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!universalSearch.trim() || universalSearch.length < 2) {
@@ -450,7 +459,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                       router.push(item.href);
                     }}
                     title={collapsed ? item.name : undefined}
-                    className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all ${
+                    className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                       active
                         ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-bold"
                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
@@ -482,7 +491,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                       <button
                         type="button"
                         onClick={() => toggleGroup(group.id)}
-                        className="w-full flex items-center justify-between px-2.5 py-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                        className="w-full flex items-center justify-between px-2.5 py-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer focus:outline-none"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className={`w-1.5 h-1.5 rounded-full ${hasActiveItem ? "bg-blue-500" : "bg-transparent"}`} />
@@ -513,7 +522,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                                 router.push(item.href);
                               }}
                               title={collapsed ? item.name : undefined}
-                              className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all ${
+                              className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                                 active
                                   ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 font-bold"
                                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
