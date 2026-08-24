@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight, Calculator } from "lucide-react";
+import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
@@ -1908,7 +1908,7 @@ function SalesPageContent() {
                           <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">Safe Estimate Mode</span>
                         </div>
                         <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center">
-                          <Calculator className="w-5 h-5" />
+                          <Receipt className="w-5 h-5" />
                         </div>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-3">Ledger posts only when converted</p>
