@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const meta = parseInvoiceMetadata(quotation.notes, quotation);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Generate unique invoice number
       const lastInv = await tx.invoice.findFirst({
         orderBy: { createdAt: "desc" },

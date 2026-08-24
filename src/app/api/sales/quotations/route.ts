@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const createdQuotation = await prisma.$transaction(async (tx) => {
+    const createdQuotation = await prisma.$transaction(async (tx: any) => {
       // 1. Resolve or create Customer profile
       let resolvedCustomerId = inputCustomerId || null;
       if (!resolvedCustomerId && finalClientName) {

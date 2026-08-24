@@ -80,7 +80,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       );
     }
 
-    const updatedQuotation = await prisma.$transaction(async (tx) => {
+    const updatedQuotation = await prisma.$transaction(async (tx: any) => {
       // 1. Resolve customer
       let resolvedCustomerId = inputCustomerId || null;
       if (!resolvedCustomerId && finalClientName) {
@@ -260,7 +260,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.quotationLineItem.deleteMany({
         where: { quotationId: existingQuotation.id },
       });
