@@ -1910,62 +1910,6 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              {/* 3-Way Ledger Posting Selector */}
-              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  📊 Financial Ledger Posting Choice
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setPostingOption("CUSTOMER_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      postingOption === "CUSTOMER_LEDGER"
-                        ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-200 font-bold ring-1 ring-blue-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold flex items-center justify-between mb-0.5">
-                      <span>👤 Customer Ledger</span>
-                      {postingOption === "CUSTOMER_LEDGER" && <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-mono">Default</span>}
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Posts to client's financial account and general ledger.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPostingOption("GENERAL_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      postingOption === "GENERAL_LEDGER"
-                        ? "bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-1 ring-amber-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold mb-0.5">🏢 General Ledger Only</div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Updates company totals without affecting customer's balance.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPostingOption("NO_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      postingOption === "NO_LEDGER"
-                        ? "bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-900 dark:text-rose-200 font-bold ring-1 ring-rose-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold mb-0.5">📄 No Ledger Posting</div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Paperwork / Formality only. Zero accounting entries.
-                    </p>
-                  </button>
-                </div>
-              </div>
-
               {/* Subject Heading & Description */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-1">
@@ -2471,62 +2415,6 @@ function SalesPageContent() {
                     <option value="GST">GST (With Sales Tax)</option>
                     <option value="NON_GST">Non-GST (No Sales Tax)</option>
                   </select>
-                </div>
-              </div>
-
-              {/* 3-Way Ledger Posting Selector */}
-              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  📊 Financial Ledger Posting Choice
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setEditPostingOption("CUSTOMER_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      editPostingOption === "CUSTOMER_LEDGER"
-                        ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-900 dark:text-blue-200 font-bold ring-1 ring-blue-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold flex items-center justify-between mb-0.5">
-                      <span>👤 Customer Ledger</span>
-                      {editPostingOption === "CUSTOMER_LEDGER" && <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-mono">Selected</span>}
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Updates client's financial account and general ledger without duplicate entries.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditPostingOption("GENERAL_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      editPostingOption === "GENERAL_LEDGER"
-                        ? "bg-amber-50 dark:bg-amber-950/60 border-amber-500 text-amber-900 dark:text-amber-200 font-bold ring-1 ring-amber-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold mb-0.5">🏢 General Ledger Only</div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Updates company totals without affecting customer's balance.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setEditPostingOption("NO_LEDGER")}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      editPostingOption === "NO_LEDGER"
-                        ? "bg-rose-50 dark:bg-rose-950/60 border-rose-500 text-rose-900 dark:text-rose-200 font-bold ring-1 ring-rose-500"
-                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="font-bold mb-0.5">📄 No Ledger Posting</div>
-                    <p className="text-[10px] text-slate-500 font-normal">
-                      Paperwork / Formality only. Zero accounting entries.
-                    </p>
-                  </button>
                 </div>
               </div>
 
