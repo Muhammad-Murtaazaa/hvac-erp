@@ -38,6 +38,7 @@ import {
   Info,
   ExternalLink,
   ArrowLeftRight,
+  FileText,
 } from "lucide-react";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
@@ -80,6 +81,7 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     defaultOpen: true,
     items: [
       { name: "Customers", href: "/sales?tab=customers", icon: Users, roles: ["Admin", "Sales", "Accountant", "Support"], permissions: ["MANAGE_SALES", "MANAGE_SUPPORT", "VIEW_FINANCIALS"] },
+      { name: "Quotations", href: "/sales?tab=quotations", icon: FileText, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "VIEW_FINANCIALS"] },
       { name: "Invoicing", href: "/sales?tab=invoices", icon: FileSpreadsheet, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "VIEW_FINANCIALS"] },
       { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES"] },
       { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "MANAGE_INVENTORY"] },
