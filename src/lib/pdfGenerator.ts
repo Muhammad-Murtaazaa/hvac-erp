@@ -91,8 +91,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       if (invoiceData.complaint) {
         doc.text(`Ref Support Ticket: ${invoiceData.complaint.complaintNumber}`, 340, 162);
       }
-      doc.text(`Payment Status: ${invoiceData.status}`, 340, 176);
-      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 190);
+      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
 
       // Subject Block
       let y = 220;

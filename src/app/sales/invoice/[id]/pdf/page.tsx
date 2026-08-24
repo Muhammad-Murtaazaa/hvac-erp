@@ -206,10 +206,6 @@ export default function InvoicePdfPage() {
                     {new Date(invoice.date).toLocaleDateString("en-GB")}
                   </span>
                 </div>
-                <div>
-                  <span className="font-bold text-black">Status:</span>{" "}
-                  <span className="font-black uppercase text-black">{invoice.status}</span>
-                </div>
               </div>
             </div>
           </div>
