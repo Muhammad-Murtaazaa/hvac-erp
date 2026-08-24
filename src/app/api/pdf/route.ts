@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { generateInvoicePDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF } from "@/lib/pdfGenerator";
+import { generateInvoicePDF, generateQuotationPDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF } from "@/lib/pdfGenerator";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type"); // invoice, do, payslip, complaint, employee-form, soa, salary-sheet
+    const type = searchParams.get("type"); // invoice, quotation, do, payslip, complaint, employee-form, soa, salary-sheet
     const id = searchParams.get("id");
 
     if (!type) {
@@ -29,7 +29,17 @@ export async function GET(req: Request) {
     let pdfBuffer: Buffer;
     let fileName = `${type}-${id || "doc"}.pdf`;
 
-    if (type === "invoice") {
+    if (type === "quotation") {
+      const quotation = await prisma.quotation.findUnique({
+        where: { id: id! },
+        include: {
+          lineItems: { include: { product: true } },
+        },
+      });
+      if (!quotation) return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
+      pdfBuffer = await generateQuotationPDF(quotation);
+      fileName = `quotation-${quotation.quotationNumber}.pdf`;
+    } else if (type === "invoice") {
       const invoice = await prisma.invoice.findUnique({
         where: { id: id! },
         include: {

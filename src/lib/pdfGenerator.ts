@@ -1274,5 +1274,183 @@ export function generateMonthlySalarySheetPDF(data: { month: number; year: numbe
   });
 }
 
+export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
+
+      registerAppFonts(doc);
+
+      // TCE Logo Left
+      let logoLoaded = false;
+      try {
+        let logoPath = path.resolve("LOGO.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve("public/logo.png");
+        }
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 50, 40, { width: 70 });
+          logoLoaded = true;
+        }
+      } catch (e) {
+        console.error("Error loading logo image:", e);
+      }
+
+      if (!logoLoaded) {
+        doc.save();
+        doc.fillColor("#F28C28");
+        doc.moveTo(60, 45)
+           .bezierCurveTo(45, 55, 45, 75, 60, 85)
+           .bezierCurveTo(63, 81, 63, 79, 60, 75)
+           .bezierCurveTo(52, 69, 52, 61, 60, 55)
+           .bezierCurveTo(63, 51, 63, 49, 60, 45)
+           .closePath()
+           .fill();
+         
+        doc.moveTo(100, 45)
+           .bezierCurveTo(115, 55, 115, 75, 100, 85)
+           .bezierCurveTo(97, 81, 97, 79, 100, 75)
+           .bezierCurveTo(108, 69, 108, 61, 100, 55)
+           .bezierCurveTo(97, 51, 97, 49, 100, 45)
+           .closePath()
+           .fill();
+
+        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
+        doc.text("TCE", 60, 57, { width: 40, align: "center" });
+        doc.restore();
+      }
+
+      // Right Side Header (Official TCE Letterhead)
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+
+      // Title Banner
+      doc.rect(50, 102, 500, 20).fill("#1e293b"); // dark slate header
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("PRICE QUOTATION / ESTIMATE", 50, 107, { align: "center", width: 500 });
+
+      // Info metadata block
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`QUOTATION: ${quotationData.quotationNumber}`, 50, 130);
+      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
+      doc.text(`Date: ${new Date(quotationData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Client Name: ${quotationData.clientName}`, 50, 162);
+      if (quotationData.clientPhone) doc.text(`Client Phone: ${quotationData.clientPhone}`, 50, 176);
+      if (quotationData.clientAddress) doc.text(`Client Address: ${quotationData.clientAddress}`, 50, 190, { width: 280 });
+
+      if (quotationData.validUntil) {
+        doc.text(`Valid Until: ${new Date(quotationData.validUntil).toLocaleDateString("en-GB")}`, 340, 148);
+      }
+      doc.text(`Status: ${quotationData.status || "DRAFT"}`, 340, 162);
+      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+
+      // Subject Block
+      let y = 220;
+      if (quotationData.subjectHeading) {
+        doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937").text(`Subject: ${quotationData.subjectHeading}`, 50, y);
+        y += 15;
+        if (quotationData.subjectDescription) {
+          doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(quotationData.subjectDescription, 50, y, { width: 500 });
+          const textHeight = doc.heightOfString(quotationData.subjectDescription, { width: 500 });
+          y += textHeight + 15;
+        } else {
+          y += 15;
+        }
+      }
+
+      // Table columns header
+      doc.font("Roboto-Bold").fontSize(10).fillColor("#1e3a8a");
+      doc.text("Description", 50, y);
+      doc.text("Qty", 300, y, { width: 50, align: "right" });
+      doc.text("Price (PKR)", 380, y, { width: 80, align: "right" });
+      doc.text("Total (PKR)", 475, y, { width: 75, align: "right" });
+
+      // Table line
+      doc.moveTo(50, y + 15).lineTo(550, y + 15).strokeColor("#1e3a8a").stroke();
+      y += 25;
+
+      doc.font("Roboto-Regular").fillColor("#1f2937");
+      (quotationData.lineItems || []).forEach((item: any) => {
+        const desc = item.product ? `[${item.product.sku}] ${item.product.name}` : (item.description || "Service Item");
+        
+        doc.fontSize(10).text(desc, 50, y, { width: 240 });
+        doc.text(String(item.quantity), 300, y, { width: 50, align: "right" });
+        doc.text(Math.round(Number(item.salesPrice)).toLocaleString("en-US"), 380, y, { width: 80, align: "right" });
+        const lineTotal = Math.round(item.quantity * Number(item.salesPrice));
+        doc.text(lineTotal.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+        
+        y += 20;
+
+        if (item.extraFields) {
+          try {
+            const fields = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
+            if (fields && Object.keys(fields).length > 0) {
+              Object.entries(fields).forEach(([key, val]) => {
+                if (key === "unit") return;
+                doc.fontSize(8).fillColor("#6b7280").text(`  • ${key}: ${val}`, 60, y);
+                y += 12;
+              });
+              doc.fillColor("#1f2937");
+            }
+          } catch (e) {}
+        }
+      });
+
+      // Bottom Totals Line
+      doc.moveTo(50, y + 5).lineTo(550, y + 5).strokeColor("#e5e7eb").stroke();
+      y += 20;
+
+      const meta = parseInvoiceMetadata(quotationData.notes, quotationData);
+      const subtotal = meta.subtotalAmount;
+      const discountAmount = meta.discountAmount;
+      const taxableAmount = Math.max(0, subtotal - discountAmount);
+      const taxAmount = meta.taxAmount;
+      const computedTaxRate = meta.taxRate;
+      const totalAmount = meta.totalAmount;
+
+      // Print Totals
+      doc.fontSize(10).fillColor("#4b5563");
+      doc.text("Subtotal:", 320, y, { width: 140, align: "right" });
+      doc.text(subtotal.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+
+      if (discountAmount > 0) {
+        y += 18;
+        doc.fillColor("#b91c1c").text(`Discount (${meta.discountType === "PERCENTAGE" ? `${meta.discountPercent}%` : "Flat"}):`, 320, y, { width: 140, align: "right" });
+        doc.text(`-${discountAmount.toLocaleString("en-US")}`, 475, y, { width: 75, align: "right" });
+        doc.fillColor("#4b5563");
+      }
+
+      if (taxAmount > 0) {
+        y += 18;
+        doc.text(`Sales Tax (${computedTaxRate}%):`, 320, y, { width: 140, align: "right" });
+        doc.text(taxAmount.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+      }
+
+      y += 18;
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937");
+      doc.text("Estimated Total (PKR):", 320, y, { width: 140, align: "right" });
+      doc.text(totalAmount.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+
+      if (meta.userNotes) {
+        y += 30;
+        doc.font("Roboto-Bold").fontSize(10).fillColor("#1f2937").text("Notes / Terms:", 50, y);
+        y += 15;
+        doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(meta.userNotes, 50, y, { width: 500 });
+      }
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 
 

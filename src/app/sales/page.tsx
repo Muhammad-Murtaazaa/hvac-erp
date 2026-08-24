@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight } from "lucide-react";
+import { Plus, ListFilter, ClipboardCheck, ArrowUpRight, ArrowDownRight, Layers, FileText, CheckCircle2, DollarSign, RefreshCw, Undo2, QrCode, AlertCircle, AlertTriangle, Users, Phone, MapPin, Mail, Edit2, Trash2, Eye, History, User, Building2, Check, Wrench, Receipt, BookOpen, ArrowRight, Calculator } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
@@ -15,6 +15,7 @@ import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 function SalesPageContent() {
   const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [quotations, setQuotations] = useState<any[]>([]);
   const [deliveryOrders, setDeliveryOrders] = useState<any[]>([]);
   const [customerReturns, setCustomerReturns] = useState<any[]>([]);
   const [vendorReturns, setVendorReturns] = useState<any[]>([]);
@@ -24,7 +25,7 @@ function SalesPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "invoices"); // invoices, customers, dos, customer_returns, vendor_returns, sales_setup
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "invoices"); // invoices, quotations, customers, dos, customer_returns, vendor_returns, sales_setup
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
@@ -164,6 +165,50 @@ function SalesPageContent() {
   const [editInvoiceError, setEditInvoiceError] = useState("");
   const [submittingEditInvoice, setSubmittingEditInvoice] = useState(false);
 
+  // Quotation Management States
+  const [isQuotationOpen, setIsQuotationOpen] = useState(false);
+  const [isEditQuotationOpen, setIsEditQuotationOpen] = useState(false);
+  const [editingQuotation, setEditingQuotation] = useState<any>(null);
+  const [selectedQuotationIds, setSelectedQuotationIds] = useState<string[]>([]);
+
+  // Create Quotation State
+  const [quoClientName, setQuoClientName] = useState("");
+  const [quoClientPhone, setQuoClientPhone] = useState("");
+  const [quoClientAddress, setQuoClientAddress] = useState("");
+  const [quoCustomerId, setQuoCustomerId] = useState<string | null>(null);
+  const [quoDate, setQuoDate] = useState("");
+  const [quoValidUntil, setQuoValidUntil] = useState("");
+  const [quoIsGst, setQuoIsGst] = useState(true);
+  const [quoLines, setQuoLines] = useState<any[]>([
+    { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} },
+  ]);
+  const [quoNotes, setQuoNotes] = useState("");
+  const [quoDiscountType, setQuoDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [quoDiscountValue, setQuoDiscountValue] = useState("0");
+  const [quoSubjectHeading, setQuoSubjectHeading] = useState("");
+  const [quoSubjectDescription, setQuoSubjectDescription] = useState("");
+  const [submittingQuotation, setSubmittingQuotation] = useState(false);
+  const [quotationError, setQuotationError] = useState("");
+
+  // Edit Quotation State
+  const [editQuoClientName, setEditQuoClientName] = useState("");
+  const [editQuoClientPhone, setEditQuoClientPhone] = useState("");
+  const [editQuoClientAddress, setEditQuoClientAddress] = useState("");
+  const [editQuoCustomerId, setEditQuoCustomerId] = useState<string | null>(null);
+  const [editQuoDate, setEditQuoDate] = useState("");
+  const [editQuoValidUntil, setEditQuoValidUntil] = useState("");
+  const [editQuoStatus, setEditQuoStatus] = useState("DRAFT");
+  const [editQuoIsGst, setEditQuoIsGst] = useState(true);
+  const [editQuoSalesTaxRate, setEditQuoSalesTaxRate] = useState(18);
+  const [editQuoLines, setEditQuoLines] = useState<any[]>([]);
+  const [editQuoNotes, setEditQuoNotes] = useState("");
+  const [editQuoDiscountType, setEditQuoDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+  const [editQuoDiscountValue, setEditQuoDiscountValue] = useState("0");
+  const [editQuoSubjectHeading, setEditQuoSubjectHeading] = useState("");
+  const [editQuoSubjectDescription, setEditQuoSubjectDescription] = useState("");
+  const [submittingEditQuotation, setSubmittingEditQuotation] = useState(false);
+  const [editQuotationError, setEditQuotationError] = useState("");
+
   // Delivery Order Creation State
   const [doClientName, setDoClientName] = useState("");
   const [doClientPhone, setDoClientPhone] = useState("");
@@ -218,6 +263,7 @@ function SalesPageContent() {
     const token = localStorage.getItem("token");
     try {
       const invRes = await fetch("/api/sales/invoice", { headers: { Authorization: `Bearer ${token}` } });
+      const quoRes = await fetch("/api/sales/quotations", { headers: { Authorization: `Bearer ${token}` } });
       const doRes = await fetch("/api/sales/do", { headers: { Authorization: `Bearer ${token}` } });
       const pRes = await fetch("/api/inventory/products", { headers: { Authorization: `Bearer ${token}` } });
       const retRes = await fetch("/api/sales/returns", { headers: { Authorization: `Bearer ${token}` } });
@@ -227,6 +273,7 @@ function SalesPageContent() {
       const compRes = await fetch("/api/support/complaints", { headers: { Authorization: `Bearer ${token}` } });
 
       if (invRes.ok) setInvoices((await invRes.json()).invoices || []);
+      if (quoRes.ok) setQuotations((await quoRes.json()).quotations || []);
       if (doRes.ok) setDeliveryOrders((await doRes.json()).deliveryOrders || []);
       if (pRes.ok) setProducts((await pRes.json()).products || []);
       if (retRes.ok) setCustomerReturns((await retRes.json()).returns || []);
@@ -719,6 +766,262 @@ function SalesPageContent() {
     }
   };
 
+  // Quotation Action Handlers
+  const handleCreateQuotationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formattedLines = quoLines
+      .filter((l) => l.productId || (l.description && l.description.trim()))
+      .map((l) => {
+        const lineUnit = (l.unit || "Nos").trim();
+        const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
+        extraFieldsObj.unit = lineUnit;
+        if (l.isCustom) {
+          return {
+            productId: null,
+            description: (l.description || "").trim(),
+            quantity: isNaN(parseInt(l.quantity)) ? 1 : Math.max(1, parseInt(l.quantity)),
+            salesPrice: isNaN(Number(l.salesPrice)) || !l.salesPrice ? 0 : Number(l.salesPrice),
+            unit: lineUnit,
+            extraFields: extraFieldsObj,
+          };
+        }
+        return {
+          productId: l.productId || null,
+          description: (l.description || "").trim(),
+          quantity: isNaN(parseInt(l.quantity)) ? 1 : Math.max(1, parseInt(l.quantity)),
+          salesPrice: isNaN(Number(l.salesPrice)) || !l.salesPrice ? 0 : Number(l.salesPrice),
+          unit: lineUnit,
+          extraFields: extraFieldsObj,
+        };
+      });
+
+    if (!quoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+      setQuotationError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
+      return;
+    }
+
+    setSubmittingQuotation(true);
+    setQuotationError("");
+    const token = localStorage.getItem("token");
+    const discVal = Number(quoDiscountValue) || 0;
+
+    try {
+      const res = await fetch("/api/sales/quotations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          customerId: quoCustomerId,
+          clientName: quoClientName.trim(),
+          clientPhone: quoClientPhone.trim(),
+          clientAddress: quoClientAddress.trim(),
+          date: quoDate ? new Date(quoDate) : new Date(),
+          validUntil: quoValidUntil ? new Date(quoValidUntil) : null,
+          lineItems: formattedLines,
+          notes: quoNotes,
+          subjectHeading: quoSubjectHeading.trim() || null,
+          subjectDescription: quoSubjectDescription.trim() || null,
+          isGst: quoIsGst,
+          discountType: quoDiscountType,
+          discountPercent: quoDiscountType === "PERCENTAGE" ? discVal : 0,
+          discountAmount: quoDiscountType === "FIXED" ? discVal : 0,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create Quotation");
+
+      toast({ title: "Quotation Created", message: `Quotation ${data.quotation?.quotationNumber || ""} created successfully without ledger impact.`, type: "success" });
+      setIsQuotationOpen(false);
+      setQuoClientName("");
+      setQuoClientPhone("");
+      setQuoClientAddress("");
+      setQuoCustomerId(null);
+      setQuoDate("");
+      setQuoValidUntil("");
+      setQuoSubjectHeading("");
+      setQuoSubjectDescription("");
+      setQuoNotes("");
+      setQuoDiscountType("FIXED");
+      setQuoDiscountValue("0");
+      setQuoIsGst(true);
+      setQuoLines([{ productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
+      fetchData();
+    } catch (err: any) {
+      setQuotationError(err.message);
+      toast({ title: "Quotation Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingQuotation(false);
+    }
+  };
+
+  const handleOpenEditQuotation = (quo: any) => {
+    setEditingQuotation(quo);
+    setEditQuotationError("");
+    setEditQuoClientName(quo.clientName || "");
+    setEditQuoClientPhone(quo.clientPhone || "");
+    setEditQuoClientAddress(quo.clientAddress || "");
+    setEditQuoCustomerId(quo.customerId || null);
+    const d = new Date(quo.date || Date.now());
+    setEditQuoDate(d.toISOString().split("T")[0]);
+    setEditQuoValidUntil(quo.validUntil ? new Date(quo.validUntil).toISOString().split("T")[0] : "");
+    setEditQuoStatus(quo.status || "DRAFT");
+
+    const meta = parseInvoiceMetadata(quo.notes, quo);
+    setEditQuoNotes(meta.userNotes || "");
+    setEditQuoIsGst(meta.isGst);
+    setEditQuoSalesTaxRate(meta.taxRate || salesTaxRate || 18);
+    setEditQuoDiscountType(meta.discountType || "FIXED");
+    setEditQuoDiscountValue(String(meta.discountType === "PERCENTAGE" ? meta.discountPercent || 0 : meta.discountAmount || 0));
+    setEditQuoSubjectHeading(quo.subjectHeading || "");
+    setEditQuoSubjectDescription(quo.subjectDescription || "");
+
+    if (quo.lineItems && quo.lineItems.length > 0) {
+      const mapped = quo.lineItems.map((l: any) => {
+        let parsedExtra: any = {};
+        if (l.extraFields) {
+          try {
+            parsedExtra = typeof l.extraFields === "string" ? JSON.parse(l.extraFields) : { ...l.extraFields };
+          } catch (e) {
+            parsedExtra = {};
+          }
+        }
+        const unit = parsedExtra.unit || (l.product && l.product.unit) || "Nos";
+        const isCustom = !l.productId;
+        return {
+          id: l.id,
+          productId: l.productId || "",
+          customName: isCustom ? l.description || "" : "",
+          description: l.description || "",
+          quantity: String(l.quantity || 1),
+          salesPrice: String(l.salesPrice || 0),
+          unit: unit,
+          isCustom: isCustom,
+          extraFields: parsedExtra,
+        };
+      });
+      setEditQuoLines(mapped);
+    } else {
+      setEditQuoLines([{ productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
+    }
+
+    setIsEditQuotationOpen(true);
+  };
+
+  const handleEditQuotationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuotation) return;
+
+    const formattedLines = editQuoLines.map((l) => {
+      const lineUnit = (l.unit || "Nos").trim();
+      const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
+      extraFieldsObj.unit = lineUnit;
+      if (l.isCustom) {
+        return {
+          productId: null,
+          description: (l.customName || l.description || "").trim(),
+          quantity: l.quantity,
+          salesPrice: l.salesPrice,
+          unit: lineUnit,
+          extraFields: extraFieldsObj,
+        };
+      }
+      return {
+        productId: l.productId || null,
+        description: (l.description || "").trim(),
+        quantity: l.quantity,
+        salesPrice: l.salesPrice,
+        unit: lineUnit,
+        extraFields: extraFieldsObj,
+      };
+    });
+
+    if (!editQuoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+      setEditQuotationError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
+      return;
+    }
+
+    setSubmittingEditQuotation(true);
+    setEditQuotationError("");
+    const token = localStorage.getItem("token");
+    const discVal = Number(editQuoDiscountValue) || 0;
+
+    try {
+      const res = await fetch(`/api/sales/quotations/${editingQuotation.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          customerId: editQuoCustomerId,
+          clientName: editQuoClientName.trim(),
+          clientPhone: editQuoClientPhone.trim(),
+          clientAddress: editQuoClientAddress.trim(),
+          date: editQuoDate ? new Date(editQuoDate) : new Date(editingQuotation.date),
+          validUntil: editQuoValidUntil ? new Date(editQuoValidUntil) : null,
+          status: editQuoStatus,
+          lineItems: formattedLines,
+          notes: editQuoNotes,
+          subjectHeading: editQuoSubjectHeading.trim() || null,
+          subjectDescription: editQuoSubjectDescription.trim() || null,
+          isGst: editQuoIsGst,
+          taxRate: editQuoSalesTaxRate,
+          discountType: editQuoDiscountType,
+          discountPercent: editQuoDiscountType === "PERCENTAGE" ? discVal : 0,
+          discountAmount: editQuoDiscountType === "FIXED" ? discVal : 0,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update quotation");
+
+      toast({ title: "Quotation Updated", message: `Quotation ${editingQuotation.quotationNumber} updated successfully.`, type: "success" });
+      setIsEditQuotationOpen(false);
+      fetchData();
+    } catch (err: any) {
+      setEditQuotationError(err.message);
+      toast({ title: "Update Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingEditQuotation(false);
+    }
+  };
+
+  const handleDeleteQuotation = async (quo: any) => {
+    if (!confirm(`Are you sure you want to delete Quotation ${quo.quotationNumber}?`)) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/sales/quotations/${quo.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete quotation");
+      toast({ title: "Quotation Deleted", message: "Quotation deleted successfully.", type: "success" });
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Delete Failed", message: err.message, type: "error" });
+    }
+  };
+
+  const handleConvertQuotationToInvoice = async (quo: any) => {
+    if (!confirm(`Convert Quotation ${quo.quotationNumber} into an official live Sales Invoice? This will post to the customer ledger and generate standard invoice records.`)) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/sales/quotations/${quo.id}/convert`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to convert quotation");
+      toast({
+        title: "Quotation Converted",
+        message: `Generated Invoice ${data.invoice?.invoiceNumber || ""}. Ledger balances updated successfully.`,
+        type: "success",
+      });
+      fetchData();
+      setActiveTab("invoices");
+    } catch (err: any) {
+      toast({ title: "Conversion Failed", message: err.message, type: "error" });
+    }
+  };
+
   const [doError, setDoError] = useState("");
 
   const handleDoSubmit = async (e: React.FormEvent) => {
@@ -1057,6 +1360,11 @@ function SalesPageContent() {
     return text.includes(search.toLowerCase());
   });
 
+  const filteredQuotations = quotations.filter((q) => {
+    const text = (q.quotationNumber + " " + (q.clientName || "") + " " + (q.clientPhone || "")).toLowerCase();
+    return text.includes(search.toLowerCase());
+  });
+
   const filteredDOs = deliveryOrders.filter((d) => {
     const text = d.doNumber.toLowerCase() + d.clientName.toLowerCase();
     return text.includes(search.toLowerCase());
@@ -1076,6 +1384,8 @@ function SalesPageContent() {
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               {activeTab === "invoices"
                 ? "Commercial Invoices"
+                : activeTab === "quotations"
+                ? "Commercial Quotations & Estimates"
                 : activeTab === "customers"
                 ? "Customer Directory & 360° History"
                 : activeTab === "dos"
@@ -1089,6 +1399,8 @@ function SalesPageContent() {
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               {activeTab === "invoices"
                 ? "Generate customer billing invoices, record payments, and track tax ledgers."
+                : activeTab === "quotations"
+                ? "Create price quotations & estimates with official letterheads (zero financial ledger impact until converted)."
                 : activeTab === "customers"
                 ? "Manage customer accounts, view 360° track records (invoices, service tickets, DOs), and edit contact profiles."
                 : activeTab === "dos"
@@ -1110,6 +1422,16 @@ function SalesPageContent() {
               >
                 <Plus className="w-4 h-4" />
                 <span>New Invoice</span>
+              </button>
+            )}
+
+            {activeTab === "quotations" && (
+              <button
+                onClick={() => setIsQuotationOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Quotation</span>
               </button>
             )}
 
@@ -1159,6 +1481,7 @@ function SalesPageContent() {
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
           {[
             { id: "invoices", label: `Invoices (${invoices.length})` },
+            { id: "quotations", label: `Quotations (${quotations.length})` },
             { id: "customers", label: `Customers (${customers.length})` },
             { id: "dos", label: `Delivery Orders (${deliveryOrders.length})` },
             { id: "customer_returns", label: `Customer Returns (${customerReturns.length})` },
@@ -1524,6 +1847,181 @@ function SalesPageContent() {
                   { label: "Set Cancelled", value: "CANCELLED" },
                 ]}
               />
+            </div>
+          )}
+
+          {/* 1.5. COMMERCIAL QUOTATIONS LIST */}
+          {activeTab === "quotations" && (
+            <div className="space-y-6">
+              {/* Quotation Stats Cards */}
+              {(() => {
+                const totalCount = quotations.length;
+                const draftCount = quotations.filter((q) => q.status === "DRAFT").length;
+                const convertedCount = quotations.filter((q) => q.status === "CONVERTED").length;
+                const totalEstimatedValue = quotations.reduce((acc, q) => acc + Number(q.totalAmount || 0), 0);
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Quotations</span>
+                          <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">{totalCount}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">{draftCount} in draft status</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider block">Converted to Invoices</span>
+                          <span className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 block">{convertedCount}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">{totalCount > 0 ? Math.round((convertedCount / totalCount) * 100) : 0}% converted to live revenue</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">Total Pipeline Value</span>
+                          <span className="text-2xl font-black font-mono text-emerald-500 mt-1 block">PKR {Math.round(totalEstimatedValue).toLocaleString("en-US")}</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
+                          <DollarSign className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">Total estimated quote potential</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider block">Zero Financial Impact</span>
+                          <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-1 block">Safe Estimate Mode</span>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 flex items-center justify-center">
+                          <Calculator className="w-5 h-5" />
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-3">Ledger posts only when converted</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
+                        <th className="p-3">Quotation Number</th>
+                        <th className="p-3">Client</th>
+                        <th className="p-3">Subject / Purpose</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Estimated Total (PKR)</th>
+                        <th className="p-3">Date</th>
+                        <th className="p-3">Valid Until</th>
+                        <th className="p-3 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {filteredQuotations.map((quo) => {
+                        const statusColors: Record<string, string> = {
+                          DRAFT: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                          SENT: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
+                          ACCEPTED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                          REJECTED: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400",
+                          CONVERTED: "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
+                        };
+
+                        return (
+                          <tr key={quo.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
+                            <td className="p-3 font-bold whitespace-nowrap text-blue-600 dark:text-blue-400">
+                              {quo.quotationNumber}
+                            </td>
+                            <td className="p-3">
+                              <div className="font-semibold text-slate-900 dark:text-white">{quo.clientName}</div>
+                              {quo.clientPhone && <div className="text-[10px] text-slate-400">{quo.clientPhone}</div>}
+                            </td>
+                            <td className="p-3 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={quo.subjectHeading || quo.subjectDescription || ""}>
+                              {quo.subjectHeading || (quo.lineItems && quo.lineItems.length > 0 ? `${quo.lineItems.length} line items` : "-")}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusColors[quo.status] || statusColors.DRAFT}`}>
+                                {quo.status}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right font-bold text-slate-900 dark:text-white font-mono">
+                              {Math.round(Number(quo.totalAmount)).toLocaleString("en-US")}
+                            </td>
+                            <td className="p-3 text-slate-500 whitespace-nowrap">
+                              {new Date(quo.date).toLocaleDateString("en-GB")}
+                            </td>
+                            <td className="p-3 text-slate-500 whitespace-nowrap">
+                              {quo.validUntil ? new Date(quo.validUntil).toLocaleDateString("en-GB") : "-"}
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditQuotation(quo)}
+                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 rounded text-amber-600 dark:text-amber-400 transition-all"
+                                  title="Edit Quotation"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <a
+                                  href={`/sales/quotation/${quo.id}/pdf`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 rounded text-blue-500 transition-all"
+                                  title="Print PDF"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </a>
+                                {quo.status !== "CONVERTED" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConvertQuotationToInvoice(quo)}
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                                    title="Convert to Live Invoice (Posts to Ledger)"
+                                  >
+                                    <ArrowRight className="w-3 h-3" />
+                                    <span>Convert</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuotation(quo)}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 rounded text-rose-600 dark:text-rose-400 transition-all"
+                                  title="Delete Quotation"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredQuotations.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="p-8 text-center text-slate-400">
+                            No quotations found. Click &quot;New Quotation&quot; above to create one.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2767,6 +3265,835 @@ function SalesPageContent() {
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                   <span>{submittingEditInvoice ? "Saving Changes..." : "Save Invoice Changes"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== CREATE QUOTATION MODAL ==================== */}
+      {mounted && isQuotationOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Create Commercial Quotation</h3>
+                <p className="text-xs text-slate-500">Generate an estimate with official letterhead without impacting financial ledger balances or stock.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQuotationOpen(false);
+                  setQuotationError("");
+                }}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateQuotationSubmit} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <CustomerSelect
+                    label="Customer / Client"
+                    value={quoClientName}
+                    phoneValue={quoClientPhone}
+                    addressValue={quoClientAddress}
+                    includeVendors={true}
+                    onChange={(c) => {
+                      setQuoClientName(c.name);
+                      if (c.phone) setQuoClientPhone(c.phone);
+                      if (c.address) setQuoClientAddress(c.address);
+                      setQuoCustomerId(c.id || null);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="0300-1234567"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoClientPhone}
+                    onChange={(e) => setQuoClientPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Quotation Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoDate || new Date().toISOString().split("T")[0]}
+                    onChange={(e) => setQuoDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Client Premises / Delivery Address
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Factory, site, or project location"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoClientAddress}
+                    onChange={(e) => setQuoClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Valid Until (Optional Expiration Date)
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoValidUntil}
+                    onChange={(e) => setQuoValidUntil(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Subject & Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950/50 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Subject Heading (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Quotation for VRF Air Conditioning Setup"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoSubjectHeading}
+                    onChange={(e) => setQuoSubjectHeading(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Scope / Subject Description (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Scope includes copper piping, indoor units installation, and commissioning"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoSubjectDescription}
+                    onChange={(e) => setQuoSubjectDescription(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Quotation Line Items */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quotation Line Items</span>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setQuoLines([...quoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
+                      className="text-xs text-blue-500 hover:underline font-bold"
+                    >
+                      + Add Catalog Row
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuoLines([...quoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      className="text-xs text-emerald-500 hover:underline font-bold"
+                    >
+                      + Add Custom Row
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
+                    <div className="sm:col-span-3">Item / Product</div>
+                    <div className="sm:col-span-3">Description / Custom Scope</div>
+                    <div className="sm:col-span-2">Unit</div>
+                    <div className="sm:col-span-1">Qty</div>
+                    <div className="sm:col-span-2">Quoted Rate (PKR)</div>
+                    <div className="sm:col-span-1 text-center">Action</div>
+                  </div>
+
+                  {quoLines.map((line, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                      <div className="sm:col-span-3">
+                        {line.isCustom ? (
+                          <input
+                            type="text"
+                            required
+                            placeholder="Custom item name"
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={line.description || ""}
+                            onChange={(e) => {
+                              const updated = [...quoLines];
+                              updated[index].description = e.target.value;
+                              setQuoLines(updated);
+                            }}
+                          />
+                        ) : (
+                          <ProductSelect
+                            products={products}
+                            value={line.productId}
+                            placeholder="Search catalog product or SKU..."
+                            onChange={(p) => {
+                              const updated = [...quoLines];
+                              updated[index].productId = p ? p.id : "";
+                              if (p) {
+                                updated[index].description = p.name;
+                                updated[index].unit = p.unit || "Nos";
+                                const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
+                                if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
+                                  updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                                }
+                              }
+                              setQuoLines(updated);
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Scope notes, specifications..."
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.description || ""}
+                          onChange={(e) => {
+                            const updated = [...quoLines];
+                            updated[index].description = e.target.value;
+                            setQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <select
+                          className="w-full px-2 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
+                          value={line.unit || "Nos"}
+                          onChange={(e) => {
+                            const updated = [...quoLines];
+                            updated[index].unit = e.target.value;
+                            setQuoLines(updated);
+                          }}
+                        >
+                          {availableUnits.map((u: string) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-1">
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          className="w-full px-2 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-center bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            const updated = [...quoLines];
+                            updated[index].quantity = e.target.value;
+                            setQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          placeholder="Rate"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.salesPrice}
+                          onChange={(e) => {
+                            const updated = [...quoLines];
+                            updated[index].salesPrice = e.target.value;
+                            setQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-1 flex justify-center">
+                        {quoLines.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setQuoLines(quoLines.filter((_, i) => i !== index))}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all"
+                            title="Remove row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">-</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quotation Calculations Breakdown */}
+              {(() => {
+                const subtotal = quoLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(quoDiscountValue) || 0;
+                if (quoDiscountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = quoIsGst ? Math.round(taxable * (salesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+
+                return (
+                  <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Discount Mode
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={quoDiscountType}
+                            onChange={(e) => setQuoDiscountType(e.target.value as any)}
+                          >
+                            <option value="FIXED">Flat (PKR)</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                          <input
+                            type="number"
+                            min="0"
+                            max={quoDiscountType === "PERCENTAGE" ? "100" : undefined}
+                            placeholder="0"
+                            className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={quoDiscountValue}
+                            onChange={(e) => setQuoDiscountValue(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Sales Tax (GST)
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={quoIsGst}
+                              onChange={(e) => setQuoIsGst(e.target.checked)}
+                            />
+                            <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span className="ml-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {quoIsGst ? `Apply ${salesTaxRate}% GST` : "No GST (Zero-Rated)"}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-w-xs ml-auto">
+                      <div className="flex justify-between items-center text-slate-500 font-semibold">
+                        <span>Items Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {subtotal.toLocaleString()}</span>
+                      </div>
+
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-rose-500 font-semibold">
+                          <span>Discount Applied:</span>
+                          <span className="font-mono font-bold">- PKR {discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-semibold">
+                        <span>Taxable Amount:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {taxable.toLocaleString()}</span>
+                      </div>
+
+                      {quoIsGst && (
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Sales Tax ({salesTaxRate}% GST):</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {tax.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-sm font-black text-blue-600 dark:text-blue-400 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <span>Estimated Total:</span>
+                        <span className="font-mono">PKR {grandTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                  Terms, Notes, & Quotation Conditions
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Terms of payment, delivery lead time, validity, warranties..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={quoNotes}
+                  onChange={(e) => setQuoNotes(e.target.value)}
+                />
+              </div>
+
+              {quotationError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-bold">
+                  {quotationError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsQuotationOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingQuotation}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-600/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{submittingQuotation ? "Generating..." : "Generate Quotation"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ==================== EDIT QUOTATION MODAL ==================== */}
+      {mounted && isEditQuotationOpen && editingQuotation && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl w-full max-w-4xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                  Edit Quotation {editingQuotation.quotationNumber}
+                </h3>
+                <p className="text-xs text-slate-500">Update estimate details, rates, and validity without affecting ledger balances.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditQuotationOpen(false);
+                  setEditQuotationError("");
+                }}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditQuotationSubmit} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Customer / Client Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoClientName}
+                    onChange={(e) => setEditQuoClientName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Client Phone <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoClientPhone}
+                    onChange={(e) => setEditQuoClientPhone(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Status
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoStatus}
+                    onChange={(e) => setEditQuoStatus(e.target.value)}
+                  >
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="SENT">SENT</option>
+                    <option value="ACCEPTED">ACCEPTED</option>
+                    <option value="REJECTED">REJECTED</option>
+                    <option value="CONVERTED">CONVERTED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Premises / Site Address
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoClientAddress}
+                    onChange={(e) => setEditQuoClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoDate}
+                    onChange={(e) => setEditQuoDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Valid Until
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoValidUntil}
+                    onChange={(e) => setEditQuoValidUntil(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Subject & Description */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950/50 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Subject Heading
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoSubjectHeading}
+                    onChange={(e) => setEditQuoSubjectHeading(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                    Subject Scope Description
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoSubjectDescription}
+                    onChange={(e) => setEditQuoSubjectDescription(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Edit Quotation Line Items */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quotation Line Items</span>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
+                      className="text-xs text-blue-500 hover:underline font-bold"
+                    >
+                      + Add Catalog Row
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      className="text-xs text-emerald-500 hover:underline font-bold"
+                    >
+                      + Add Custom Row
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-y border-slate-100 dark:border-slate-800 py-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:grid mb-1">
+                    <div className="sm:col-span-3">Item / Product</div>
+                    <div className="sm:col-span-3">Description / Custom Scope</div>
+                    <div className="sm:col-span-2">Unit</div>
+                    <div className="sm:col-span-1">Qty</div>
+                    <div className="sm:col-span-2">Quoted Rate (PKR)</div>
+                    <div className="sm:col-span-1 text-center">Action</div>
+                  </div>
+
+                  {editQuoLines.map((line, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-950 p-3 rounded-xl">
+                      <div className="sm:col-span-3">
+                        {line.isCustom ? (
+                          <input
+                            type="text"
+                            required
+                            placeholder="Custom item name"
+                            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                            value={line.customName || line.description || ""}
+                            onChange={(e) => {
+                              const updated = [...editQuoLines];
+                              updated[index].customName = e.target.value;
+                              updated[index].description = e.target.value;
+                              setEditQuoLines(updated);
+                            }}
+                          />
+                        ) : (
+                          <ProductSelect
+                            products={products}
+                            value={line.productId}
+                            placeholder="Search catalog product or SKU..."
+                            onChange={(p) => {
+                              const updated = [...editQuoLines];
+                              updated[index].productId = p ? p.id : "";
+                              if (p) {
+                                updated[index].description = p.name;
+                                updated[index].unit = p.unit || "Nos";
+                                const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
+                                if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
+                                  updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                                }
+                              }
+                              setEditQuoLines(updated);
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Scope notes, specifications..."
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.description || ""}
+                          onChange={(e) => {
+                            const updated = [...editQuoLines];
+                            updated[index].description = e.target.value;
+                            setEditQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <select
+                          className="w-full px-2 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none"
+                          value={line.unit || "Nos"}
+                          onChange={(e) => {
+                            const updated = [...editQuoLines];
+                            updated[index].unit = e.target.value;
+                            setEditQuoLines(updated);
+                          }}
+                        >
+                          {availableUnits.map((u: string) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-1">
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          className="w-full px-2 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-center bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.quantity}
+                          onChange={(e) => {
+                            const updated = [...editQuoLines];
+                            updated[index].quantity = e.target.value;
+                            setEditQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          placeholder="Rate"
+                          className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                          value={line.salesPrice}
+                          onChange={(e) => {
+                            const updated = [...editQuoLines];
+                            updated[index].salesPrice = e.target.value;
+                            setEditQuoLines(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="sm:col-span-1 flex justify-center">
+                        {editQuoLines.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditQuoLines(editQuoLines.filter((_, i) => i !== index))}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all"
+                            title="Remove row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">-</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edit Quotation Calculations Breakdown */}
+              {(() => {
+                const subtotal = editQuoLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(editQuoDiscountValue) || 0;
+                if (editQuoDiscountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = editQuoIsGst ? Math.round(taxable * (editQuoSalesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+
+                return (
+                  <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-4 text-xs border border-slate-100 dark:border-slate-800/80">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Discount Mode
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={editQuoDiscountType}
+                            onChange={(e) => setEditQuoDiscountType(e.target.value as any)}
+                          >
+                            <option value="FIXED">Flat (PKR)</option>
+                            <option value="PERCENTAGE">Percentage (%)</option>
+                          </select>
+                          <input
+                            type="number"
+                            min="0"
+                            max={editQuoDiscountType === "PERCENTAGE" ? "100" : undefined}
+                            placeholder="0"
+                            className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            value={editQuoDiscountValue}
+                            onChange={(e) => setEditQuoDiscountValue(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                          Sales Tax (GST)
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={editQuoIsGst}
+                              onChange={(e) => setEditQuoIsGst(e.target.checked)}
+                            />
+                            <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                            <span className="ml-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {editQuoIsGst ? `Apply ${editQuoSalesTaxRate}% GST` : "No GST (Zero-Rated)"}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-w-xs ml-auto">
+                      <div className="flex justify-between items-center text-slate-500 font-semibold">
+                        <span>Items Subtotal:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {subtotal.toLocaleString()}</span>
+                      </div>
+
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-rose-500 font-semibold">
+                          <span>Discount Applied:</span>
+                          <span className="font-mono font-bold">- PKR {discountAmount.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-600 dark:text-slate-300 font-semibold">
+                        <span>Taxable Amount:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {taxable.toLocaleString()}</span>
+                      </div>
+
+                      {editQuoIsGst && (
+                        <div className="flex justify-between items-center text-slate-500 font-semibold">
+                          <span>Sales Tax ({editQuoSalesTaxRate}% GST):</span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">PKR {tax.toLocaleString()}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-sm font-black text-blue-600 dark:text-blue-400 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <span>Estimated Total:</span>
+                        <span className="font-mono">PKR {grandTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                  Terms, Notes, & Quotation Conditions
+                </label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editQuoNotes}
+                  onChange={(e) => setEditQuoNotes(e.target.value)}
+                />
+              </div>
+
+              {editQuotationError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-bold">
+                  {editQuotationError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditQuotationOpen(false)}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingEditQuotation}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-500/50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 flex items-center gap-1.5"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>{submittingEditQuotation ? "Saving Changes..." : "Save Quotation Changes"}</span>
                 </button>
               </div>
             </form>
