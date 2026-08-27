@@ -3,7 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 import { recordLedgerEntry } from "@/lib/ledger";
-import { postJournalEntry } from "@/lib/journal";
+import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { formatInvoiceNotesPayload, parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
@@ -64,6 +64,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       discountAmount: reqDiscountAmount,
       discount: reqDiscount,
       taxRate: reqTaxRate,
+      amountReceived: reqAmountReceived,
+      paymentMethod: reqPaymentMethod,
     } = body;
 
     const existingInvoice = await prisma.invoice.findUnique({
@@ -218,51 +220,76 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         0
       );
 
-      const wasFullyPaid =
-        existingInvoice.status === "PAID" ||
-        (currentAmountPaid >= Number(existingInvoice.totalAmount) && Number(existingInvoice.totalAmount) > 0);
+      let finalAmountPaid = 0;
+      const pMethod = reqPaymentMethod || existingPayments[0]?.method || "CASH";
 
-      let finalAmountPaid = currentAmountPaid;
-      let invoiceStatus = "UNPAID";
-
-      if (wasFullyPaid || (currentAmountPaid > finalTotalAmount && finalTotalAmount >= 0)) {
-        finalAmountPaid = finalTotalAmount;
-        invoiceStatus = "PAID";
-
-        // Adjust payment records to match new finalTotalAmount
-        if (existingPayments.length === 1) {
-          await tx.payment.update({
-            where: { id: existingPayments[0].id },
-            data: { amountPaid: finalTotalAmount },
-          });
-        } else if (existingPayments.length > 1) {
-          let remainingToDistribute = finalTotalAmount;
-          for (let i = 0; i < existingPayments.length; i++) {
-            const p = existingPayments[i];
-            if (i === existingPayments.length - 1) {
-              await tx.payment.update({
-                where: { id: p.id },
-                data: { amountPaid: Math.max(0, remainingToDistribute) },
-              });
-            } else {
-              const allocated = Math.min(Number(p.amountPaid), remainingToDistribute);
-              await tx.payment.update({
-                where: { id: p.id },
-                data: { amountPaid: allocated },
-              });
-              remainingToDistribute -= allocated;
+      if (reqAmountReceived !== undefined) {
+        finalAmountPaid = Math.max(0, Math.min(finalTotalAmount, Number(reqAmountReceived)));
+        if (finalAmountPaid > 0) {
+          if (existingPayments.length > 0) {
+            await tx.payment.update({
+              where: { id: existingPayments[0].id },
+              data: { amountPaid: finalAmountPaid, method: pMethod },
+            });
+            if (existingPayments.length > 1) {
+              const extraIds = existingPayments.slice(1).map((p) => p.id);
+              await tx.payment.deleteMany({ where: { id: { in: extraIds } } });
             }
+          } else {
+            await tx.payment.create({
+              data: {
+                invoiceId: existingInvoice.id,
+                amountPaid: finalAmountPaid,
+                method: pMethod,
+              },
+            });
+          }
+        } else {
+          if (existingPayments.length > 0) {
+            await tx.payment.deleteMany({ where: { invoiceId: existingInvoice.id } });
           }
         }
       } else {
-        finalAmountPaid = currentAmountPaid;
-        if (finalAmountPaid >= finalTotalAmount && finalTotalAmount > 0) {
-          invoiceStatus = "PAID";
-        } else if (finalAmountPaid > 0) {
-          invoiceStatus = "PARTIALLY_PAID";
+        const wasFullyPaid =
+          existingInvoice.status === "PAID" ||
+          (currentAmountPaid >= Number(existingInvoice.totalAmount) && Number(existingInvoice.totalAmount) > 0);
+
+        if (wasFullyPaid || (currentAmountPaid > finalTotalAmount && finalTotalAmount >= 0)) {
+          finalAmountPaid = finalTotalAmount;
+          if (existingPayments.length === 1) {
+            await tx.payment.update({
+              where: { id: existingPayments[0].id },
+              data: { amountPaid: finalTotalAmount },
+            });
+          } else if (existingPayments.length > 1) {
+            let remainingToDistribute = finalTotalAmount;
+            for (let i = 0; i < existingPayments.length; i++) {
+              const p = existingPayments[i];
+              if (i === existingPayments.length - 1) {
+                await tx.payment.update({
+                  where: { id: p.id },
+                  data: { amountPaid: Math.max(0, remainingToDistribute) },
+                });
+              } else {
+                const allocated = Math.min(Number(p.amountPaid), remainingToDistribute);
+                await tx.payment.update({
+                  where: { id: p.id },
+                  data: { amountPaid: allocated },
+                });
+                remainingToDistribute -= allocated;
+              }
+            }
+          }
         } else {
-          invoiceStatus = "UNPAID";
+          finalAmountPaid = currentAmountPaid;
         }
+      }
+
+      let invoiceStatus = "UNPAID";
+      if (finalAmountPaid >= finalTotalAmount && finalTotalAmount > 0) {
+        invoiceStatus = "PAID";
+      } else if (finalAmountPaid > 0) {
+        invoiceStatus = "PARTIALLY_PAID";
       }
 
       // 6. Delete old line items and recreate updated ones
@@ -473,74 +500,132 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           });
         }
 
-        // Sync payment vouchers & journals if invoice was paid or customer changed
-        if (existingPayments.length > 0) {
-          if (wasFullyPaid || currentAmountPaid > finalTotalAmount) {
-            // Update payment ledger entries amount to finalAmountPaid
+        // Sync payment vouchers & journals
+        const isBank = pMethod === "BANK" || pMethod === "BANK_TRANSFER" || pMethod === "CHEQUE" || pMethod === "ONLINE";
+        const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+
+        if (finalAmountPaid > 0) {
+          // Check for existing payment ledger entries
+          const existingPaymentLedgers = await tx.ledgerEntry.findMany({
+            where: {
+              OR: [
+                { referenceType: "INVOICE", referenceId: existingInvoice.id, voucherType: { in: ["CRV", "BRV"] } },
+                { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["CRV", "BRV"] } },
+              ],
+            },
+          });
+
+          if (existingPaymentLedgers.length > 0) {
+            // Update existing entry in-place without creating duplicate rows
             await tx.ledgerEntry.updateMany({
               where: {
-                OR: [
-                  {
-                    referenceType: "INVOICE",
-                    referenceId: existingInvoice.id,
-                    voucherType: { in: ["CRV", "BRV"] },
-                  },
-                  {
-                    voucherNumber: existingInvoice.invoiceNumber,
-                    voucherType: { in: ["CRV", "BRV"] },
-                  },
-                ],
+                id: { in: existingPaymentLedgers.map((l) => l.id) },
               },
               data: {
+                entryDate: invoiceDate,
+                description: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+                debitAccount: liquidAcc,
+                creditAccount: "Accounts Receivable (Trade Debtors)",
                 amount: finalAmountPaid,
+                partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
                 partyId: isPartyPosting ? resolvedCustomerId : null,
                 partyName: isPartyPosting ? finalClientName : null,
+                voucherType: isBank ? "BRV" : "CRV",
+                paymentMethod: pMethod,
               },
             });
-
-            // Update Double-Entry Journal Lines for Payments
-            const paymentJournals = await tx.journalEntry.findMany({
-              where: {
-                OR: [
-                  { sourceId: existingInvoice.id },
-                  ...existingPayments.map((p) => ({ sourceId: p.id })),
-                  { idempotencyKey: { contains: existingInvoice.id } },
-                  ...existingPayments.map((p) => ({ idempotencyKey: { contains: p.id } })),
-                ],
-              },
-              include: { lines: true },
+          } else {
+            // Record payment ledger entry if none existed before
+            await recordLedgerEntry(tx, {
+              entryDate: invoiceDate,
+              description: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+              debitAccount: liquidAcc,
+              creditAccount: "Accounts Receivable (Trade Debtors)",
+              amount: finalAmountPaid,
+              referenceType: "INVOICE",
+              referenceId: existingInvoice.id,
+              partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+              partyId: isPartyPosting ? resolvedCustomerId : null,
+              partyName: isPartyPosting ? finalClientName : null,
+              voucherType: isBank ? "BRV" : "CRV",
+              voucherNumber: existingInvoice.invoiceNumber,
+              paymentMethod: pMethod,
             });
+          }
 
+          // Double-Entry Journal for Payments
+          const paymentJournals = await tx.journalEntry.findMany({
+            where: {
+              OR: [
+                { sourceId: existingInvoice.id, sourceType: "INVOICE" },
+                { idempotencyKey: { startsWith: `INVOICE:${existingInvoice.id}:payment` } },
+                ...existingPayments.map((p) => ({ sourceId: p.id })),
+              ],
+            },
+            include: { lines: true },
+          });
+
+          if (paymentJournals.length > 0) {
             for (const pj of paymentJournals) {
-              if (
-                pj.idempotencyKey?.includes("payment") ||
-                pj.sourceType === "PAYMENT" ||
-                pj.narration?.toLowerCase().includes("payment")
-              ) {
-                for (const line of pj.lines) {
-                  await tx.journalLine.update({
-                    where: { id: line.id },
-                    data: {
-                      debit: Number(line.debit) > 0 ? finalAmountPaid : 0,
-                      credit: Number(line.credit) > 0 ? finalAmountPaid : 0,
-                      partyId: isPartyPosting && line.partyId ? resolvedCustomerId : line.partyId,
-                    },
-                  });
-                }
+              for (const line of pj.lines) {
+                await tx.journalLine.update({
+                  where: { id: line.id },
+                  data: {
+                    debit: Number(line.debit) > 0 ? finalAmountPaid : 0,
+                    credit: Number(line.credit) > 0 ? finalAmountPaid : 0,
+                    partyId: isPartyPosting && line.partyId ? resolvedCustomerId : line.partyId,
+                  },
+                });
               }
             }
-          } else if (isPartyPosting && resolvedCustomerId) {
-            await tx.ledgerEntry.updateMany({
-              where: {
-                referenceType: "INVOICE",
-                referenceId: existingInvoice.id,
-                voucherType: { in: ["CRV", "BRV"] },
-              },
-              data: {
-                partyId: resolvedCustomerId,
-                partyName: finalClientName,
-              },
+          } else {
+            await postJournalEntry(tx, {
+              entryDate: invoiceDate,
+              narration: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+              sourceType: "INVOICE",
+              sourceId: existingInvoice.id,
+              idempotencyKey: `INVOICE:${existingInvoice.id}:payment:default`,
+              lines: [
+                {
+                  accountName: mapPaymentMethodToAccount(pMethod),
+                  partyId: null,
+                  debit: finalAmountPaid,
+                  credit: 0,
+                },
+                {
+                  accountName: "Accounts Receivable (Trade Debtors)",
+                  partyId: isPartyPosting ? resolvedCustomerId : null,
+                  debit: 0,
+                  credit: finalAmountPaid,
+                },
+              ],
             });
+          }
+        } else {
+          // finalAmountPaid is 0: remove payment ledger entries and payment journals
+          await tx.ledgerEntry.deleteMany({
+            where: {
+              OR: [
+                { referenceType: "INVOICE", referenceId: existingInvoice.id, voucherType: { in: ["CRV", "BRV"] } },
+                { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["CRV", "BRV"] } },
+              ],
+            },
+          });
+
+          const paymentJournals = await tx.journalEntry.findMany({
+            where: {
+              OR: [
+                { sourceId: existingInvoice.id, sourceType: "INVOICE" },
+                { idempotencyKey: { startsWith: `INVOICE:${existingInvoice.id}:payment` } },
+                ...existingPayments.map((p) => ({ sourceId: p.id })),
+              ],
+            },
+            select: { id: true },
+          });
+          if (paymentJournals.length > 0) {
+            const jIds = paymentJournals.map((j) => j.id);
+            await tx.journalLine.deleteMany({ where: { journalEntryId: { in: jIds } } });
+            await tx.journalEntry.deleteMany({ where: { id: { in: jIds } } });
           }
         }
       }

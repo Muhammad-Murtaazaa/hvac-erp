@@ -159,6 +159,9 @@ function SalesPageContent() {
   const [editNotes, setEditNotes] = useState("");
   const [editDiscountType, setEditDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
   const [editDiscountValue, setEditDiscountValue] = useState("0");
+  const [editAmountReceived, setEditAmountReceived] = useState("");
+  const [editPayMethod, setEditPayMethod] = useState("CASH");
+  const [newInstallmentAmount, setNewInstallmentAmount] = useState("");
   const [editInvLines, setEditInvLines] = useState<any[]>([]);
   const [editInvoiceError, setEditInvoiceError] = useState("");
   const [submittingEditInvoice, setSubmittingEditInvoice] = useState(false);
@@ -561,7 +564,7 @@ function SalesPageContent() {
 
     const token = localStorage.getItem("token");
     const paymentsList: any[] = [];
-    const numAmountReceived = Number(amountReceived) || 0;
+    const numAmountReceived = Math.max(0, Math.min(grandTotal, Number(amountReceived) || 0));
     if (numAmountReceived > 0) {
       paymentsList.push({ amountPaid: numAmountReceived, method: payMethod || "CASH" });
     }
@@ -641,6 +644,9 @@ function SalesPageContent() {
     setEditSubjectHeading(inv.subjectHeading || "");
     setEditSubjectDescription(inv.subjectDescription || "");
     setEditPostingOption("CUSTOMER_LEDGER");
+    setEditAmountReceived(String(Math.round(Number(inv.amountPaid || 0))));
+    setEditPayMethod(inv.payments?.[0]?.method || "CASH");
+    setNewInstallmentAmount("");
 
     if (inv.lineItems && inv.lineItems.length > 0) {
       const mapped = inv.lineItems.map((l: any) => {
@@ -736,6 +742,8 @@ function SalesPageContent() {
           discountPercent: editDiscountType === "PERCENTAGE" ? discVal : 0,
           discountAmount: editDiscountType === "FIXED" ? discVal : 0,
           postingOption: editPostingOption,
+          amountReceived: Number(editAmountReceived) || 0,
+          paymentMethod: editPayMethod,
         }),
       });
 
@@ -1801,19 +1809,6 @@ function SalesPageContent() {
                                 >
                                   <FileText className="w-4 h-4" />
                                 </a>
-                                {!isFullyPaid && displayStatus !== "PAID" && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedInvoice(inv);
-                                      const outstanding = Math.round(Number(inv.totalAmount) - Number(inv.amountPaid));
-                                      setPaymentAmount(String(outstanding));
-                                      setIsPaymentOpen(true);
-                                    }}
-                                    className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-0.5"
-                                  >
-                                    <DollarSign className="w-3.5 h-3.5" /> Pay
-                                  </button>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -2794,12 +2789,27 @@ function SalesPageContent() {
                           <input
                             type="number"
                             min="0"
+                            max={grandTotal}
                             step="any"
                             placeholder="0.00"
                             onFocus={(e) => e.target.select()}
                             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl text-sm font-mono font-bold text-emerald-700 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                             value={amountReceived}
-                            onChange={(e) => setAmountReceived(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setAmountReceived("");
+                                return;
+                              }
+                              const num = Number(val);
+                              if (num > grandTotal) {
+                                setAmountReceived(String(grandTotal));
+                              } else if (num < 0) {
+                                setAmountReceived("0");
+                              } else {
+                                setAmountReceived(val);
+                              }
+                            }}
                           />
                         </div>
                       </div>
@@ -3300,20 +3310,241 @@ function SalesPageContent() {
                         <span>Updated Total Amount:</span>
                         <span className="font-mono">PKR {grandTotal.toLocaleString()}</span>
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
-                      {paidSoFar > 0 && (
-                        <div className="flex justify-between items-center text-xs font-bold pt-1 text-emerald-600 dark:text-emerald-400">
-                          <span>Previously Paid (Recorded):</span>
-                          <span className="font-mono">PKR {paidSoFar.toLocaleString()}</span>
+              {/* Payment / Amount Received Section for Edit */}
+              {(() => {
+                const subtotal = editInvLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(editDiscountValue) || 0;
+                if (editDiscountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = editIsGst ? Math.round(taxable * (editSalesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+
+                const numReceived = Number(editAmountReceived) || 0;
+                const balanceDue = Math.max(0, grandTotal - numReceived);
+                const isFull = numReceived >= grandTotal && grandTotal > 0;
+                const isPartial = numReceived > 0 && numReceived < grandTotal;
+
+                return (
+                  <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                          <DollarSign className="w-4 h-4" />
                         </div>
-                      )}
-
-                      <div className="flex justify-between items-center text-xs font-extrabold pt-1">
-                        <span className="text-slate-600 dark:text-slate-400">Remaining Balance Due:</span>
-                        <span className={`font-mono ${remainingDue > 0 ? "text-amber-500" : "text-emerald-500"}`}>
-                          PKR {remainingDue.toLocaleString()}
-                        </span>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                            Payment / Amount Received
+                          </span>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Update payment collected against this invoice. Existing ledger records will be updated in-place.
+                          </p>
+                        </div>
                       </div>
+
+                      {/* Quick Presets */}
+                      <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setEditAmountReceived(String(grandTotal))}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm"
+                        >
+                          Full Payment (PKR {grandTotal.toLocaleString()})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditAmountReceived("0")}
+                          className="px-2 py-1 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold transition-all"
+                        >
+                          Unpaid (0)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* Amount Received Input */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          Amount Received (PKR)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max={grandTotal}
+                            step="any"
+                            placeholder="0.00"
+                            onFocus={(e) => e.target.select()}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl text-sm font-mono font-bold text-emerald-700 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                            value={editAmountReceived}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setEditAmountReceived("");
+                                return;
+                              }
+                              const num = Number(val);
+                              if (num > grandTotal) {
+                                setEditAmountReceived(String(grandTotal));
+                              } else if (num < 0) {
+                                setEditAmountReceived("0");
+                              } else {
+                                setEditAmountReceived(val);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          Payment Method
+                        </label>
+                        <select
+                          disabled={numReceived <= 0}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:opacity-50"
+                          value={editPayMethod}
+                          onChange={(e) => setEditPayMethod(e.target.value)}
+                        >
+                          <option value="CASH">CASH (Cash in Hand)</option>
+                          <option value="BANK">BANK (Bank Transfer)</option>
+                          <option value="CARD">CARD (Debit/Credit Card)</option>
+                          <option value="CHEQUE">CHEQUE</option>
+                          <option value="ONLINE">ONLINE (Raast / IBFT)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Quick Installment Collector Tool */}
+                    {balanceDue > 0 && (
+                      <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>➕ Record New Installment Payment</span>
+                          </label>
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold">
+                            Current Due: PKR {balanceDue.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 items-center">
+                          <div className="relative flex-1 w-full">
+                            <input
+                              type="number"
+                              min="1"
+                              max={balanceDue}
+                              step="any"
+                              placeholder="Enter installment amount (e.g. 20000)"
+                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                              value={newInstallmentAmount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "") {
+                                  setNewInstallmentAmount("");
+                                  return;
+                                }
+                                const num = Number(val);
+                                if (num > balanceDue) {
+                                  setNewInstallmentAmount(String(balanceDue));
+                                } else if (num < 0) {
+                                  setNewInstallmentAmount("0");
+                                } else {
+                                  setNewInstallmentAmount(val);
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const addVal = Number(newInstallmentAmount) || 0;
+                                if (addVal <= 0) return;
+                                const current = Number(editAmountReceived) || 0;
+                                const updated = Math.min(grandTotal, current + addVal);
+                                setEditAmountReceived(String(updated));
+                                setNewInstallmentAmount("");
+                              }}
+                              disabled={!newInstallmentAmount || Number(newInstallmentAmount) <= 0}
+                              className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition-all whitespace-nowrap"
+                            >
+                              + Add to Received
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditAmountReceived(String(grandTotal));
+                                setNewInstallmentAmount("");
+                              }}
+                              className="flex-1 sm:flex-none px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold transition-all whitespace-nowrap"
+                            >
+                              Pay Remaining (PKR {balanceDue.toLocaleString()})
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                          Entering an installment automatically updates the cumulative Amount Received and adjusts remaining balance due.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Payment History Breakdown if existing payments */}
+                    {editingInvoice?.payments?.length > 0 && (
+                      <div className="pt-2 border-t border-emerald-100 dark:border-emerald-900/40">
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                          Payment Installments on Record:
+                        </span>
+                        <div className="space-y-1">
+                          {editingInvoice.payments.map((p: any, idx: number) => (
+                            <div key={p.id || idx} className="flex justify-between items-center text-[11px] bg-white/60 dark:bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-100 dark:border-slate-800">
+                              <span className="text-slate-600 dark:text-slate-300 font-semibold">
+                                Installment #{idx + 1} ({p.method || "CASH"}) - {new Date(p.paymentDate || p.createdAt || Date.now()).toLocaleDateString()}
+                              </span>
+                              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                PKR {Math.round(Number(p.amountPaid)).toLocaleString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Balance and Status Live Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 text-xs">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400">Amount Received: </span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            PKR {numReceived.toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400">Balance Due: </span>
+                          <span className={`font-mono font-bold ${balanceDue > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                            PKR {balanceDue.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        isFull
+                          ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                          : isPartial
+                          ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
+                      }`}>
+                        {isFull ? "Full Paid" : isPartial ? "Partially Paid" : "Unpaid"}
+                      </span>
                     </div>
                   </div>
                 );

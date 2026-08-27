@@ -258,7 +258,8 @@ export async function POST(req: Request) {
         payments.forEach((p: any) => {
           amountPaid += Math.round(Number(p.amountPaid ?? p.amount ?? 0));
         });
-        if (amountPaid >= finalTotalAmount) {
+        amountPaid = Math.max(0, Math.min(finalTotalAmount, amountPaid));
+        if (amountPaid >= finalTotalAmount && finalTotalAmount > 0) {
           invoiceStatus = "PAID";
         } else if (amountPaid > 0) {
           invoiceStatus = "PARTIALLY_PAID";
