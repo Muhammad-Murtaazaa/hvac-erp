@@ -3,6 +3,7 @@ import fs from "fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { parseInvoiceMetadata } from "./invoiceHelper";
+import { formatDateDisplay } from "./dateUtils";
 
 // Setup font paths dynamically using absolute path resolution
 const fontRegularPath = path.resolve("src/assets/fonts/Roboto-Regular.ttf");
@@ -80,7 +81,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`Date: ${new Date(invoiceData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Date: ${formatDateDisplay(invoiceData.date, "en-GB")}`, 50, 148);
       doc.text(`Client Name: ${invoiceData.clientName}`, 50, 162);
       if (invoiceData.clientPhone) doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, 176);
       if (invoiceData.clientAddress) doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, 190, { width: 280 });
@@ -276,7 +277,7 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`DO NUMBER: ${doData.doNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`Date: ${new Date(doData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Date: ${formatDateDisplay(doData.date, "en-GB")}`, 50, 148);
       doc.text(`Client Name: ${doData.clientName}`, 50, 162);
       if (doData.clientPhone) doc.text(`Client Phone: ${doData.clientPhone}`, 50, 176);
       if (doData.deliveryAddress) doc.text(`Delivery Address: ${doData.deliveryAddress}`, 50, 190, { width: 280 });
@@ -561,7 +562,7 @@ export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
 
       // Right metadata
       doc.font("Roboto-Bold").fontSize(10).text("Date:", 340, 130);
-      doc.font("Roboto-Regular").fontSize(10).text(new Date(complaintData.date).toLocaleDateString("en-GB"), 380, 130);
+      doc.font("Roboto-Regular").fontSize(10).text(formatDateDisplay(complaintData.date, "en-GB"), 380, 130);
       doc.moveTo(380, 140).lineTo(550, 140).strokeColor("#000000").stroke();
 
       doc.font("Roboto-Bold").fontSize(10).text("Location:", 340, 150);
@@ -1342,13 +1343,13 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`QUOTATION: ${quotationData.quotationNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`Date: ${new Date(quotationData.date).toLocaleDateString("en-GB")}`, 50, 148);
+      doc.text(`Date: ${formatDateDisplay(quotationData.date, "en-GB")}`, 50, 148);
       doc.text(`Client Name: ${quotationData.clientName}`, 50, 162);
       if (quotationData.clientPhone) doc.text(`Client Phone: ${quotationData.clientPhone}`, 50, 176);
       if (quotationData.clientAddress) doc.text(`Client Address: ${quotationData.clientAddress}`, 50, 190, { width: 280 });
 
       if (quotationData.validUntil) {
-        doc.text(`Valid Until: ${new Date(quotationData.validUntil).toLocaleDateString("en-GB")}`, 340, 148);
+        doc.text(`Valid Until: ${formatDateDisplay(quotationData.validUntil, "en-GB")}`, 340, 148);
       }
       doc.text(`Status: ${quotationData.status || "DRAFT"}`, 340, 162);
       doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);

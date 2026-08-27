@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
 import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { clientName, clientPhone, lineItems, paymentMethod } = await req.json(); // lineItems = Array of { productId, quantity, salesPrice }
+    const { clientName, clientPhone, lineItems, paymentMethod, date } = await req.json(); // lineItems = Array of { productId, quantity, salesPrice }
 
     if (!lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Cart line items are required" }, { status: 400 });
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
       }
 
       // 1. Create Invoice with status PAID
+      const invoiceDate = parseDateForStorage(date || new Date());
+
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
           status: "PAID",
           totalAmount,
           amountPaid: totalAmount,
-          date: new Date(),
+          date: invoiceDate,
           lineItems: {
             create: lineItemsWithInfo.map((l) => ({
               productId: l.productId,
@@ -95,6 +98,7 @@ export async function POST(req: Request) {
       // 3. Ledger Entries: Revenue
       // Debit Accounts Receivable / Credit Sales Revenue
       await recordLedgerEntry(tx, {
+        entryDate: invoiceDate,
         description: `POS sale Revenue (${invoiceNumber})`,
         debitAccount: "Accounts Receivable (Trade Debtors)",
         creditAccount: "Sales Revenue",
@@ -105,7 +109,7 @@ export async function POST(req: Request) {
 
       // Native Double-Entry: POS Revenue (partyId null for walk-in)
       await postJournalEntry(tx, {
-        entryDate: new Date(),
+        entryDate: invoiceDate,
         narration: `POS sale Revenue (${invoiceNumber})`,
         sourceType: "POS",
         sourceId: createdInvoice.id,
@@ -130,6 +134,7 @@ export async function POST(req: Request) {
       // Debit COGS / Credit Inventory Asset
       if (totalCogs > 0) {
         await recordLedgerEntry(tx, {
+          entryDate: invoiceDate,
           description: `POS sale COGS release (${invoiceNumber})`,
           debitAccount: "Cost of Goods Sold",
           creditAccount: "Inventory Asset",
@@ -140,7 +145,7 @@ export async function POST(req: Request) {
 
         // Native Double-Entry: POS COGS
         await postJournalEntry(tx, {
-          entryDate: new Date(),
+          entryDate: invoiceDate,
           narration: `POS sale COGS release (${invoiceNumber})`,
           sourceType: "POS",
           sourceId: createdInvoice.id,
@@ -177,6 +182,7 @@ export async function POST(req: Request) {
       const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
 
       await recordLedgerEntry(tx, {
+        entryDate: invoiceDate,
         description: `POS payment received against Invoice ${invoiceNumber} via ${payMethod}`,
         debitAccount: liquidAcc,
         creditAccount: "Accounts Receivable (Trade Debtors)",
@@ -187,7 +193,7 @@ export async function POST(req: Request) {
 
       // Native Double-Entry: POS Payment
       await postJournalEntry(tx, {
-        entryDate: new Date(),
+        entryDate: invoiceDate,
         narration: `POS payment received against Invoice ${invoiceNumber} via ${payMethod}`,
         sourceType: "POS",
         sourceId: createdInvoice.id,

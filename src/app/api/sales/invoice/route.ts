@@ -6,6 +6,7 @@ import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
 import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -266,6 +267,8 @@ export async function POST(req: Request) {
         }
       }
 
+      const invoiceDate = parseDateForStorage(date);
+
       // Create the Invoice record
       const createdInvoice = await tx.invoice.create({
         data: {
@@ -274,7 +277,7 @@ export async function POST(req: Request) {
           clientName: finalClientName,
           clientPhone: finalClientPhone || null,
           clientAddress: finalClientAddress || null,
-          date: new Date(date || Date.now()),
+          date: invoiceDate,
           status: invoiceStatus,
           totalAmount: finalTotalAmount,
           amountPaid,
@@ -336,6 +339,7 @@ export async function POST(req: Request) {
       // General Ledger Journal Entry (Debit Accounts Receivable / Credit Sales Revenue)
       if (!isNoLedger) {
         await recordLedgerEntry(tx, {
+          entryDate: invoiceDate,
           description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
@@ -351,6 +355,7 @@ export async function POST(req: Request) {
 
         if (taxAmount > 0) {
           await recordLedgerEntry(tx, {
+            entryDate: invoiceDate,
             description: `Sales Tax for Invoice ${invoiceNumber}`,
             debitAccount: "Accounts Receivable (Trade Debtors)",
             creditAccount: "Sales Tax Payable",
@@ -390,7 +395,7 @@ export async function POST(req: Request) {
         }
 
         await postJournalEntry(tx, {
-          entryDate: new Date(date || Date.now()),
+          entryDate: invoiceDate,
           narration: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           sourceType: "INVOICE",
           sourceId: createdInvoice.id,
@@ -401,6 +406,7 @@ export async function POST(req: Request) {
         // General Ledger COGS entries (Debit COGS / Credit Inventory Asset)
         if (totalCogs > 0) {
           await recordLedgerEntry(tx, {
+            entryDate: invoiceDate,
             description: `COGS release for Invoice ${invoiceNumber}`,
             debitAccount: "Cost of Goods Sold",
             creditAccount: "Inventory Asset",
@@ -416,7 +422,7 @@ export async function POST(req: Request) {
 
           // Native Double-Entry Journal: COGS separate
           await postJournalEntry(tx, {
-            entryDate: new Date(date || Date.now()),
+            entryDate: invoiceDate,
             narration: `COGS release for Invoice ${invoiceNumber}`,
             sourceType: "INVOICE",
             sourceId: createdInvoice.id,
@@ -459,6 +465,7 @@ export async function POST(req: Request) {
           if (!isNoLedger) {
             // Ledger Entry for payment receipt (Debit Cash-Bank / Credit Accounts Receivable)
             await recordLedgerEntry(tx, {
+              entryDate: invoiceDate,
               description: `Payment received against Invoice ${invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
               debitAccount: liquidAcc,
               creditAccount: "Accounts Receivable (Trade Debtors)",
@@ -475,7 +482,7 @@ export async function POST(req: Request) {
 
             // Native Double-Entry Journal: Payment separate
             await postJournalEntry(tx, {
-              entryDate: new Date(date || Date.now()),
+              entryDate: invoiceDate,
               narration: `Payment received against Invoice ${invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
               sourceType: "INVOICE",
               sourceId: createdInvoice.id,

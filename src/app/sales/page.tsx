@@ -11,6 +11,7 @@ import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
+import { getLocalDateString, formatDateForInput, formatDateDisplay } from "@/lib/dateUtils";
 
 function SalesPageContent() {
   const searchParams = useSearchParams();
@@ -86,14 +87,14 @@ function SalesPageContent() {
         .concat(
           selected.map(
             (i) =>
-              `"${i.invoiceNumber}","${i.clientName}","${i.clientPhone || ""}","${i.status}",${i.totalAmount},${i.amountPaid},"${new Date(i.date).toISOString().split("T")[0]}"`
+              `"${i.invoiceNumber}","${i.clientName}","${i.clientPhone || ""}","${i.status}",${i.totalAmount},${i.amountPaid},"${formatDateForInput(i.date)}"`
           )
         )
         .join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Selected_Invoices_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `Selected_Invoices_${getLocalDateString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -120,6 +121,7 @@ function SalesPageContent() {
 
   // Standalone Invoice State
   const [clientName, setClientName] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(getLocalDateString());
   const [isGst, setIsGst] = useState(true);
   const [postingOption, setPostingOption] = useState<"CUSTOMER_LEDGER" | "GENERAL_LEDGER" | "NO_LEDGER">("CUSTOMER_LEDGER");
   const [clientPhone, setClientPhone] = useState("");
@@ -575,6 +577,7 @@ function SalesPageContent() {
       clientName,
       clientPhone,
       clientAddress,
+      date: invoiceDate,
       lineItems: formattedLines,
       payments: paymentsList,
       notes,
@@ -601,6 +604,7 @@ function SalesPageContent() {
       setSelectedCustomerId(null);
       setSelectedComplaintId("");
       setClientName("");
+      setInvoiceDate(getLocalDateString());
       setClientPhone("");
       setClientAddress("");
       setNotes("");
@@ -627,8 +631,7 @@ function SalesPageContent() {
     setEditClientAddress(inv.clientAddress || "");
     setEditCustomerId(inv.customerId || null);
 
-    const d = new Date(inv.date || Date.now());
-    setEditDate(d.toISOString().split("T")[0]);
+    setEditDate(formatDateForInput(inv.date));
 
     const meta = parseInvoiceMetadata(inv.notes, inv);
     setEditNotes(meta.userNotes || "");
@@ -731,7 +734,7 @@ function SalesPageContent() {
           clientName: editClientName.trim(),
           clientPhone: editClientPhone.trim(),
           clientAddress: editClientAddress.trim(),
-          date: editDate ? new Date(editDate) : new Date(editingInvoice.date),
+          date: editDate || formatDateForInput(editingInvoice.date),
           lineItems: formattedLines,
           notes: editNotes,
           subjectHeading: editSubjectHeading.trim() || null,
@@ -864,9 +867,8 @@ function SalesPageContent() {
     setEditQuoClientPhone(quo.clientPhone || "");
     setEditQuoClientAddress(quo.clientAddress || "");
     setEditQuoCustomerId(quo.customerId || null);
-    const d = new Date(quo.date || Date.now());
-    setEditQuoDate(d.toISOString().split("T")[0]);
-    setEditQuoValidUntil(quo.validUntil ? new Date(quo.validUntil).toISOString().split("T")[0] : "");
+    setEditQuoDate(formatDateForInput(quo.date));
+    setEditQuoValidUntil(quo.validUntil ? formatDateForInput(quo.validUntil) : "");
     setEditQuoStatus(quo.status || "DRAFT");
 
     const meta = parseInvoiceMetadata(quo.notes, quo);
@@ -1420,7 +1422,10 @@ function SalesPageContent() {
           <div className="flex items-center gap-2">
             {activeTab === "invoices" && (
               <button
-                onClick={() => setIsInvoiceOpen(true)}
+                onClick={() => {
+                  setInvoiceDate(getLocalDateString());
+                  setIsInvoiceOpen(true);
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
@@ -1430,7 +1435,10 @@ function SalesPageContent() {
 
             {activeTab === "quotations" && (
               <button
-                onClick={() => setIsQuotationOpen(true)}
+                onClick={() => {
+                  setQuoDate(getLocalDateString());
+                  setIsQuotationOpen(true);
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
@@ -1789,7 +1797,7 @@ function SalesPageContent() {
                             </td>
                             <td className="p-3 text-right font-bold">{Math.round(Number(inv.totalAmount)).toLocaleString("en-US")}</td>
                             <td className="p-3 text-right text-emerald-500 font-semibold">{Math.round(Number(inv.amountPaid)).toLocaleString("en-US")}</td>
-                            <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
+                            <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(inv.date)}</td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
@@ -1953,10 +1961,10 @@ function SalesPageContent() {
                               {Math.round(Number(quo.totalAmount)).toLocaleString("en-US")}
                             </td>
                             <td className="p-3 text-slate-500 whitespace-nowrap">
-                              {new Date(quo.date).toLocaleDateString("en-GB")}
+                              {formatDateDisplay(quo.date)}
                             </td>
                             <td className="p-3 text-slate-500 whitespace-nowrap">
-                              {quo.validUntil ? new Date(quo.validUntil).toLocaleDateString("en-GB") : "-"}
+                              {quo.validUntil ? formatDateDisplay(quo.validUntil) : "-"}
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1.5">
@@ -2047,7 +2055,7 @@ function SalesPageContent() {
                           </span>
                         </td>
                         <td className="p-3 truncate max-w-xs">{doRec.deliveryAddress}</td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(doRec.date).toLocaleDateString()}</td>
+                        <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(doRec.date)}</td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
@@ -2373,15 +2381,16 @@ function SalesPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
-                  <select
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Invoice Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
-                    value={isGst ? "GST" : "NON_GST"}
-                    onChange={(e) => setIsGst(e.target.value === "GST")}
-                  >
-                    <option value="GST">GST (With Sales Tax)</option>
-                    <option value="NON_GST">Non-GST (No Sales Tax)</option>
-                  </select>
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -2395,6 +2404,17 @@ function SalesPageContent() {
                     value={clientAddress}
                     onChange={(e) => setClientAddress(e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
+                  <select
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold"
+                    value={isGst ? "GST" : "NON_GST"}
+                    onChange={(e) => setIsGst(e.target.value === "GST")}
+                  >
+                    <option value="GST">GST (With Sales Tax)</option>
+                    <option value="NON_GST">Non-GST (No Sales Tax)</option>
+                  </select>
                 </div>
               </div>
 
@@ -5792,7 +5812,7 @@ function SalesPageContent() {
                             return (
                               <tr key={inv.id} className="hover:bg-white dark:hover:bg-slate-900/60">
                                 <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{inv.invoiceNumber}</td>
-                                <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(inv.date).toLocaleDateString()}</td>
+                                <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(inv.date)}</td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                     isFullyPaid
@@ -5924,7 +5944,7 @@ function SalesPageContent() {
                               return (
                                 <tr key={tx.id || idx} className="hover:bg-white dark:hover:bg-slate-900/60 font-sans">
                                   <td className="p-3 text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                                    {new Date(tx.date).toLocaleDateString()}
+                                    {formatDateDisplay(tx.date)}
                                   </td>
                                   <td className="p-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
                                     {tx.voucherNumber || tx.referenceNumber || "-"}
@@ -6003,7 +6023,7 @@ function SalesPageContent() {
                           {selectedCustomerDossier.complaints?.map((comp: any) => (
                             <tr key={comp.id} className="hover:bg-white dark:hover:bg-slate-900/60">
                               <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{comp.complaintNumber}</td>
-                              <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(comp.date || comp.createdAt).toLocaleDateString()}</td>
+                              <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(comp.date || comp.createdAt)}</td>
                               <td className="p-3 max-w-xs truncate" title={comp.description}>{comp.description}</td>
                               <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">
                                 {comp.technician?.name || <span className="text-slate-400 italic">Unassigned</span>}
@@ -6065,7 +6085,7 @@ function SalesPageContent() {
                           {selectedCustomerDossier.deliveryOrders?.map((d: any) => (
                             <tr key={d.id} className="hover:bg-white dark:hover:bg-slate-900/60">
                               <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{d.doNumber}</td>
-                              <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(d.date || d.createdAt).toLocaleDateString()}</td>
+                              <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(d.date || d.createdAt)}</td>
                               <td className="p-3">
                                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950/40 rounded-full text-[10px] font-bold">
                                   {d.status}

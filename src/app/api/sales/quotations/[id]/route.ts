@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -207,8 +208,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           clientName: finalClientName,
           clientPhone: finalClientPhone || null,
           clientAddress: finalClientAddress || null,
-          date: new Date(date || existingQuotation.date),
-          validUntil: validUntil ? new Date(validUntil) : null,
+          date: date ? parseDateForStorage(date) : existingQuotation.date,
+          validUntil: validUntil !== undefined ? (validUntil ? parseDateForStorage(validUntil) : null) : existingQuotation.validUntil,
           status: reqStatus || existingQuotation.status,
           totalAmount: finalTotalAmount,
           notes: formattedNotes,

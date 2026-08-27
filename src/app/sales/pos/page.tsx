@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Search, ShoppingCart, Plus, Minus, Trash2, DollarSign, User, Phone, CheckCircle2, Printer } from "lucide-react";
 import { SkeletonCard } from "@/components/shared/SkeletonTable";
 import { useToast } from "@/components/shared/ToastProvider";
+import { formatDateDisplay } from "@/lib/dateUtils";
 
 export default function PosPage() {
   const { toast } = useToast();
@@ -317,7 +318,7 @@ export default function PosPage() {
             <div className="border border-dashed border-slate-200 dark:border-slate-800 p-4 rounded-xl text-xs space-y-3 font-mono bg-slate-50 dark:bg-slate-950/40">
               <div className="text-center border-b border-dashed border-slate-200 dark:border-slate-800 pb-2">
                 <span className="font-bold text-sm block">HVAC TRADING POS</span>
-                <span className="text-[9px] text-slate-400">Date: {new Date(receiptData.date).toLocaleDateString()}</span>
+                <span className="text-[9px] text-slate-400">Date: {formatDateDisplay(receiptData.date)}</span>
               </div>
               <div className="space-y-1 text-[10px]">
                 <p>Client: {receiptData.clientName}</p>

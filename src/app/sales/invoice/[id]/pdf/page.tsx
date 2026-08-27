@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
+import { formatDateDisplay } from "@/lib/dateUtils";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -205,7 +206,7 @@ export default function InvoicePdfPage() {
                 <div>
                   <span className="font-bold text-black">Date:</span>{" "}
                   <span className="font-bold text-black">
-                    {new Date(invoice.date).toLocaleDateString("en-GB")}
+                    {formatDateDisplay(invoice.date, "en-GB")}
                   </span>
                 </div>
               </div>

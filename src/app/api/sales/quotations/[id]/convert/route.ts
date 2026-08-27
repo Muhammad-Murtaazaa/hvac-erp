@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
 import { postJournalEntry } from "@/lib/journal";
 import { parseInvoiceMetadata, formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -106,6 +107,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
 
       // 3. Create Live Invoice
+      const invoiceDate = parseDateForStorage(new Date());
+
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
@@ -113,7 +116,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           clientName: quotation.clientName,
           clientPhone: quotation.clientPhone || null,
           clientAddress: quotation.clientAddress || null,
-          date: new Date(),
+          date: invoiceDate,
           status: "UNPAID",
           totalAmount: finalTotalAmount,
           amountPaid: 0,
@@ -141,7 +144,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const isPartyPosting = !!quotation.customerId;
 
       await recordLedgerEntry(tx, {
-        entryDate: new Date(),
+        entryDate: invoiceDate,
         description: `Revenue for Invoice ${invoiceNumber} issued to ${quotation.clientName} (Converted from Quotation ${quotation.quotationNumber})`,
         debitAccount: "Accounts Receivable (Trade Debtors)",
         creditAccount: "Sales Revenue",
@@ -157,7 +160,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
       if (taxAmount > 0) {
         await recordLedgerEntry(tx, {
-          entryDate: new Date(),
+          entryDate: invoiceDate,
           description: `Sales Tax for Invoice ${invoiceNumber}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: "Sales Tax Payable",
@@ -197,7 +200,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       }
 
       await postJournalEntry(tx, {
-        entryDate: new Date(),
+        entryDate: invoiceDate,
         narration: `Revenue for Invoice ${invoiceNumber} issued to ${quotation.clientName} (Converted from Quotation ${quotation.quotationNumber})`,
         sourceType: "INVOICE",
         sourceId: createdInvoice.id,
@@ -208,7 +211,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       // COGS
       if (totalCogs > 0) {
         await recordLedgerEntry(tx, {
-          entryDate: new Date(),
+          entryDate: invoiceDate,
           description: `COGS release for Invoice ${invoiceNumber}`,
           debitAccount: "Cost of Goods Sold",
           creditAccount: "Inventory Asset",
@@ -223,7 +226,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         });
 
         await postJournalEntry(tx, {
-          entryDate: new Date(),
+          entryDate: invoiceDate,
           narration: `COGS release for Invoice ${invoiceNumber}`,
           sourceType: "INVOICE",
           sourceId: createdInvoice.id,

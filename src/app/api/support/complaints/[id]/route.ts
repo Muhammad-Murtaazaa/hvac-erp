@@ -5,6 +5,7 @@ import { recordLedgerEntry } from "@/lib/ledger";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
 import { sendTechnicianPushNotification } from "@/lib/push-notify";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -116,6 +117,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       if (generateInvoice && finalAmount > 0 && !ticket.invoice) {
         const invCount = await tx.invoice.count();
         const invoiceNumber = `INV-${10001 + invCount}`;
+        const invoiceDate = parseDateForStorage(new Date());
 
         // Create Sales Service Invoice (no stock deducts)
         const inv = await tx.invoice.create({
@@ -125,7 +127,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             clientName: finalCustomerName,
             clientPhone: finalCustomerPhone,
             clientAddress: finalCustomerAddress,
-            date: new Date(),
+            date: invoiceDate,
             status: "UNPAID",
             totalAmount: finalAmount,
             amountPaid: 0.00,
@@ -146,6 +148,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
         // Post ledger entries: Debit AR / Credit Revenue
         await recordLedgerEntry(tx, {
+          entryDate: invoiceDate,
           description: `Service billing for Complaint ${ticket.complaintNumber} (${invoiceNumber})`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: "Service & Maintenance Income",

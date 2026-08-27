@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft, QrCode, Tag } from "lucide-react";
 import QRCode from "qrcode";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
+import { formatDateDisplay } from "@/lib/dateUtils";
 
 export default function DeliveryOrderPdfPage() {
   const params = useParams();
@@ -148,7 +149,7 @@ export default function DeliveryOrderPdfPage() {
               <h2 className="text-xl font-extrabold text-black">{formattedDN}</h2>
             </div>
             <div className="text-right text-[11px] font-bold text-black">
-              <div>{new Date(doRecord.date).toLocaleDateString("en-GB")}</div>
+              <div>{formatDateDisplay(doRecord.date, "en-GB")}</div>
               <div>{doRecord.through || "DISPATCH"}</div>
             </div>
           </div>
@@ -253,7 +254,7 @@ export default function DeliveryOrderPdfPage() {
             <div className="flex flex-col items-end text-right space-y-1 col-span-1">
               <div>
                 <span className="text-black font-bold">Date:</span>{" "}
-                <span className="text-black font-extrabold">{new Date(doRecord.date).toLocaleDateString("en-GB")}</span>
+                <span className="text-black font-extrabold">{formatDateDisplay(doRecord.date, "en-GB")}</span>
               </div>
               <div>
                 <span className="text-black font-bold">DN.No:</span>{" "}

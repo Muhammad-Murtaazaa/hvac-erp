@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
+import { formatDateDisplay } from "@/lib/dateUtils";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -203,14 +204,14 @@ export default function QuotationPdfPage() {
                 <div>
                   <span className="font-bold text-black">Date:</span>{" "}
                   <span className="font-bold text-black">
-                    {new Date(quotation.date).toLocaleDateString("en-GB")}
+                    {formatDateDisplay(quotation.date, "en-GB")}
                   </span>
                 </div>
                 {quotation.validUntil && (
                   <div>
                     <span className="font-bold text-black">Valid Until:</span>{" "}
                     <span className="font-bold text-black">
-                      {new Date(quotation.validUntil).toLocaleDateString("en-GB")}
+                      {formatDateDisplay(quotation.validUntil, "en-GB")}
                     </span>
                   </div>
                 )}

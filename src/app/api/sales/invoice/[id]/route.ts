@@ -6,6 +6,7 @@ import { recordLedgerEntry } from "@/lib/ledger";
 import { postJournalEntry, mapPaymentMethodToAccount } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { formatInvoiceNotesPayload, parseInvoiceMetadata } from "@/lib/invoiceHelper";
+import { parseDateForStorage } from "@/lib/dateUtils";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -298,6 +299,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       });
 
       const effectiveComplaintId = complaintId !== undefined ? complaintId : existingInvoice.complaintId;
+      const invoiceDate = date ? parseDateForStorage(date) : existingInvoice.date;
 
       const invoiceUpdated = await tx.invoice.update({
         where: { id: existingInvoice.id },
@@ -306,7 +308,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           clientName: finalClientName,
           clientPhone: finalClientPhone || null,
           clientAddress: finalClientAddress || null,
-          date: new Date(date || existingInvoice.date),
+          date: invoiceDate,
           status: invoiceStatus,
           totalAmount: finalTotalAmount,
           amountPaid: finalAmountPaid,
@@ -392,8 +394,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const isNoLedger = selectedPosting === "NO_LEDGER";
 
       if (!isNoLedger) {
-        const invoiceDate = new Date(date || existingInvoice.date);
-
         // General Ledger Revenue Entry
         await recordLedgerEntry(tx, {
           entryDate: invoiceDate,
