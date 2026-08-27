@@ -86,6 +86,8 @@ export default function InvoicePdfPage() {
   const taxAmount = meta.taxAmount;
   const computedTaxRate = meta.taxRate;
   const totalAmount = meta.totalAmount;
+  const amountPaid = Math.round(Number(invoice.amountPaid || 0));
+  const balanceDue = Math.max(0, Math.round(totalAmount - amountPaid));
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
@@ -305,6 +307,20 @@ export default function InvoicePdfPage() {
                 <span>Total:</span>
                 <span className="font-mono">Rs. {totalAmount.toLocaleString("en-US")}</span>
               </div>
+
+              {amountPaid > 0 && (
+                <>
+                  <div className="flex justify-between font-bold text-black pt-1">
+                    <span>Received Payment:</span>
+                    <span className="font-mono font-bold">Rs. {amountPaid.toLocaleString("en-US")}</span>
+                  </div>
+
+                  <div className="flex justify-between font-black text-black border-t-2 border-black pt-1.5 text-[14px]">
+                    <span>Balance Due:</span>
+                    <span className="font-mono">Rs. {balanceDue.toLocaleString("en-US")}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

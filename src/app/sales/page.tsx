@@ -140,10 +140,8 @@ function SalesPageContent() {
   const [discountValue, setDiscountValue] = useState("0");
   const [subjectHeading, setSubjectHeading] = useState("");
   const [subjectDescription, setSubjectDescription] = useState("");
-  const [immediatePayment, setImmediatePayment] = useState(false);
+  const [amountReceived, setAmountReceived] = useState("");
   const [payMethod, setPayMethod] = useState("CASH");
-  const [applyAdvance, setApplyAdvance] = useState(false);
-  const [advanceToApply, setAdvanceToApply] = useState("");
 
   // Edit Commercial Invoice State
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
@@ -563,14 +561,9 @@ function SalesPageContent() {
 
     const token = localStorage.getItem("token");
     const paymentsList: any[] = [];
-    if (applyAdvance && Number(advanceToApply) > 0) {
-      paymentsList.push({ amountPaid: Number(advanceToApply), method: "CUSTOMER_ADVANCE" });
-    }
-    if (immediatePayment) {
-      const remaining = Math.max(0, grandTotal - (applyAdvance ? Number(advanceToApply) : 0));
-      if (remaining > 0) {
-        paymentsList.push({ amountPaid: remaining, method: payMethod });
-      }
+    const numAmountReceived = Number(amountReceived) || 0;
+    if (numAmountReceived > 0) {
+      paymentsList.push({ amountPaid: numAmountReceived, method: payMethod || "CASH" });
     }
 
     const payload = {
@@ -614,6 +607,8 @@ function SalesPageContent() {
       setSubjectDescription("");
       setIsGst(true);
       setPostingOption("CUSTOMER_LEDGER");
+      setAmountReceived("");
+      setPayMethod("CASH");
       setInvLines([{ productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
       fetchData();
     } catch (err: any) {
@@ -2733,58 +2728,132 @@ function SalesPageContent() {
                 );
               })()}
 
-              {/* Apply Customer Advance Deposit */}
-              <div className="bg-emerald-50/60 dark:bg-emerald-950/30 p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-2">
-                <label className="flex items-center gap-2 text-xs font-bold text-emerald-900 dark:text-emerald-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-emerald-400 focus:ring-emerald-500 text-emerald-600"
-                    checked={applyAdvance}
-                    onChange={(e) => setApplyAdvance(e.target.checked)}
-                  />
-                  <span>💰 Apply Customer Advance Deposit to this Invoice</span>
-                </label>
-                {applyAdvance && (
-                  <div className="pt-2">
-                    <label className="block text-[10px] font-bold uppercase text-emerald-800 dark:text-emerald-400 mb-1">Advance Amount to Apply (PKR)</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 40000"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-lg text-xs font-bold font-mono text-emerald-700 dark:text-emerald-300"
-                      value={advanceToApply}
-                      onChange={(e) => setAdvanceToApply(e.target.value)}
-                    />
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">
-                      This will automatically offset the advance from the customer's ledger account and show remaining balance due on the invoice.
-                    </p>
+              {/* Payment / Amount Received Section */}
+              {(() => {
+                const subtotal = invLines.reduce((acc, l) => acc + (Number(l.quantity) || 0) * (Number(l.salesPrice) || 0), 0);
+                let discountAmount = 0;
+                const discVal = Number(discountValue) || 0;
+                if (discountType === "PERCENTAGE") {
+                  discountAmount = Math.round(subtotal * (discVal / 100));
+                } else {
+                  discountAmount = Math.round(discVal);
+                }
+                discountAmount = Math.max(0, Math.min(discountAmount, subtotal));
+                const taxable = Math.max(0, subtotal - discountAmount);
+                const tax = isGst ? Math.round(taxable * (salesTaxRate / 100)) : 0;
+                const grandTotal = Math.max(0, taxable + tax);
+
+                const numReceived = Number(amountReceived) || 0;
+                const balanceDue = Math.max(0, grandTotal - numReceived);
+                const isFull = numReceived >= grandTotal && grandTotal > 0;
+                const isPartial = numReceived > 0 && numReceived < grandTotal;
+
+                return (
+                  <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/50 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                            Payment / Amount Received
+                          </span>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Enter amount received or leave 0 for an unpaid invoice.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Quick Presets */}
+                      <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setAmountReceived(String(grandTotal))}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-sm"
+                        >
+                          Full Payment (PKR {grandTotal.toLocaleString()})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAmountReceived("0")}
+                          className="px-2 py-1 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold transition-all"
+                        >
+                          Unpaid (0)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* Amount Received Input */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          Amount Received (PKR)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            placeholder="0.00"
+                            onFocus={(e) => e.target.select()}
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-xl text-sm font-mono font-bold text-emerald-700 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                            value={amountReceived}
+                            onChange={(e) => setAmountReceived(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
+                          Payment Method
+                        </label>
+                        <select
+                          disabled={numReceived <= 0}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:opacity-50"
+                          value={payMethod}
+                          onChange={(e) => setPayMethod(e.target.value)}
+                        >
+                          <option value="CASH">CASH (Cash in Hand)</option>
+                          <option value="BANK">BANK (Bank Transfer)</option>
+                          <option value="CARD">CARD (Debit/Credit Card)</option>
+                          <option value="CHEQUE">CHEQUE</option>
+                          <option value="ONLINE">ONLINE (Raast / IBFT)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Balance and Status Live Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/40 text-xs">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400">Amount Received: </span>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            PKR {numReceived.toLocaleString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500 dark:text-slate-400">Balance Due: </span>
+                          <span className={`font-mono font-bold ${balanceDue > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                            PKR {balanceDue.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        isFull
+                          ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                          : isPartial
+                          ? "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700"
+                      }`}>
+                        {isFull ? "Full Paid" : isPartial ? "Partially Paid" : "Unpaid"}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Immediate Payment collection toggle */}
-              <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-xl">
-                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-slate-300 focus:ring-blue-500"
-                    checked={immediatePayment}
-                    onChange={(e) => setImmediatePayment(e.target.checked)}
-                  />
-                  Collect Immediate Full Payment
-                </label>
-
-                {immediatePayment && (
-                  <select
-                    className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                    value={payMethod}
-                    onChange={(e) => setPayMethod(e.target.value)}
-                  >
-                    <option value="CASH">CASH</option>
-                    <option value="CARD">CARD</option>
-                    <option value="BANK">BANK</option>
-                  </select>
-                )}
-              </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <button

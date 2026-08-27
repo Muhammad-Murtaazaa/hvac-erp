@@ -182,14 +182,16 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.text("Total Invoice Amount:", 320, y, { width: 140, align: "right" });
       doc.text(totalAmount.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
-      y += 18;
-      doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
-      doc.text("Amount Paid:", 320, y, { width: 140, align: "right" });
-      doc.text(amountPaid.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+      if (amountPaid > 0) {
+        y += 18;
+        doc.font("Roboto-Regular").fontSize(10).fillColor("#4b5563");
+        doc.text("Received Payment:", 320, y, { width: 140, align: "right" });
+        doc.text(amountPaid.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
 
-      y += 18;
-      doc.font("Roboto-Bold").fontSize(11).fillColor("#b91c1c").text("Balance Due (PKR):", 320, y, { width: 140, align: "right" });
-      doc.text(balance.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+        y += 18;
+        doc.font("Roboto-Bold").fontSize(11).fillColor("#b91c1c").text("Balance Due (PKR):", 320, y, { width: 140, align: "right" });
+        doc.text(balance.toLocaleString("en-US"), 475, y, { width: 75, align: "right" });
+      }
 
       if (meta.userNotes) {
         y += 30;
