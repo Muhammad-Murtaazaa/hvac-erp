@@ -299,10 +299,12 @@ export async function getPartyLedgerReportData({
           credit: 0,
           dueDate: inv.dueDate || inv.date,
         });
+        loggedRefKeys.add(inv.invoiceNumber.toLowerCase());
+        loggedRefKeys.add(inv.id.toLowerCase());
       }
 
       (inv.payments || []).forEach((p: any) => {
-        const isPayCaptured = isInvCaptured || loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
+        const isPayCaptured = loggedRefKeys.has(p.id.toLowerCase()) || loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
         if (!isPayCaptured) {
           rawItems.push({
             date: p.paymentDate,
@@ -313,6 +315,9 @@ export async function getPartyLedgerReportData({
             credit: Math.round(Number(p.amountPaid) * 100) / 100,
             dueDate: p.paymentDate,
           });
+          loggedRefKeys.add(p.id.toLowerCase());
+          loggedRefKeys.add(`payment:${p.id.toLowerCase()}`);
+          loggedRefKeys.add(`rec-${inv.invoiceNumber.toLowerCase()}`);
         }
       });
     });
