@@ -243,6 +243,10 @@ function ReportsContent() {
   };
 
   const handlePrint = () => {
+    if (reportType === "valuation") {
+      window.open("/api/pdf?type=stock-valuation&inline=true", "_blank");
+      return;
+    }
     window.print();
   };
 
@@ -975,22 +979,42 @@ function ReportsContent() {
             {/* --------------------------------------------------------------------- */}
             {reportType === "valuation" && (
               <div className="space-y-5">
-                <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 block">
-                      Total In-Stock Asset Value
-                    </span>
-                    <span className="text-2xl font-mono font-black text-emerald-700 dark:text-emerald-300 mt-1 block">
-                      PKR {Math.round(reportData.totalValuation || 0).toLocaleString()}
-                    </span>
+                <div className="p-5 bg-emerald-50/70 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 block">
+                        Total In-Stock Asset Value
+                      </span>
+                      <span className="text-2xl font-mono font-black text-emerald-700 dark:text-emerald-300 mt-1 block">
+                        PKR {Math.round(reportData.totalValuation || 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="border-l border-emerald-200 dark:border-emerald-800/80 pl-6">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
+                        Total Physical Units
+                      </span>
+                      <span className="text-lg font-mono font-black text-slate-900 dark:text-white mt-0.5 block">
+                        {reportData.totalItemsCount || 0} units
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                      Total Physical Inventory Units:
-                    </span>
-                    <span className="font-mono font-black text-lg block text-slate-900 dark:text-white">
-                      {reportData.totalItemsCount || 0} units
-                    </span>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      onClick={() => window.open("/api/pdf?type=stock-valuation&inline=true", "_blank")}
+                      className="px-4 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black shadow-md shadow-blue-500/25 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Download Stock Valuation PDF</span>
+                    </button>
+                    <a
+                      href="/api/pdf?type=stock-valuation"
+                      download={`stock-valuation-${new Date().toISOString().slice(0, 10)}.pdf`}
+                      className="p-2.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-1.5"
+                      title="Direct File Download"
+                    >
+                      <Download className="w-4 h-4 text-emerald-600" />
+                    </a>
                   </div>
                 </div>
 
@@ -1007,18 +1031,20 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(reportData.items || []).map((p: any) => (
-                        <tr key={p.sku} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 font-medium">
-                          <td className="p-3 font-mono font-bold text-blue-600">{p.sku}</td>
-                          <td className="p-3 font-bold text-slate-900 dark:text-white">{p.name}</td>
-                          <td className="p-3 text-slate-500">{p.category}</td>
-                          <td className="p-3 text-right font-mono font-bold">{p.onHandQty}</td>
-                          <td className="p-3 text-right font-mono">PKR {Math.round(p.averageCost).toLocaleString()}</td>
-                          <td className="p-3 text-right font-mono font-black text-emerald-600">
-                            PKR {Math.round(p.totalValue).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {(reportData.items || [])
+                        .filter((p: any) => Number(p.onHandQty || 0) > 0)
+                        .map((p: any) => (
+                          <tr key={p.sku} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 font-medium">
+                            <td className="p-3 font-mono font-bold text-blue-600">{p.sku}</td>
+                            <td className="p-3 font-bold text-slate-900 dark:text-white">{p.name}</td>
+                            <td className="p-3 text-slate-500">{p.category}</td>
+                            <td className="p-3 text-right font-mono font-bold">{p.onHandQty}</td>
+                            <td className="p-3 text-right font-mono">PKR {Math.round(p.averageCost).toLocaleString()}</td>
+                            <td className="p-3 text-right font-mono font-black text-emerald-600">
+                              PKR {Math.round(p.totalValue).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>

@@ -1563,5 +1563,197 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
   });
 }
 
+export function generateStockValuationPDF(data: {
+  reportDate?: Date;
+  totalValuation: number;
+  totalItemsCount: number;
+  items: Array<{
+    sku: string;
+    name: string;
+    category?: string;
+    onHandQty: number;
+    averageCost: number;
+    salesPrice?: number;
+    totalValue: number;
+  }>;
+}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 40, size: "A4", font: fontRegularPath });
+      const chunks: Buffer[] = [];
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
+
+      registerAppFonts(doc);
+
+      // Filter out zero and negative stock items strictly
+      const inStockItems = (data.items || []).filter((item) => Number(item.onHandQty || 0) > 0);
+      
+      let computedTotalValuation = 0;
+      let computedTotalUnits = 0;
+      inStockItems.forEach((it) => {
+        computedTotalValuation += Number(it.totalValue || 0);
+        computedTotalUnits += Number(it.onHandQty || 0);
+      });
+
+      const drawHeader = (pageNumber?: number, totalPages?: number) => {
+        // Logo
+        let logoLoaded = false;
+        try {
+          let logoPath = path.resolve("LOGO.png");
+          if (!fs.existsSync(logoPath)) {
+            logoPath = path.resolve("public/logo.png");
+          }
+          if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 40, 35, { width: 65 });
+            logoLoaded = true;
+          }
+        } catch (e) {
+          console.error("Error loading logo image:", e);
+        }
+
+        if (!logoLoaded) {
+          doc.save();
+          doc.fillColor("#F28C28");
+          doc.moveTo(48, 40)
+             .bezierCurveTo(36, 48, 36, 68, 48, 76)
+             .bezierCurveTo(51, 72, 51, 70, 48, 66)
+             .bezierCurveTo(42, 61, 42, 54, 48, 49)
+             .bezierCurveTo(51, 45, 51, 43, 48, 40)
+             .closePath()
+             .fill();
+           
+          doc.moveTo(82, 40)
+             .bezierCurveTo(94, 48, 94, 68, 82, 76)
+             .bezierCurveTo(79, 72, 79, 70, 82, 66)
+             .bezierCurveTo(88, 61, 88, 54, 82, 49)
+             .bezierCurveTo(79, 45, 79, 43, 82, 40)
+             .closePath()
+             .fill();
+
+          doc.font("Roboto-Bold").fontSize(18).fillColor("#3A1984");
+          doc.text("TCE", 48, 50, { width: 34, align: "center" });
+          doc.restore();
+        }
+
+        // Company Details Right
+        doc.font("Roboto-Bold").fontSize(20).fillColor("#3A1984").text("Technicool Engineering", 115, 34);
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 115, 57, { align: "left", width: 440 });
+
+        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+        doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 115, 68, { width: 440 });
+        doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 115, 79, { width: 440 });
+
+        // Title Banner
+        doc.rect(40, 94, 515, 20).fill("#1e293b");
+        doc.font("Roboto-Bold").fontSize(10).fillColor("#ffffff").text("INVENTORY STOCK ASSET VALUATION REPORT", 40, 99, { align: "center", width: 515 });
+      };
+
+      drawHeader();
+
+      // Report Summary Cards / KPI Bar
+      let y = 120;
+      doc.rect(40, y, 515, 38).fill("#f8fafc");
+      doc.rect(40, y, 515, 38).strokeColor("#e2e8f0").lineWidth(0.75).stroke();
+
+      const genDate = data.reportDate ? new Date(data.reportDate) : new Date();
+      const formattedGenDate = `${String(genDate.getDate()).padStart(2, "0")}/${String(genDate.getMonth() + 1).padStart(2, "0")}/${genDate.getFullYear()} ${genDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`;
+
+      // Card 1: Total Valuation
+      doc.font("Roboto-Bold").fontSize(7).fillColor("#059669").text("TOTAL STOCK VALUATION", 55, y + 8);
+      doc.font("Roboto-Bold").fontSize(12).fillColor("#047857").text(`PKR ${Math.round(computedTotalValuation).toLocaleString("en-US")}`, 55, y + 18);
+
+      // Card 2: Total Units
+      doc.font("Roboto-Bold").fontSize(7).fillColor("#0284c7").text("TOTAL IN-STOCK UNITS", 230, y + 8);
+      doc.font("Roboto-Bold").fontSize(12).fillColor("#0369a1").text(`${computedTotalUnits.toLocaleString("en-US")} Units`, 230, y + 18);
+
+      // Card 3: Active SKUs & Date
+      doc.font("Roboto-Bold").fontSize(7).fillColor("#64748b").text("ACTIVE SKUs", 380, y + 8);
+      doc.font("Roboto-Bold").fontSize(9).fillColor("#1e293b").text(`${inStockItems.length} Products`, 380, y + 18);
+      doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text(`Generated: ${formattedGenDate}`, 380, y + 28);
+
+      y += 46;
+
+      const drawTableHeader = (posY: number) => {
+        doc.rect(40, posY, 515, 18).fill("#3A1984");
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#ffffff");
+        doc.text("#", 45, posY + 5, { width: 20 });
+        doc.text("SKU", 68, posY + 5, { width: 62 });
+        doc.text("Product Description", 135, posY + 5, { width: 175 });
+        doc.text("Category", 315, posY + 5, { width: 65 });
+        doc.text("In Stock", 385, posY + 5, { width: 40, align: "right" });
+        doc.text("Avg Cost (PKR)", 430, posY + 5, { width: 55, align: "right" });
+        doc.text("Valuation (PKR)", 490, posY + 5, { width: 60, align: "right" });
+      };
+
+      drawTableHeader(y);
+      y += 18;
+
+      inStockItems.forEach((p, idx) => {
+        if (y > 750) {
+          doc.addPage({ margin: 40, size: "A4", font: fontRegularPath });
+          registerAppFonts(doc);
+          drawHeader();
+          y = 120;
+          drawTableHeader(y);
+          y += 18;
+        }
+
+        const bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+        doc.rect(40, y, 515, 17).fill(bg);
+        doc.rect(40, y, 515, 17).strokeColor("#f1f5f9").lineWidth(0.5).stroke();
+
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#64748b").text(String(idx + 1), 45, y + 5, { width: 20 });
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#2563eb").text(p.sku || "-", 68, y + 5, { width: 62 });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(p.name || "Unnamed Product", 135, y + 5, { width: 175, height: 12, ellipsis: true });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#64748b").text(p.category || "General", 315, y + 5, { width: 65, height: 12, ellipsis: true });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(Number(p.onHandQty || 0).toLocaleString(), 385, y + 5, { width: 40, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(Math.round(Number(p.averageCost || 0)).toLocaleString(), 430, y + 5, { width: 55, align: "right" });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#059669").text(Math.round(Number(p.totalValue || 0)).toLocaleString(), 490, y + 5, { width: 60, align: "right" });
+
+        y += 17;
+      });
+
+      // Total Closing Bar
+      if (y > 720) {
+        doc.addPage({ margin: 40, size: "A4", font: fontRegularPath });
+        registerAppFonts(doc);
+        drawHeader();
+        y = 120;
+      }
+
+      y += 5;
+      doc.rect(40, y, 515, 20).fill("#1e293b");
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#ffffff");
+      doc.text("TOTAL IN-STOCK VALUATION", 68, y + 6);
+      doc.text(`${computedTotalUnits.toLocaleString()} Units`, 385, y + 6, { width: 40, align: "right" });
+      doc.text(`PKR ${Math.round(computedTotalValuation).toLocaleString("en-US")}`, 465, y + 6, { width: 85, align: "right" });
+
+      // Sign-off section
+      y += 35;
+      if (y > 750) {
+        doc.addPage({ margin: 40, size: "A4", font: fontRegularPath });
+        registerAppFonts(doc);
+        y = 60;
+      }
+
+      doc.moveTo(50, y).lineTo(170, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b").text("Store Incharge / Inventory", 50, y + 4, { align: "center", width: 120 });
+
+      doc.moveTo(235, y).lineTo(355, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b").text("Inventory Auditor / Accounts", 235, y + 4, { align: "center", width: 120 });
+
+      doc.moveTo(420, y).lineTo(540, y).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b").text("Managing Director / CEO", 420, y + 4, { align: "center", width: 120 });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { generateInvoicePDF, generateQuotationPDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF } from "@/lib/pdfGenerator";
+import { generateInvoicePDF, generateQuotationPDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF, generateStockValuationPDF } from "@/lib/pdfGenerator";
 import { getPartyLedgerReportData } from "@/lib/partyLedger";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +11,14 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type"); // invoice, quotation, do, payslip, complaint, employee-form, soa, salary-sheet
+    const type = searchParams.get("type"); // invoice, quotation, do, payslip, complaint, employee-form, soa, salary-sheet, stock-valuation
     const id = searchParams.get("id");
 
     if (!type) {
       return NextResponse.json({ error: "Document type is required" }, { status: 400 });
     }
 
-    if (!["soa", "salary-sheet"].includes(type) && !id) {
+    if (!["soa", "salary-sheet", "stock-valuation", "stock"].includes(type) && !id) {
       return NextResponse.json({ error: "Type and ID are required" }, { status: 400 });
     }
 
@@ -166,6 +166,43 @@ export async function GET(req: Request) {
 
       pdfBuffer = await generateSOAPDF(soaReport);
       fileName = `statement-of-account-${(soaReport.partyInfo?.name || "party").replace(/\s+/g, "_")}.pdf`;
+    } else if (type === "stock-valuation" || type === "stock") {
+      const products = await prisma.product.findMany({
+        where: {
+          onHandQty: { gt: 0 },
+        },
+        orderBy: { sku: "asc" },
+      });
+
+      let totalValuation = 0;
+      let totalItemsCount = 0;
+
+      const items = products.map((p) => {
+        const qty = p.onHandQty;
+        const avgCost = Number(p.averageCost || 0);
+        const totalValue = qty * avgCost;
+        totalValuation += totalValue;
+        totalItemsCount += qty;
+
+        return {
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          category: p.category || "General",
+          onHandQty: qty,
+          averageCost: avgCost,
+          salesPrice: Number(p.salesPrice || 0),
+          totalValue,
+        };
+      });
+
+      pdfBuffer = await generateStockValuationPDF({
+        reportDate: new Date(),
+        totalValuation,
+        totalItemsCount,
+        items,
+      });
+      fileName = `stock-asset-valuation-${new Date().toISOString().slice(0, 10)}.pdf`;
     } else {
       return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
     }

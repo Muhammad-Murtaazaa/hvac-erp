@@ -518,7 +518,12 @@ export async function GET(req: Request) {
     // 7. STOCK VALUATION REPORT
     // =========================================================================
     if (type === "valuation") {
-      const products = await prisma.product.findMany({ orderBy: { sku: "asc" } });
+      const products = await prisma.product.findMany({
+        where: {
+          onHandQty: { gt: 0 },
+        },
+        orderBy: { sku: "asc" },
+      });
 
       let totalValuation = 0;
       let totalItemsCount = 0;
