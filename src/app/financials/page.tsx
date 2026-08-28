@@ -1373,6 +1373,20 @@ function FinancialsPageContent() {
             <button
               type="button"
               onClick={() => {
+                setActiveSection("statements");
+                if (selectedPartyName) {
+                  fetchPartyLedger(selectedPartyName, selectedPartyId);
+                }
+              }}
+              className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black transition-all shadow-xs flex items-center gap-2 transform active:scale-95"
+            >
+              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>Statement of Accounts</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 setActiveSection("record");
                 setTxnNarration("Advance payment received");
               }}
@@ -1397,6 +1411,23 @@ function FinancialsPageContent() {
             >
               <TrendingUp className="w-4 h-4 text-blue-500" />
               <span>Financial Insights & Analytics</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveSection("statements");
+                if (selectedPartyName) {
+                  fetchPartyLedger(selectedPartyName, selectedPartyId);
+                }
+              }}
+              className={`px-4 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 ${
+                activeSection === "statements"
+                  ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 font-black shadow-sm border border-slate-200/50 dark:border-slate-700/50"
+                  : "hover:text-slate-900 dark:hover:text-white text-slate-700 dark:text-slate-300"
+              }`}
+            >
+              <FileText className="w-4 h-4 text-blue-500" />
+              <span>Statement of Account (Customer/Vendor Ledger)</span>
             </button>
 
             <button

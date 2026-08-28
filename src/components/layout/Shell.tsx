@@ -70,9 +70,10 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "Financials & Accounts",
     defaultOpen: true,
     items: [
+      { name: "Financial Insights", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
+      { name: "Statement of Account", href: "/financials?tab=statements", icon: FileText, roles: ["Admin", "Accountant", "Sales"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
       { name: "Debit / Credit Entry", href: "/financials?tab=record", icon: ArrowLeftRight, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
       { name: "General Ledger", href: "/financials?tab=general-ledger", icon: BookOpen, roles: ["Admin", "Accountant"], permissions: ["VIEW_FINANCIALS", "VIEW_REPORTS"] },
-      { name: "Financial Insights", href: "/financials", icon: TrendingUp, roles: ["Admin", "Accountant", "Investor"], permissions: ["VIEW_FINANCIALS"] },
     ],
   },
   {
