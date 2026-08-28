@@ -1063,7 +1063,7 @@ export function generateBusinessSummaryPDF(data: BusinessSummaryData): Promise<B
 export function generateSOAPDF(soaData: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 40, size: "A4", font: fontRegularPath });
+      const doc = new PDFDocument({ margin: 35, size: "A4", font: fontRegularPath });
       const chunks: Buffer[] = [];
 
       doc.on("data", (chunk) => chunks.push(chunk));
@@ -1072,110 +1072,189 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      // 1. Universal Header
-      doc.font("Roboto-Bold").fontSize(18).fillColor("#0f172a").text("TECHNICOOL ENGINEERING", 40, 40);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#64748b").text("MAKE YOUR DESIRE CLIMATE", 40, 60);
+      const formatDateShort = (d: any) => {
+        if (!d) return "-";
+        try {
+          const dateObj = new Date(d);
+          if (isNaN(dateObj.getTime())) return String(d);
+          const day = String(dateObj.getDate()).padStart(2, "0");
+          const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+          const year = String(dateObj.getFullYear()).slice(-2);
+          return `${month}/${day}/${year}`;
+        } catch {
+          return String(d);
+        }
+      };
 
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#475569");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 40, 72);
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 40, 83);
+      const formatCurrency2 = (num: any) => {
+        const val = Number(num) || 0;
+        return val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
 
-      doc.moveTo(40, 96).lineTo(555, 96).strokeColor("#0f172a").lineWidth(1.5).stroke();
+      const drawTableHeader = (headerY: number) => {
+        doc.rect(35, headerY, 525, 20).fill("#4688b9").stroke();
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#ffffff");
+        doc.text("Posting\nDate", 40, headerY + 3, { width: 45, align: "left" });
+        doc.text("Document\nNo.", 88, headerY + 3, { width: 72, align: "left" });
+        doc.text("Description", 165, headerY + 6, { width: 172, align: "left" });
+        doc.text("Due Date", 342, headerY + 6, { width: 45, align: "left" });
+        doc.text("Original\nAmount", 390, headerY + 3, { width: 55, align: "right" });
+        doc.text("Remaining\nAmount", 448, headerY + 3, { width: 42, align: "right" });
+        doc.text("Running Total", 492, headerY + 6, { width: 64, align: "right" });
+      };
 
-      // 2. Title & Party Details
-      doc.font("Roboto-Bold").fontSize(12).fillColor("#0f172a").text("STATEMENT OF ACCOUNT", 40, 108);
-      
-      const partyTypeLabel = soaData.partyType === "CUSTOMER" ? "Client / Customer" : soaData.partyType === "VENDOR" ? "Vendor / Supplier" : "Staff Member";
-      doc.rect(40, 126, 515, 45).fill("#f8fafc").strokeColor("#e2e8f0").lineWidth(0.5).stroke();
-      
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#475569").text(`${partyTypeLabel.toUpperCase()} DETAILS:`, 50, 134);
-      doc.font("Roboto-Bold").fontSize(10).fillColor("#0f172a").text(soaData.partyInfo.name || "Valued Party", 50, 146);
-      if (soaData.partyInfo.phone) {
-        doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text(`Phone: ${soaData.partyInfo.phone}`, 50, 158);
+      // ================= PAGE 1 HEADER =================
+      // 1. Top-Left Statement Title
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#27496d").text("Statement", 35, 35);
+
+      // 2. Document Info Metadata Block (under Statement title)
+      const docDateStr = formatDateShort(new Date());
+      const statementNo = soaData.statementNumber || (soaData.partyInfo?.id ? soaData.partyInfo.id.slice(0, 8).toUpperCase() : "86");
+      const startDateStr = formatDateShort(soaData.period?.startDate);
+      const endDateStr = formatDateShort(soaData.period?.endDate);
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#334155");
+      doc.text("Document Date", 35, 66);
+      doc.font("Roboto-Bold").text(docDateStr, 115, 66);
+
+      doc.font("Roboto-Regular").text("Statement", 35, 78);
+      doc.font("Roboto-Bold").text(statementNo, 115, 78);
+
+      doc.font("Roboto-Regular").text("Starting Date", 35, 90);
+      doc.font("Roboto-Bold").text(startDateStr, 115, 90);
+
+      doc.font("Roboto-Regular").text("Ending Date", 35, 102);
+      doc.font("Roboto-Bold").text(endDateStr, 115, 102);
+
+      // 3. Top-Right Company Header Block
+      let logoLoaded = false;
+      try {
+        let logoPath = path.resolve("LOGO.png");
+        if (!fs.existsSync(logoPath)) logoPath = path.resolve("public/logo.png");
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 395, 30, { width: 90 });
+          logoLoaded = true;
+        }
+      } catch (e) {
+        console.error("Logo load error in SOA:", e);
       }
 
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#475569").text("STATEMENT PERIOD:", 360, 134);
-      doc.font("Roboto-Regular").fontSize(8).fillColor("#0f172a").text(`${soaData.period.startDate} to ${soaData.period.endDate}`, 360, 146);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#0284c7").text(`Opening Balance: PKR ${Math.round(soaData.openingBalance).toLocaleString()}`, 360, 158);
+      const compY = logoLoaded ? 70 : 35;
+      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#1e3a8a").text("AIR CONDITIONERS", 395, compY, { align: "left" });
+      doc.font("Roboto-Bold").fontSize(9).fillColor("#0f172a").text("TECHNICOOL ENGINEERING", 395, compY + 12, { align: "left" });
 
-      // 3. Table Header
-      let y = 182;
-      doc.rect(40, y, 515, 18).fill("#0f172a").stroke();
-      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#ffffff");
-      doc.text("Date", 46, y + 5);
-      doc.text("Ref / Voucher", 96, y + 5);
-      doc.text("Type", 160, y + 5);
-      doc.text("Description & Particulars", 210, y + 5, { width: 170 });
-      doc.text("Debit (PKR)", 385, y + 5, { width: 50, align: "right" });
-      doc.text("Credit (PKR)", 440, y + 5, { width: 50, align: "right" });
-      doc.text("Balance (PKR)", 495, y + 5, { width: 55, align: "right" });
+      doc.font("Roboto-Regular").fontSize(7).fillColor("#475569");
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 395, compY + 23, { width: 165, align: "left" });
+      doc.text("Phone No. +92-321-8304978  |  +92-300-8636100", 395, compY + 44, { width: 165, align: "left" });
 
-      y += 18;
+      // 4. Recipient Party Information (Left side at y = 120)
+      const partyCode = soaData.partyInfo?.code || (soaData.partyType === "CUSTOMER" ? "CUS-000011" : soaData.partyType === "VENDOR" ? "VEN-000012" : "EMP-000015");
+      const partyName = (soaData.partyInfo?.name || "Valued Account").toUpperCase();
+      const contactPerson = soaData.partyInfo?.contactPerson ? `MR. ${soaData.partyInfo.contactPerson.toUpperCase()}` : null;
+      const partyAddress = soaData.partyInfo?.address || "MULTAN, PUNJAB, Pakistan";
+      const partyPhone = soaData.partyInfo?.phone || "";
 
-      // Table Rows
+      let partyY = 122;
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a").text(partyCode, 35, partyY);
+      partyY += 10;
+      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#0f172a").text(partyName, 35, partyY, { width: 260 });
+      partyY += 11;
+      if (contactPerson) {
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#334155").text(contactPerson, 35, partyY);
+        partyY += 10;
+      }
+      doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(partyAddress, 35, partyY, { width: 250 });
+      partyY += 18;
+      if (partyPhone) {
+        doc.text(`Phone: ${partyPhone}`, 35, partyY);
+        partyY += 10;
+      }
+
+      // ================= TABLE RENDERING =================
+      let y = Math.max(partyY + 6, 185);
+      drawTableHeader(y);
+      y += 20;
+
+      // Opening Balance Row
+      const openingBalVal = Number(soaData.openingBalance) || 0;
+      doc.rect(35, y, 525, 14).fill("#f8fafc").strokeColor("#e2e8f0").lineWidth(0.4).stroke();
+      doc.font("Roboto-Bold").fontSize(7).fillColor("#475569").text("Entries PKR", 40, y + 3.5);
+      doc.font("Roboto-Bold").fontSize(7).fillColor("#0f172a").text(formatCurrency2(openingBalVal), 492, y + 3.5, { width: 64, align: "right" });
+      y += 14;
+
+      // Transaction Rows
       const transactions = soaData.transactions || [];
       if (transactions.length === 0) {
-        doc.rect(40, y, 515, 25).fill("#ffffff").strokeColor("#e2e8f0").lineWidth(0.5).stroke();
-        doc.font("Roboto-Regular").fontSize(8).fillColor("#94a3b8").text("No transactions recorded during this period.", 50, y + 8, { align: "center", width: 495 });
-        y += 25;
+        doc.rect(35, y, 525, 22).fill("#ffffff").strokeColor("#e2e8f0").lineWidth(0.4).stroke();
+        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#94a3b8").text("No transactions recorded during this statement period.", 40, y + 7, { align: "center", width: 515 });
+        y += 22;
       } else {
         transactions.forEach((tx: any, idx: number) => {
-          if (y > 730) {
+          // Check for page break
+          if (y > 750) {
             doc.addPage();
-            y = 40;
-            // Repeat table header
-            doc.rect(40, y, 515, 18).fill("#0f172a").stroke();
-            doc.font("Roboto-Bold").fontSize(7.5).fillColor("#ffffff");
-            doc.text("Date", 46, y + 5);
-            doc.text("Ref / Voucher", 96, y + 5);
-            doc.text("Type", 160, y + 5);
-            doc.text("Description & Particulars", 210, y + 5, { width: 170 });
-            doc.text("Debit (PKR)", 385, y + 5, { width: 50, align: "right" });
-            doc.text("Credit (PKR)", 440, y + 5, { width: 50, align: "right" });
-            doc.text("Balance (PKR)", 495, y + 5, { width: 55, align: "right" });
-            y += 18;
+            doc.font("Roboto-Bold").fontSize(14).fillColor("#27496d").text("Statement", 35, 30);
+            y = 48;
+            drawTableHeader(y);
+            y += 20;
           }
 
-          const rowBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-          doc.rect(40, y, 515, 18).fill(rowBg).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+          // Calculate signed original amount
+          let origAmount = 0;
+          if (soaData.partyType === "VENDOR") {
+            if (tx.debit > 0) origAmount = -Number(tx.debit); // payment to vendor
+            else origAmount = Number(tx.credit); // bill from vendor
+          } else {
+            if (tx.debit > 0) origAmount = Number(tx.debit); // invoice to customer
+            else origAmount = -Number(tx.credit); // payment from customer
+          }
 
-          doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(tx.date, 46, y + 5);
-          doc.font("Roboto-Bold").fontSize(7).fillColor("#0f172a").text(tx.referenceNumber || "-", 96, y + 5, { width: 60 });
-          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text(tx.docType || "JV", 160, y + 5);
-          doc.font("Roboto-Regular").fontSize(7).fillColor("#1e293b").text(tx.description || "-", 210, y + 5, { width: 170, ellipsis: true });
+          const isEven = idx % 2 === 0;
+          const rowBg = isEven ? "#ffffff" : "#f8fafc";
+          const rowHeight = (tx.description && tx.description.length > 55) ? 22 : 16;
 
-          doc.font("Roboto-Bold").fontSize(7).fillColor(tx.debit > 0 ? "#0f172a" : "#94a3b8").text(tx.debit > 0 ? Math.round(tx.debit).toLocaleString() : "-", 385, y + 5, { width: 50, align: "right" });
-          doc.font("Roboto-Bold").fontSize(7).fillColor(tx.credit > 0 ? "#0f172a" : "#94a3b8").text(tx.credit > 0 ? Math.round(tx.credit).toLocaleString() : "-", 440, y + 5, { width: 50, align: "right" });
-          
-          doc.font("Roboto-Bold").fontSize(7.5).fillColor(tx.runningBalance >= 0 ? "#0284c7" : "#e11d48").text(Math.round(tx.runningBalance).toLocaleString(), 495, y + 5, { width: 55, align: "right" });
+          doc.rect(35, y, 525, rowHeight).fill(rowBg).strokeColor("#e2e8f0").lineWidth(0.3).stroke();
 
-          y += 18;
+          // Date
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(formatDateShort(tx.date), 40, y + 4, { width: 45 });
+
+          // Document No.
+          const docNo = tx.referenceNumber || tx.voucherNumber || tx.id || "-";
+          doc.font("Roboto-Bold").fontSize(6.5).fillColor("#1e293b").text(docNo, 88, y + 4, { width: 72, ellipsis: true });
+
+          // Description
+          const desc = tx.description || tx.particulars || "Transaction";
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#1e293b").text(desc, 165, y + 4, { width: 172, height: rowHeight - 4, ellipsis: true });
+
+          // Due Date
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#475569").text(formatDateShort(tx.dueDate || tx.date), 342, y + 4, { width: 45 });
+
+          // Original Amount
+          const origAmtStr = formatCurrency2(origAmount);
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#0f172a").text(origAmtStr, 390, y + 4, { width: 55, align: "right" });
+
+          // Remaining Amount (0.00)
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text("0.00", 448, y + 4, { width: 42, align: "right" });
+
+          // Running Total
+          const runBalStr = formatCurrency2(tx.runningBalance);
+          doc.font("Roboto-Bold").fontSize(6.5).fillColor("#0f172a").text(runBalStr, 492, y + 4, { width: 64, align: "right" });
+
+          y += rowHeight;
         });
       }
 
-      // Summary Box
-      y += 10;
-      doc.rect(40, y, 515, 26).fill("#f1f5f9").strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a");
-      doc.text(`Total Period Debits: PKR ${Math.round(soaData.totals?.totalDebit || 0).toLocaleString()}`, 50, y + 9);
-      doc.text(`Total Period Credits: PKR ${Math.round(soaData.totals?.totalCredit || 0).toLocaleString()}`, 230, y + 9);
-      
-      const closeBal = Math.round(soaData.totals?.closingBalance || 0);
-      let closeLabel = "Settled";
-      if (closeBal > 0) {
-        closeLabel = soaData.partyType === "VENDOR" ? "Net Payable" : "Net Receivable";
-      } else if (closeBal < 0) {
-        closeLabel = soaData.partyType === "VENDOR" ? "Advance Paid" : "Advance Held";
+      // ================= FINAL CLOSING TOTAL BAR =================
+      if (y > 745) {
+        doc.addPage();
+        y = 40;
       }
-      doc.font("Roboto-Bold").fontSize(9).fillColor(closeBal > 0 ? (soaData.partyType === "VENDOR" ? "#e11d48" : "#0284c7") : closeBal < 0 ? "#059669" : "#64748b").text(`Closing Balance: PKR ${Math.abs(closeBal).toLocaleString()} (${closeLabel})`, 340, y + 9, { width: 205, align: "right" });
 
-      // Bottom Universal Footer
-      const footerY = 790;
-      doc.moveTo(40, footerY).lineTo(555, footerY).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b");
-      doc.text("Technicool Engineering Enterprise Operations  |  Financial Sub-Ledger System", 40, footerY + 6, { align: "left" });
-      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#2563eb");
-      doc.text("Official Statement of Account", 350, footerY + 6, { align: "right", width: 205 });
+      y += 4;
+      doc.rect(35, y, 525, 20).fill("#f1f5f9").strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a").text("Total PKR", 380, y + 6, { width: 100, align: "right" });
+      const closingBalVal = Number(soaData.totals?.closingBalance ?? (transactions.length > 0 ? transactions[transactions.length - 1].runningBalance : soaData.openingBalance));
+      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#0f172a").text(formatCurrency2(closingBalVal), 485, y + 5.5, { width: 70, align: "right" });
 
       doc.end();
     } catch (err) {

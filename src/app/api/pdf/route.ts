@@ -161,18 +161,70 @@ export async function GET(req: Request) {
       const endDate = new Date(endDateStr);
       endDate.setHours(23, 59, 59, 999);
 
-      let resolvedPartyInfo = { name: partyName || "Party Account", phone: "" };
+      let resolvedPartyInfo: any = { name: partyName || "Party Account", phone: "", address: "", code: "", contactPerson: "" };
       if (partyType === "CUSTOMER") {
-        const sampleInv = await prisma.invoice.findFirst({
-          where: { clientName: { equals: partyName, mode: "insensitive" } },
-        });
-        if (sampleInv) resolvedPartyInfo = { name: sampleInv.clientName, phone: sampleInv.clientPhone || "" };
+        if (partyId) {
+          const cust = await prisma.customer.findUnique({ where: { id: partyId } });
+          if (cust) {
+            resolvedPartyInfo = {
+              name: cust.name,
+              phone: cust.phone || "",
+              address: cust.address || "Multan, Pakistan",
+              code: (cust as any).customerCode || `CUS-${cust.id.slice(-6).toUpperCase()}`,
+              contactPerson: "",
+            };
+          }
+        }
+        if (!resolvedPartyInfo.code && partyName) {
+          const custByName = await prisma.customer.findFirst({
+            where: { name: { equals: partyName, mode: "insensitive" } },
+          });
+          if (custByName) {
+            resolvedPartyInfo = {
+              name: custByName.name,
+              phone: custByName.phone || "",
+              address: custByName.address || "Multan, Pakistan",
+              code: (custByName as any).customerCode || `CUS-${custByName.id.slice(-6).toUpperCase()}`,
+              contactPerson: "",
+            };
+          } else {
+            const sampleInv = await prisma.invoice.findFirst({
+              where: { clientName: { equals: partyName, mode: "insensitive" } },
+              orderBy: { createdAt: "desc" },
+            });
+            if (sampleInv) {
+              resolvedPartyInfo = {
+                name: sampleInv.clientName,
+                phone: sampleInv.clientPhone || "",
+                address: sampleInv.clientAddress || "Multan, Pakistan",
+                code: "CUS-000011",
+                contactPerson: "",
+              };
+            }
+          }
+        }
       } else if (partyType === "VENDOR" && partyId) {
         const vendor = await prisma.vendor.findUnique({ where: { id: partyId } });
-        if (vendor) resolvedPartyInfo = { name: vendor.name, phone: vendor.phone || "" };
+        if (vendor) {
+          resolvedPartyInfo = {
+            name: vendor.name,
+            phone: vendor.phone || "",
+            address: vendor.address || "Multan, Pakistan",
+            contactPerson: vendor.contactPerson || "",
+            code: (vendor as any).vendorCode || `VEN-${vendor.id.slice(-6).toUpperCase()}`,
+          };
+        }
       } else if (partyType === "EMPLOYEE" && partyId) {
         const emp = await prisma.employee.findUnique({ where: { id: partyId } });
-        if (emp) resolvedPartyInfo = { name: emp.name, phone: emp.phone || "" };
+        if (emp) {
+          resolvedPartyInfo = {
+            name: emp.name,
+            phone: emp.phone || "",
+            address: emp.address || "Multan, Pakistan",
+            contactPerson: "",
+            code: emp.employeeNo || `EMP-${emp.id.slice(-6).toUpperCase()}`,
+          };
+        }
       }
 
       const partyLedgerEntries = await prisma.ledgerEntry.findMany({
