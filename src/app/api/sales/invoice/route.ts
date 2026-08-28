@@ -346,7 +346,7 @@ export async function POST(req: Request) {
           description: `Revenue for Invoice ${invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: complaintId ? "Service & Maintenance Income" : "Sales Revenue",
-          amount: taxableAmount,
+          amount: finalTotalAmount,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
           partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
@@ -355,23 +355,6 @@ export async function POST(req: Request) {
           voucherType: "INV",
           voucherNumber: invoiceNumber,
         });
-
-        if (taxAmount > 0) {
-          await recordLedgerEntry(tx, {
-            entryDate: invoiceDate,
-            description: `Sales Tax for Invoice ${invoiceNumber}`,
-            debitAccount: "Accounts Receivable (Trade Debtors)",
-            creditAccount: "Sales Tax Payable",
-            amount: taxAmount,
-            referenceType: "INVOICE",
-            referenceId: createdInvoice.id,
-            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-            partyId: isPartyPosting ? resolvedCustomerId : null,
-            partyName: isPartyPosting ? finalClientName : null,
-            voucherType: "INV",
-            voucherNumber: invoiceNumber,
-          });
-        }
 
         // Native Double-Entry Journal: Revenue & Tax grouped together
         const revenueLines = [
@@ -416,9 +399,9 @@ export async function POST(req: Request) {
             amount: totalCogs,
             referenceType: "INVOICE",
             referenceId: createdInvoice.id,
-            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-            partyId: isPartyPosting ? resolvedCustomerId : null,
-            partyName: isPartyPosting ? finalClientName : null,
+            partyType: "GENERAL",
+            partyId: null,
+            partyName: null,
             voucherType: "COGS",
             voucherNumber: invoiceNumber,
           });

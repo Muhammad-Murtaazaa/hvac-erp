@@ -184,6 +184,21 @@ export async function getPartyLedgerReportData({
 
   // 1. Process Vouchers & Manual Ledger entries
   partyLedgerEntries.forEach((le) => {
+    // Strictly exclude internal COGS and inventory movements from party statements
+    if (
+      le.voucherType === "COGS" ||
+      le.debitAccount?.toLowerCase().includes("cost of goods sold") ||
+      le.creditAccount?.toLowerCase().includes("inventory asset") ||
+      le.partyType === "GENERAL"
+    ) {
+      return;
+    }
+
+    // For customer invoices, skip raw INV ledger entries if we have the master invoice records to avoid duplicates/stale amounts on edits
+    if (partyType === "CUSTOMER" && (le.voucherType === "INV" || le.referenceType === "INVOICE")) {
+      return;
+    }
+
     let debit = 0;
     let credit = 0;
 
@@ -242,10 +257,9 @@ export async function getPartyLedgerReportData({
   });
 
   const loggedRefKeys = new Set<string>();
-  partyLedgerEntries.forEach((le) => {
-    if (le.voucherNumber) loggedRefKeys.add(le.voucherNumber.toLowerCase());
-    if (le.referenceId) loggedRefKeys.add(le.referenceId.toLowerCase());
-    if (le.referenceType && le.referenceId) loggedRefKeys.add(`${le.referenceType.toLowerCase()}:${le.referenceId.toLowerCase()}`);
+  rawItems.forEach((item) => {
+    if (item.voucherNumber) loggedRefKeys.add(item.voucherNumber.toLowerCase());
+    if (item.referenceNumber) loggedRefKeys.add(item.referenceNumber.toLowerCase());
   });
 
   // 2. Add System Invoices & Payments for Customer if partyName given

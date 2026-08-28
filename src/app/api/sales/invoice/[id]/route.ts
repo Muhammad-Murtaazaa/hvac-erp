@@ -370,9 +370,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       // Remove previous invoice revenue, tax, and cogs ledger entries so we can update them in-place
       await tx.ledgerEntry.deleteMany({
         where: {
-          referenceType: "INVOICE",
-          referenceId: existingInvoice.id,
-          voucherType: { in: ["INV", "COGS"] },
+          OR: [
+            { referenceType: "INVOICE", referenceId: existingInvoice.id },
+            { voucherNumber: existingInvoice.invoiceNumber, referenceType: "INVOICE" },
+            { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["INV", "COGS"] } },
+          ],
         },
       });
 
@@ -396,13 +398,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const isNoLedger = selectedPosting === "NO_LEDGER";
 
       if (!isNoLedger) {
-        // General Ledger Revenue Entry
+        // Customer / General Ledger Revenue Entry (Unified Net Total Amount)
         await recordLedgerEntry(tx, {
           entryDate: invoiceDate,
           description: `Revenue for Invoice ${existingInvoice.invoiceNumber} issued to ${finalClientName}${!isPartyPosting ? " (GL Only)" : ""}`,
           debitAccount: "Accounts Receivable (Trade Debtors)",
           creditAccount: effectiveComplaintId ? "Service & Maintenance Income" : "Sales Revenue",
-          amount: taxableAmount,
+          amount: finalTotalAmount,
           referenceType: "INVOICE",
           referenceId: existingInvoice.id,
           partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
@@ -411,23 +413,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           voucherType: "INV",
           voucherNumber: existingInvoice.invoiceNumber,
         });
-
-        if (taxAmount > 0) {
-          await recordLedgerEntry(tx, {
-            entryDate: invoiceDate,
-            description: `Sales Tax for Invoice ${existingInvoice.invoiceNumber}`,
-            debitAccount: "Accounts Receivable (Trade Debtors)",
-            creditAccount: "Sales Tax Payable",
-            amount: taxAmount,
-            referenceType: "INVOICE",
-            referenceId: existingInvoice.id,
-            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-            partyId: isPartyPosting ? resolvedCustomerId : null,
-            partyName: isPartyPosting ? finalClientName : null,
-            voucherType: "INV",
-            voucherNumber: existingInvoice.invoiceNumber,
-          });
-        }
 
         // Native Double-Entry Journal: Revenue & Tax
         const revenueLines = [
@@ -462,7 +447,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           lines: revenueLines,
         });
 
-        // COGS Entries
+        // COGS Entries (Internal Inventory movement - never attached to customer account)
         if (totalCogs > 0) {
           await recordLedgerEntry(tx, {
             entryDate: invoiceDate,
@@ -472,9 +457,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             amount: totalCogs,
             referenceType: "INVOICE",
             referenceId: existingInvoice.id,
-            partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-            partyId: isPartyPosting ? resolvedCustomerId : null,
-            partyName: isPartyPosting ? finalClientName : null,
+            partyType: "GENERAL",
+            partyId: null,
+            partyName: null,
             voucherType: "COGS",
             voucherNumber: existingInvoice.invoiceNumber,
           });

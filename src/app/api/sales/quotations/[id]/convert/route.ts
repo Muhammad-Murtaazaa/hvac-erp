@@ -219,9 +219,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           amount: totalCogs,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
-          partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-          partyId: quotation.customerId || null,
-          partyName: quotation.clientName,
+          partyType: "GENERAL",
+          partyId: null,
+          partyName: null,
           voucherType: "COGS",
           voucherNumber: invoiceNumber,
         });
