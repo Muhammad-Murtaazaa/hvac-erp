@@ -521,6 +521,23 @@ function ProcurementPageContent() {
     }
   };
 
+  // Helper to determine if a PO is pending stock delivery/arrival
+  const isPendingArrival = (po: any) => {
+    if (!po) return false;
+    const s = (po.status || "").toUpperCase();
+    if (s === "COMPLETED" || s === "RECEIVED" || s === "CANCELLED" || s === "DRAFT") {
+      return false;
+    }
+    // If all line items are already received, it's not pending arrival
+    if (Array.isArray(po.lineItems) && po.lineItems.length > 0) {
+      const hasUnreceived = po.lineItems.some(
+        (l: any) => (Number(l.quantityOrdered) || 0) > (Number(l.quantityReceived) || 0)
+      );
+      if (!hasUnreceived) return false;
+    }
+    return s === "APPROVED" || s === "SUBMITTED" || s === "PARTIALLY_RECEIVED";
+  };
+
   // Filters
   const filteredPOs = (purchaseOrders || []).filter((po) => {
     const poNum = po.poNumber || "";
@@ -535,6 +552,7 @@ function ProcurementPageContent() {
   const poStatusOptions = [
     { label: "Draft", value: "DRAFT" },
     { label: "Submitted", value: "SUBMITTED" },
+    { label: "Approved", value: "APPROVED" },
     { label: "Partially Received", value: "PARTIALLY_RECEIVED" },
     { label: "Completed", value: "COMPLETED" },
     { label: "Cancelled", value: "CANCELLED" },
@@ -594,7 +612,7 @@ function ProcurementPageContent() {
         <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar text-xs font-bold">
           {[
             { id: "pos", label: `Purchase Orders (${purchaseOrders.length})` },
-            { id: "arrivals", label: `Arrivals (${purchaseOrders.filter((po) => po.status === "SUBMITTED").length})` },
+            { id: "arrivals", label: `Arrivals (${purchaseOrders.filter(isPendingArrival).length})` },
             { id: "shortages", label: `Pending Stock (${pendingItems.length})` },
             { id: "vendors", label: `Vendors (${vendors.length})` },
           ].map((tab) => (
@@ -729,31 +747,40 @@ function ProcurementPageContent() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredPOs
-                    .filter((po) => po.status === "APPROVED" || po.status === "SUBMITTED" || po.status === "PARTIALLY_RECEIVED")
-                    .map((po) => (
-                      <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                        <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
-                        <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
-                            Dispatched / Pending
-                          </span>
-                        </td>
-                        <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => openGrnForm(po)}
-                            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto shadow-md shadow-blue-500/10"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Check-In 1st Delivery
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  {filteredPOs.filter((po) => po.status === "SUBMITTED").length === 0 && (
+                    .filter(isPendingArrival)
+                    .map((po) => {
+                      const isPartiallyReceived = po.status === "PARTIALLY_RECEIVED";
+                      return (
+                        <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                          <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
+                          <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
+                          <td className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                isPartiallyReceived
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                  : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                              }`}
+                            >
+                              {isPartiallyReceived ? "Partially Received (Pending Balance)" : "Dispatched / Pending Arrival"}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
+                          <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => openGrnForm(po)}
+                              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto shadow-md shadow-blue-500/10"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" /> {isPartiallyReceived ? "Check-In Balance Delivery" : "Check-In 1st Delivery"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {filteredPOs.filter(isPendingArrival).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400">All 1st deliveries checked in! No pending new arrivals.</td>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">All deliveries checked in! No pending new arrivals.</td>
                     </tr>
                   )}
                 </tbody>
