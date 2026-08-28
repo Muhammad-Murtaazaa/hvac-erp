@@ -81,17 +81,26 @@ export async function POST(req: NextRequest) {
 
     // Update DO status to DELIVERED
     const updatedDO = await prisma.deliveryOrder.update({
-      where: { id },
+      where: { id: existingDO.id },
       data: {
         status: "DELIVERED",
         notes: updatedNotes,
       },
+      include: {
+        lineItems: { include: { product: true } },
+      },
+    });
+
+    // Automatically sync linked invoices to DELIVERED dispatchStatus
+    await prisma.invoice.updateMany({
+      where: { doId: existingDO.id },
+      data: { dispatchStatus: "DELIVERED" },
     });
 
     // Record audit snapshot
     await recordAuditSnapshot({
       entityName: "DeliveryOrder",
-      entityId: id,
+      entityId: existingDO.id,
       action: "UPDATE",
       actor: { id: "qr-receiver", email: receiverName ? `${receiverName} (QR Scan)` : "Client (QR Scan)" },
       beforeState: existingDO,

@@ -369,7 +369,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   // If on public page (login, reset password, or delivery QR verification), bypass sidebar shell layout entirely
   if (isPublicPage) {
-    return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">{children}</div>;
+    return (
+      <ToastProvider>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-200">{children}</div>
+      </ToastProvider>
+    );
   }
 
   // If on dedicated PDF print page (Invoice, PO, DO), bypass sidebar, top bar, floating widgets, and shell chrome entirely

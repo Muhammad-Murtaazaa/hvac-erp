@@ -167,7 +167,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
+    return {
+      toast: (options: Omit<Toast, "id">) => {
+        if (typeof window !== "undefined") {
+          console.info("[Toast]", options.title, options.message);
+        }
+      },
+      undoToast: () => {},
+    };
   }
   return context;
 }
