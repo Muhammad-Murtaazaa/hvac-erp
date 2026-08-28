@@ -49,17 +49,52 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     ],
   },
   PRODUCT: {
-    label: "Inventory / Stock",
+    label: "Inventory / Stock Intelligence",
     fields: [
       "sku",
       "name",
       "category",
       "unit",
       "onHandQty",
+      "stockStatus",
+      "primaryVendor",
+      "totalPurchasedQty",
+      "totalPurchaseCost",
+      "lastPurchaseCost",
+      "averageCost",
+      "totalSoldQty",
+      "totalSalesValue",
+      "salesPrice",
+      "totalValuation",
       "incomingQty",
       "reorderLevel",
-      "averageCost",
-      "salesPrice",
+      "createdAt",
+    ],
+  },
+  GRN: {
+    label: "Stock Receipts & GRNs (Purchased Intake)",
+    fields: [
+      "grnNumber",
+      "poNumber",
+      "vendorName",
+      "receivedAt",
+      "receivedBy",
+      "totalUnits",
+      "totalValuation",
+      "notes",
+    ],
+  },
+  PURCHASE_ORDER: {
+    label: "Purchase Orders (Procurement)",
+    fields: [
+      "poNumber",
+      "vendorName",
+      "status",
+      "totalOrderedQty",
+      "totalReceivedQty",
+      "discount",
+      "totalAmount",
+      "notes",
       "createdAt",
     ],
   },
@@ -76,17 +111,6 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
       "description",
       "remarks",
       "date",
-      "createdAt",
-    ],
-  },
-  PURCHASE_ORDER: {
-    label: "Purchase Orders",
-    fields: [
-      "poNumber",
-      "status",
-      "discount",
-      "totalAmount",
-      "notes",
       "createdAt",
     ],
   },
@@ -131,16 +155,29 @@ const FIELD_LABELS: Record<string, string> = {
   amountPaid: "Amount Paid (PKR)",
   isGst: "Tax / GST",
   subjectHeading: "Subject",
-  // Product
+  // Product / Stock Intelligence
   sku: "SKU Code",
-  name: "Item / Name",
+  name: "Product Description",
   category: "Category",
   unit: "Unit",
-  onHandQty: "Stock On Hand",
-  incomingQty: "Incoming Qty",
+  onHandQty: "Ready Stock On Hand",
+  stockStatus: "Stock Readiness Status",
+  primaryVendor: "Purchased From (Supplier)",
+  totalPurchasedQty: "Total Purchased Qty",
+  totalPurchaseCost: "Total Purchase Cost (PKR)",
+  lastPurchaseCost: "Last Purchase Cost (PKR)",
+  averageCost: "Avg Unit Cost (PKR)",
+  totalSoldQty: "Total Sold Units",
+  totalSalesValue: "Total Sales Value (PKR)",
+  salesPrice: "Selling Price (PKR)",
+  totalValuation: "Ready Stock Valuation (PKR)",
+  incomingQty: "Incoming / In-Transit Qty",
   reorderLevel: "Reorder Level",
-  averageCost: "Avg Cost (PKR)",
-  salesPrice: "Sales Price (PKR)",
+  // GRN / Receipts
+  grnNumber: "GRN #",
+  receivedAt: "Receipt Date",
+  receivedBy: "Received By Officer",
+  totalUnits: "Total Units Received",
   // Complaint
   complaintNumber: "Complaint #",
   customerName: "Customer Name",
@@ -153,6 +190,9 @@ const FIELD_LABELS: Record<string, string> = {
   remarks: "Remarks",
   // Purchase Order
   poNumber: "PO #",
+  vendorName: "Vendor / Supplier",
+  totalOrderedQty: "Total Ordered Units",
+  totalReceivedQty: "Total Received Units",
   discount: "Discount (PKR)",
   notes: "Notes / Terms",
   // Employee
@@ -179,10 +219,15 @@ const CURRENCY_FIELDS = new Set([
   "baseSalary",
   "averageCost",
   "salesPrice",
+  "totalPurchaseCost",
+  "lastPurchaseCost",
+  "totalSalesValue",
+  "totalValuation",
 ]);
 
 const DATE_FIELDS = new Set([
   "date",
+  "receivedAt",
   "createdAt",
   "updatedAt",
   "joiningDate",
@@ -463,6 +508,38 @@ export default function ReportBuilderPage() {
       );
     }
 
+    if (field === "stockStatus") {
+      const s = String(val);
+      let colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800";
+      if (s.includes("Out of Stock")) {
+        colorClass = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800";
+      } else if (s.includes("Low Stock")) {
+        colorClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800";
+      }
+      return (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${colorClass}`}>
+          {s}
+        </span>
+      );
+    }
+
+    if (field === "onHandQty") {
+      const qty = Number(val || 0);
+      return (
+        <span className={`font-mono font-bold ${qty > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"}`}>
+          {qty.toLocaleString()}
+        </span>
+      );
+    }
+
+    if (field === "primaryVendor" || field === "vendorName") {
+      return (
+        <span className="font-semibold text-slate-900 dark:text-white">
+          {String(val)}
+        </span>
+      );
+    }
+
     if (CURRENCY_FIELDS.has(field)) {
       const num = Number(val);
       if (isNaN(num)) return <span>{String(val)}</span>;
@@ -479,7 +556,7 @@ export default function ReportBuilderPage() {
   // Compute live summary KPI
   const totalAmountSum = results
     ? results.reduce((acc, row) => {
-        const sumField = selectedFields.find((f) => f === "totalAmount" || f === "amount" || f === "salesPrice");
+        const sumField = selectedFields.find((f) => f === "totalValuation" || f === "totalAmount" || f === "amount" || f === "salesPrice");
         return sumField && row[sumField] ? acc + Number(row[sumField]) : acc;
       }, 0)
     : 0;
