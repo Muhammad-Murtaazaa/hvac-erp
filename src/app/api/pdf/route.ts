@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { generateInvoicePDF, generateQuotationPDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF } from "@/lib/pdfGenerator";
+import { getPartyLedgerReportData } from "@/lib/partyLedger";
 
 export const dynamic = "force-dynamic";
 
@@ -149,201 +150,22 @@ export async function GET(req: Request) {
       pdfBuffer = await generateMonthlySalarySheetPDF({ month, year, monthName, items });
       fileName = `salary-sheet-${monthName}-${year}.pdf`;
     } else if (type === "soa") {
-      const partyType = searchParams.get("partyType") || "CUSTOMER";
-      const partyId = searchParams.get("partyId") || "";
-      const partyName = searchParams.get("partyName") || "";
-      const startDateStr = searchParams.get("startDate") || "2024-01-01";
-      const endDateStr = searchParams.get("endDate") || new Date().toISOString().split("T")[0];
+      const partyType = (searchParams.get("partyType") || "CUSTOMER") as "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+      const partyId = searchParams.get("partyId") || undefined;
+      const partyName = searchParams.get("partyName") || undefined;
+      const startDateStr = searchParams.get("startDate") || undefined;
+      const endDateStr = searchParams.get("endDate") || undefined;
 
-      // Query party ledger
-      const startDate = new Date(startDateStr);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(endDateStr);
-      endDate.setHours(23, 59, 59, 999);
-
-      let resolvedPartyInfo: any = { name: partyName || "Party Account", phone: "", address: "", code: "", contactPerson: "" };
-      if (partyType === "CUSTOMER") {
-        if (partyId) {
-          const cust = await prisma.customer.findUnique({ where: { id: partyId } });
-          if (cust) {
-            resolvedPartyInfo = {
-              name: cust.name,
-              phone: cust.phone || "",
-              address: cust.address || "Multan, Pakistan",
-              code: (cust as any).customerCode || `CUS-${cust.id.slice(-6).toUpperCase()}`,
-              contactPerson: "",
-            };
-          }
-        }
-        if (!resolvedPartyInfo.code && partyName) {
-          const custByName = await prisma.customer.findFirst({
-            where: { name: { equals: partyName, mode: "insensitive" } },
-          });
-          if (custByName) {
-            resolvedPartyInfo = {
-              name: custByName.name,
-              phone: custByName.phone || "",
-              address: custByName.address || "Multan, Pakistan",
-              code: (custByName as any).customerCode || `CUS-${custByName.id.slice(-6).toUpperCase()}`,
-              contactPerson: "",
-            };
-          } else {
-            const sampleInv = await prisma.invoice.findFirst({
-              where: { clientName: { equals: partyName, mode: "insensitive" } },
-              orderBy: { createdAt: "desc" },
-            });
-            if (sampleInv) {
-              resolvedPartyInfo = {
-                name: sampleInv.clientName,
-                phone: sampleInv.clientPhone || "",
-                address: sampleInv.clientAddress || "Multan, Pakistan",
-                code: "CUS-000011",
-                contactPerson: "",
-              };
-            }
-          }
-        }
-      } else if (partyType === "VENDOR" && partyId) {
-        const vendor = await prisma.vendor.findUnique({ where: { id: partyId } });
-        if (vendor) {
-          resolvedPartyInfo = {
-            name: vendor.name,
-            phone: vendor.phone || "",
-            address: vendor.address || "Multan, Pakistan",
-            contactPerson: vendor.contactPerson || "",
-            code: (vendor as any).vendorCode || `VEN-${vendor.id.slice(-6).toUpperCase()}`,
-          };
-        }
-      } else if (partyType === "EMPLOYEE" && partyId) {
-        const emp = await prisma.employee.findUnique({ where: { id: partyId } });
-        if (emp) {
-          resolvedPartyInfo = {
-            name: emp.name,
-            phone: emp.phone || "",
-            address: emp.address || "Multan, Pakistan",
-            contactPerson: "",
-            code: emp.employeeNo || `EMP-${emp.id.slice(-6).toUpperCase()}`,
-          };
-        }
-      }
-
-      const partyLedgerEntries = await prisma.ledgerEntry.findMany({
-        where: {
-          OR: [
-            { partyId: partyId || undefined },
-            { partyName: { equals: partyName, mode: "insensitive" } },
-          ],
-        },
-        orderBy: { entryDate: "asc" },
-      });
-
-      const rawItems: any[] = [];
-      partyLedgerEntries.forEach((le) => {
-        let debit = 0;
-        let credit = 0;
-        if (partyType === "CUSTOMER") {
-          if (le.creditAccount.toLowerCase().includes("customer") || le.creditAccount.toLowerCase().includes("receivable") || le.voucherType === "CRV" || le.voucherType === "BRV") {
-            credit = Number(le.amount);
-          } else {
-            debit = Number(le.amount);
-          }
-        } else if (partyType === "VENDOR") {
-          if (le.debitAccount.toLowerCase().includes("vendor") || le.debitAccount.toLowerCase().includes("payable") || le.voucherType === "CPV" || le.voucherType === "BPV") {
-            debit = Number(le.amount);
-          } else {
-            credit = Number(le.amount);
-          }
-        } else {
-          if (le.debitAccount.toLowerCase().includes("employee") || le.voucherType === "EAV") {
-            debit = Number(le.amount);
-          } else {
-            credit = Number(le.amount);
-          }
-        }
-
-        rawItems.push({
-          date: le.entryDate,
-          docType: le.voucherType || le.referenceType,
-          referenceNumber: le.voucherNumber || le.referenceId || "ENTRY",
-          description: le.description || le.notes || "Voucher",
-          debit,
-          credit,
-        });
-      });
-
-      if (partyType === "CUSTOMER" && partyName) {
-        const invoices = await prisma.invoice.findMany({
-          where: { clientName: { equals: partyName, mode: "insensitive" } },
-          include: { payments: true },
-        });
-        invoices.forEach((inv) => {
-          rawItems.push({
-            date: inv.date,
-            docType: "INVOICE",
-            referenceNumber: inv.invoiceNumber,
-            description: `Sales Invoice: ${inv.subjectHeading || "HVAC Equipment"}`,
-            debit: Number(inv.totalAmount),
-            credit: 0,
-          });
-          inv.payments.forEach((p) => {
-            rawItems.push({
-              date: p.paymentDate,
-              docType: "PAYMENT",
-              referenceNumber: `REC-${inv.invoiceNumber}`,
-              description: `Payment received (${p.method})`,
-              debit: 0,
-              credit: Number(p.amountPaid),
-            });
-          });
-        });
-      }
-
-      rawItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      let openingBalance = 0;
-      const transactions: any[] = [];
-      rawItems.forEach((item) => {
-        const itemTime = new Date(item.date).getTime();
-        const change = item.debit - item.credit;
-        if (itemTime < startDate.getTime()) {
-          openingBalance += change;
-        }
-      });
-
-      let runningBal = openingBalance;
-      let totalDr = 0;
-      let totalCr = 0;
-      rawItems.forEach((item) => {
-        const itemTime = new Date(item.date).getTime();
-        if (itemTime >= startDate.getTime() && itemTime <= endDate.getTime()) {
-          runningBal += (item.debit - item.credit);
-          totalDr += item.debit;
-          totalCr += item.credit;
-          transactions.push({
-            date: new Date(item.date).toLocaleDateString("en-GB").replace(/\//g, "-"),
-            referenceNumber: item.referenceNumber,
-            docType: item.docType,
-            description: item.description,
-            debit: item.debit,
-            credit: item.credit,
-            runningBalance: runningBal,
-          });
-        }
-      });
-
-      pdfBuffer = await generateSOAPDF({
+      const soaReport = await getPartyLedgerReportData({
         partyType,
-        partyInfo: resolvedPartyInfo,
-        period: { startDate: startDateStr, endDate: endDateStr },
-        openingBalance,
-        transactions,
-        totals: {
-          totalDebit: totalDr,
-          totalCredit: totalCr,
-          closingBalance: runningBal,
-        },
+        partyId,
+        partyName,
+        startDateStr,
+        endDateStr,
       });
-      fileName = `statement-of-account-${resolvedPartyInfo.name.replace(/\s+/g, "_")}.pdf`;
+
+      pdfBuffer = await generateSOAPDF(soaReport);
+      fileName = `statement-of-account-${(soaReport.partyInfo?.name || "party").replace(/\s+/g, "_")}.pdf`;
     } else {
       return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
     }

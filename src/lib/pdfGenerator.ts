@@ -1075,12 +1075,20 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       const formatDateShort = (d: any) => {
         if (!d) return "-";
         try {
+          if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+            const [y, m, day] = d.split("-");
+            return `${day}/${m}/${y.slice(-2)}`;
+          }
+          if (typeof d === "string" && /^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, m, y] = d.split("-");
+            return `${day}/${m}/${y.slice(-2)}`;
+          }
           const dateObj = new Date(d);
           if (isNaN(dateObj.getTime())) return String(d);
           const day = String(dateObj.getDate()).padStart(2, "0");
           const month = String(dateObj.getMonth() + 1).padStart(2, "0");
           const year = String(dateObj.getFullYear()).slice(-2);
-          return `${month}/${day}/${year}`;
+          return `${day}/${month}/${year}`;
         } catch {
           return String(d);
         }
@@ -1150,7 +1158,13 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       // 4. Recipient Party Information (Left side at y = 120)
       const partyCode = soaData.partyInfo?.code || (soaData.partyType === "CUSTOMER" ? "CUS-000011" : soaData.partyType === "VENDOR" ? "VEN-000012" : "EMP-000015");
       const partyName = (soaData.partyInfo?.name || "Valued Account").toUpperCase();
-      const contactPerson = soaData.partyInfo?.contactPerson ? `MR. ${soaData.partyInfo.contactPerson.toUpperCase()}` : null;
+      
+      let contactPerson = soaData.partyInfo?.contactPerson || "";
+      if (contactPerson) {
+        contactPerson = contactPerson.replace(/^MR\.?\s*/i, "").trim();
+        if (contactPerson) contactPerson = `MR. ${contactPerson.toUpperCase()}`;
+      }
+
       const partyAddress = soaData.partyInfo?.address || "MULTAN, PUNJAB, Pakistan";
       const partyPhone = soaData.partyInfo?.phone || "";
 
