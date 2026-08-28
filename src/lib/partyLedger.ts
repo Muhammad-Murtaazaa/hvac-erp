@@ -1,4 +1,5 @@
 import prisma from "@/lib/db";
+import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
 export interface LedgerTransactionItem {
   id: string;
@@ -244,12 +245,35 @@ export async function getPartyLedgerReportData({
       }
     }
 
+    let displayDesc = le.description || "";
+    if (displayDesc && displayDesc.trim().startsWith("{") && displayDesc.trim().endsWith("}")) {
+      try {
+        const parsed = JSON.parse(displayDesc.trim());
+        displayDesc = parsed.userNotes || "";
+      } catch {}
+    }
+    if (!displayDesc && le.notes) {
+      if (le.notes.trim().startsWith("{") && le.notes.trim().endsWith("}")) {
+        try {
+          const parsed = JSON.parse(le.notes.trim());
+          displayDesc = parsed.userNotes || "";
+        } catch {
+          displayDesc = le.notes;
+        }
+      } else {
+        displayDesc = le.notes;
+      }
+    }
+    if (!displayDesc) {
+      displayDesc = "General Voucher Entry";
+    }
+
     rawItems.push({
       date: le.entryDate,
       voucherNumber: le.voucherNumber || undefined,
       docType: le.voucherType || le.referenceType,
       referenceNumber: le.voucherNumber || le.referenceId || "ENTRY",
-      description: le.description || (le.notes ? `${le.notes}` : "General Voucher Entry"),
+      description: displayDesc,
       debit: Math.round(debit * 100) / 100,
       credit: Math.round(credit * 100) / 100,
       dueDate: le.entryDate,
@@ -290,11 +314,18 @@ export async function getPartyLedgerReportData({
     invoices.forEach((inv: any) => {
       const isInvCaptured = loggedRefKeys.has(inv.invoiceNumber.toLowerCase()) || loggedRefKeys.has(inv.id.toLowerCase());
       if (!isInvCaptured) {
+        let cleanNote = "";
+        if (inv.notes) {
+          const meta = parseInvoiceMetadata(inv.notes);
+          cleanNote = meta.userNotes || "";
+        }
+        const descText = inv.subjectHeading || cleanNote || "Commercial HVAC Order";
+
         rawItems.push({
           date: inv.date,
           docType: "INVOICE",
           referenceNumber: inv.invoiceNumber,
-          description: `Sales Billing Invoice: ${inv.subjectHeading || inv.notes || "Commercial HVAC Order"}`,
+          description: `Sales Billing Invoice: ${descText}`,
           debit: Math.round(Number(inv.totalAmount) * 100) / 100,
           credit: 0,
           dueDate: inv.dueDate || inv.date,

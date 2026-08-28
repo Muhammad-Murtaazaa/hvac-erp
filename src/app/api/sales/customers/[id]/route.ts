@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -245,13 +246,20 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   allInvoices.forEach((inv: any) => {
     const isInvCaptured = loggedRefKeys.has(inv.invoiceNumber.toLowerCase()) || loggedRefKeys.has(inv.id.toLowerCase());
     if (!isInvCaptured) {
+      let cleanNote = "";
+      if (inv.notes) {
+        const meta = parseInvoiceMetadata(inv.notes);
+        cleanNote = meta.userNotes || "";
+      }
+      const descText = inv.subjectHeading || cleanNote || "Commercial Sale";
+
       rawLedgerItems.push({
         id: `inv-${inv.id}`,
         date: new Date(inv.date).toISOString(),
         voucherNumber: undefined,
         docType: "INVOICE",
         referenceNumber: inv.invoiceNumber,
-        description: `Commercial Invoice: ${inv.subjectHeading || inv.notes || "Commercial Sale"}`,
+        description: `Commercial Invoice: ${descText}`,
         debit: Math.round(Number(inv.totalAmount || 0) * 100) / 100,
         credit: 0,
       });
