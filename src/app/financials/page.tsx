@@ -88,6 +88,289 @@ import { useToast } from "@/components/shared/ToastProvider";
 const PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
 /* ========================================================================= */
+/* UNIVERSAL SEARCHABLE PARTY SELECTOR (CUSTOMERS, VENDORS, EMPLOYEES)       */
+/* ========================================================================= */
+function UniversalPartyCombobox({
+  selectedName,
+  selectedId,
+  selectedType,
+  parties = [],
+  placeholder = "Search any Customer, Vendor, or Staff by name, phone...",
+  onSelect,
+  onAddNewCustomer,
+  onAddNewVendor,
+}: {
+  selectedName: string;
+  selectedId?: string;
+  selectedType?: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+  parties: Array<{
+    id: string;
+    name: string;
+    type: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+    phone?: string;
+    email?: string;
+    extra?: string;
+    balance?: number;
+  }>;
+  placeholder?: string;
+  onSelect: (party: any) => void;
+  onAddNewCustomer: (initialName: string) => void;
+  onAddNewVendor: (initialName: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<"ALL" | "CUSTOMER" | "VENDOR" | "EMPLOYEE">("ALL");
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    let list = parties;
+    if (filterType !== "ALL") {
+      list = list.filter((p) => p.type === filterType);
+    }
+    if (!search) return list;
+    const s = search.toLowerCase();
+    return list.filter((p) => {
+      const nameMatch = p.name?.toLowerCase().includes(s);
+      const phoneMatch = p.phone?.toLowerCase().includes(s);
+      const extraMatch = p.extra?.toLowerCase().includes(s);
+      const emailMatch = p.email?.toLowerCase().includes(s);
+      return nameMatch || phoneMatch || extraMatch || emailMatch;
+    });
+  }, [parties, search, filterType]);
+
+  const currentSelectedParty = useMemo(() => {
+    if (selectedId) return parties.find((p) => p.id === selectedId);
+    if (selectedName) return parties.find((p) => p.name?.toLowerCase() === selectedName.toLowerCase());
+    return null;
+  }, [parties, selectedId, selectedName]);
+
+  return (
+    <div className="space-y-1.5" ref={dropdownRef}>
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+          <Search className="w-3.5 h-3.5 text-blue-500" />
+          <span>Universal Party Search</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onAddNewCustomer(search)}
+            className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold flex items-center gap-1 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Customer</span>
+          </button>
+          <span className="text-slate-300 dark:text-slate-700">|</span>
+          <button
+            type="button"
+            onClick={() => onAddNewVendor(search)}
+            className="text-[10px] text-amber-600 hover:text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            <span>+ Vendor</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={isOpen ? search : selectedName || ""}
+            placeholder={placeholder}
+            onFocus={() => {
+              setIsOpen(true);
+              setSearch(selectedName || "");
+            }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (!isOpen) setIsOpen(true);
+            }}
+            className="w-full pl-10 pr-9 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
+          />
+          {isOpen || selectedName ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                onSelect(null);
+                setIsOpen(true);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
+        </div>
+
+        {/* Dropdown Floating Popover */}
+        {isOpen && (
+          <div className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-h-80 overflow-y-auto no-scrollbar p-2 space-y-1.5 animate-fadeIn">
+            {/* Quick Filter Chips inside Dropdown */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setFilterType("ALL")}
+                className={`px-2.5 py-1 rounded-lg transition-all ${
+                  filterType === "ALL"
+                    ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs"
+                    : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                All ({parties.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("CUSTOMER")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  filterType === "CUSTOMER"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                }`}
+              >
+                <User className="w-3 h-3" />
+                Customers ({parties.filter((p) => p.type === "CUSTOMER").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("VENDOR")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  filterType === "VENDOR"
+                    ? "bg-amber-600 text-white shadow-xs"
+                    : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                }`}
+              >
+                <Building2 className="w-3 h-3" />
+                Vendors ({parties.filter((p) => p.type === "VENDOR").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("EMPLOYEE")}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  filterType === "EMPLOYEE"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                }`}
+              >
+                <Users className="w-3 h-3" />
+                Staff ({parties.filter((p) => p.type === "EMPLOYEE").length})
+              </button>
+            </div>
+
+            {/* List of matches */}
+            {filtered.length > 0 ? (
+              filtered.map((party: any) => {
+                const isSelected = (selectedId && party.id === selectedId) || (selectedName && party.name === selectedName);
+                return (
+                  <div
+                    key={`${party.type}-${party.id || party.name}`}
+                    onClick={() => {
+                      onSelect(party);
+                      setIsOpen(false);
+                    }}
+                    className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between text-xs ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-black"
+                        : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-mono font-bold text-[10px] uppercase shrink-0 ${
+                          party.type === "CUSTOMER"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                            : party.type === "VENDOR"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                            : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                        }`}
+                      >
+                        {party.type === "CUSTOMER" ? "CU" : party.type === "VENDOR" ? "VE" : "ST"}
+                      </div>
+                      <div className="truncate">
+                        <div className="font-bold text-xs truncate flex items-center gap-1.5">
+                          <span>{party.name}</span>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase ${
+                              party.type === "CUSTOMER"
+                                ? "bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
+                                : party.type === "VENDOR"
+                                ? "bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                                : "bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                            }`}
+                          >
+                            {party.type === "CUSTOMER" ? "Customer" : party.type === "VENDOR" ? "Vendor" : "Staff"}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                          {party.phone && <span>📞 {party.phone}</span>}
+                          {party.extra && <span>• {party.extra}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {party.balance !== undefined && (
+                      <div className="text-right shrink-0 ml-2">
+                        <span
+                          className={`text-[10px] font-mono font-bold block ${
+                            party.balance > 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-400"
+                          }`}
+                        >
+                          {party.balance > 0 ? `Due: PKR ${Math.round(party.balance).toLocaleString()}` : "Settled"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-400">
+                No matching accounts found for &ldquo;{search}&rdquo;.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Selected Party Summary Ribbon */}
+      {currentSelectedParty && !isOpen && (
+        <div className="p-2 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                currentSelectedParty.type === "CUSTOMER"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                  : currentSelectedParty.type === "VENDOR"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                  : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+              }`}
+            >
+              {currentSelectedParty.type === "CUSTOMER" ? "Customer" : currentSelectedParty.type === "VENDOR" ? "Vendor" : "Staff"}
+            </span>
+            <span className="font-bold text-slate-800 dark:text-white truncate">{currentSelectedParty.name}</span>
+            {currentSelectedParty.phone && (
+              <span className="text-[10px] text-slate-500 font-mono truncate">📞 {currentSelectedParty.phone}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========================================================================= */
 /* SEARCHABLE PARTY SELECTOR WITH REAL-TIME FILTERING & AUTO-ADD SUGGEST     */
 /* ========================================================================= */
 function SearchablePartyCombobox({
@@ -713,6 +996,57 @@ function FinancialsPageContent() {
   const [documentsList, setDocumentsList] = useState<any>({ invoices: [], purchaseOrders: [], deliveryOrders: [], complaints: [] });
   const [accountsLoading, setAccountsLoading] = useState(false);
 
+  // Unified List of all Customers, Vendors, and Employees for Universal Search
+  const universalPartiesList = useMemo(() => {
+    const list: Array<{
+      id: string;
+      name: string;
+      type: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+      phone?: string;
+      email?: string;
+      extra?: string;
+      balance?: number;
+    }> = [];
+
+    (partiesList.customers || []).forEach((c: any) => {
+      list.push({
+        id: c.id,
+        name: c.name,
+        type: "CUSTOMER",
+        phone: c.phone || "",
+        email: c.email || "",
+        extra: c.address || "",
+        balance: c.balance,
+      });
+    });
+
+    (partiesList.vendors || []).forEach((v: any) => {
+      list.push({
+        id: v.id,
+        name: v.name,
+        type: "VENDOR",
+        phone: v.phone || "",
+        email: v.email || "",
+        extra: v.contactPerson ? `Contact: ${v.contactPerson}` : "",
+        balance: v.balance,
+      });
+    });
+
+    (partiesList.employees || []).forEach((e: any) => {
+      list.push({
+        id: e.id,
+        name: e.name,
+        type: "EMPLOYEE",
+        phone: e.phone || "",
+        email: e.email || "",
+        extra: e.department ? `${e.department} - ${e.position || "Staff"}` : "Staff Member",
+        balance: e.balance,
+      });
+    });
+
+    return list;
+  }, [partiesList]);
+
   // Document Linking State
   const [linkedDocType, setLinkedDocType] = useState<"NONE" | "INVOICE" | "PO" | "DO" | "COMPLAINT">("NONE");
   const [linkedDocId, setLinkedDocId] = useState("");
@@ -1039,9 +1373,14 @@ function FinancialsPageContent() {
     }
   };
 
-  const fetchPartyLedger = async (explicitPartyName?: string, explicitPartyId?: string) => {
+  const fetchPartyLedger = async (
+    explicitPartyName?: string,
+    explicitPartyId?: string,
+    explicitPartyType?: "CUSTOMER" | "VENDOR" | "EMPLOYEE"
+  ) => {
     const pName = explicitPartyName !== undefined ? explicitPartyName : selectedPartyName;
     const pId = explicitPartyId !== undefined ? explicitPartyId : selectedPartyId;
+    const pType = explicitPartyType !== undefined ? explicitPartyType : partyType;
 
     if (!pName && !pId) {
       toast({ title: "Select a Party", message: "Please choose a customer, vendor or staff member.", type: "warning" });
@@ -1050,7 +1389,7 @@ function FinancialsPageContent() {
     setSoaLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const url = `/api/finance/party-ledger?partyType=${partyType}&partyId=${pId}&partyName=${encodeURIComponent(pName)}&startDate=${soaStartDate}&endDate=${soaEndDate}`;
+      const url = `/api/finance/party-ledger?partyType=${pType}&partyId=${pId || ""}&partyName=${encodeURIComponent(pName)}&startDate=${soaStartDate}&endDate=${soaEndDate}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const json = await res.json();
@@ -1461,7 +1800,7 @@ function FinancialsPageContent() {
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: CUSTOMER & VENDOR STATEMENTS (SOA)                                */}
+      {/* TAB 1: UNIVERSAL STATEMENT OF ACCOUNT (SUB-LEDGER)                       */}
       {/* ========================================================================= */}
       {activeSection === "statements" && (
         <div className="space-y-6">
@@ -1471,118 +1810,52 @@ function FinancialsPageContent() {
               <div>
                 <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  Statement of Account (Sub-Ledger)
+                  Statement of Account (Universal Sub-Ledger)
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Select a party type and account name to generate clean running balances with debit/credit entries.
+                  Search any Customer, Vendor, or Staff Member to view their real-time ledger statement and running balances.
                 </p>
               </div>
 
-              {/* Party Type Switcher */}
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800/90 p-1.5 rounded-2xl text-xs font-bold border border-slate-200/60 dark:border-slate-700/60">
-                <button
-                  onClick={() => {
-                    setPartyType("CUSTOMER");
-                    if (partiesList.customers?.length > 0) setSelectedPartyName(partiesList.customers[0].name);
-                    setSelectedPartyId("");
-                    setSoaData(null);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "CUSTOMER"
-                      ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Customers / Clients</span>
-                  <span className="text-[10px] text-slate-400">({partiesList.customers?.length || 0})</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPartyType("VENDOR");
-                    if (partiesList.vendors?.length > 0) {
-                      setSelectedPartyId(partiesList.vendors[0].id);
-                      setSelectedPartyName(partiesList.vendors[0].name);
-                    }
-                    setSoaData(null);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "VENDOR"
-                      ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Vendors / Suppliers</span>
-                  <span className="text-[10px] text-slate-400">({partiesList.vendors?.length || 0})</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPartyType("EMPLOYEE");
-                    if (partiesList.employees?.length > 0) {
-                      setSelectedPartyId(partiesList.employees[0].id);
-                      setSelectedPartyName(partiesList.employees[0].name);
-                    }
-                    setSoaData(null);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "EMPLOYEE"
-                      ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5 text-purple-500" />
-                  <span>Staff & Technicians</span>
-                  <span className="text-[10px] text-slate-400">({partiesList.employees?.length || 0})</span>
-                </button>
+              {/* Total registered counts badge */}
+              <div className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-100/80 dark:bg-slate-800/80 px-3.5 py-1.5 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 shadow-2xs">
+                <span className="text-blue-600 dark:text-blue-400 font-bold">{partiesList.customers?.length || 0} Customers</span>
+                <span>•</span>
+                <span className="text-amber-600 dark:text-amber-400 font-bold">{partiesList.vendors?.length || 0} Vendors</span>
+                <span>•</span>
+                <span className="text-purple-600 dark:text-purple-400 font-bold">{partiesList.employees?.length || 0} Staff</span>
               </div>
             </div>
 
             {/* Selector Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              {/* Party Selection Box with Real-time Search & Quick Actions */}
-              <div className="md:col-span-4">
-                <SearchablePartyCombobox
-                  label={`Select ${partyType === "CUSTOMER" ? "Customer" : partyType === "VENDOR" ? "Vendor" : "Staff Member"}`}
-                  type={partyType}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
+              {/* Universal Party Search Bar */}
+              <div className="lg:col-span-5">
+                <UniversalPartyCombobox
                   selectedName={selectedPartyName}
                   selectedId={selectedPartyId}
-                  parties={
-                    partyType === "CUSTOMER"
-                      ? partiesList.customers || []
-                      : partyType === "VENDOR"
-                      ? partiesList.vendors || []
-                      : partiesList.employees || []
-                  }
-                  placeholder={`Search ${partyType.toLowerCase()} by name, phone...`}
+                  selectedType={partyType}
+                  parties={universalPartiesList}
+                  placeholder="Search customer, vendor, or staff by name, phone..."
                   onSelect={(party) => {
                     if (party) {
+                      setPartyType(party.type);
                       setSelectedPartyName(party.name);
                       setSelectedPartyId(party.id || "");
-                      fetchPartyLedger(party.name, party.id || "");
+                      fetchPartyLedger(party.name, party.id || "", party.type);
                     } else {
                       setSelectedPartyName("");
                       setSelectedPartyId("");
                       setSoaData(null);
                     }
                   }}
-                  onAddNew={(initialName) => {
-                    if (partyType === "CUSTOMER") handleOpenAddCustomer(initialName, "statement");
-                    else if (partyType === "VENDOR") handleOpenAddVendor(initialName, "statement");
-                  }}
-                  onEdit={(party) => {
-                    if (partyType === "CUSTOMER") handleOpenEditCustomer(party);
-                  }}
-                  onViewLedger={(party) => {
-                    fetchPartyLedger(party.name, party.id || "");
-                  }}
+                  onAddNewCustomer={(initialName) => handleOpenAddCustomer(initialName, "statement")}
+                  onAddNewVendor={(initialName) => handleOpenAddVendor(initialName, "statement")}
                 />
               </div>
 
               {/* Date Presets and Pickers */}
-              <div className="md:col-span-5 space-y-1.5">
+              <div className="lg:col-span-4 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     <Calendar className="w-3.5 h-3.5 text-indigo-500" />
@@ -1653,7 +1926,7 @@ function FinancialsPageContent() {
               </div>
 
               {/* Action Buttons */}
-              <div className="md:col-span-3 flex items-center gap-2">
+              <div className="lg:col-span-3 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => fetchPartyLedger()}
@@ -1677,6 +1950,7 @@ function FinancialsPageContent() {
               </div>
             </div>
           </div>
+
 
           {/* Statement Presentation Area */}
           {soaData ? (
