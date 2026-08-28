@@ -71,7 +71,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
 
       doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
       doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
 
       // Title Banner
@@ -81,10 +81,25 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`Date: ${formatDateDisplay(invoiceData.date, "en-GB")}`, 50, 148);
-      doc.text(`Client Name: ${invoiceData.clientName}`, 50, 162);
-      if (invoiceData.clientPhone) doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, 176);
-      if (invoiceData.clientAddress) doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, 190, { width: 280 });
+      const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
+      const siteVal = (meta.site || invoiceData.site || "").trim();
+      let leftY = 148;
+      doc.text(`Date: ${formatDateDisplay(invoiceData.date, "en-GB")}`, 50, leftY);
+      leftY += 14;
+      if (siteVal) {
+        doc.text(`Site: ${siteVal}`, 50, leftY);
+        leftY += 14;
+      }
+      doc.text(`Client Name: ${invoiceData.clientName}`, 50, leftY);
+      leftY += 14;
+      if (invoiceData.clientPhone) {
+        doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, leftY);
+        leftY += 14;
+      }
+      if (invoiceData.clientAddress) {
+        doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, leftY, { width: 280 });
+        leftY += 18;
+      }
 
       if (invoiceData.deliveryOrder) {
         doc.text(`Ref Delivery Order: ${invoiceData.deliveryOrder.doNumber}`, 340, 148);
@@ -95,7 +110,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
 
       // Subject Block
-      let y = 220;
+      let y = Math.max(220, leftY + 12);
       if (invoiceData.subjectHeading) {
         doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937").text(`Subject: ${invoiceData.subjectHeading}`, 50, y);
         y += 15;
@@ -150,7 +165,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.moveTo(50, y + 5).lineTo(550, y + 5).strokeColor("#e5e7eb").stroke();
       y += 20;
 
-      const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
+      // const meta is already parsed above
       const subtotal = meta.subtotalAmount;
       const discountAmount = meta.discountAmount;
       const taxableAmount = Math.max(0, subtotal - discountAmount);
@@ -267,7 +282,7 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
       doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
 
       doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
       doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
 
       // Title Banner
@@ -474,7 +489,7 @@ export function generatePayslipPDF(payslipData: any): Promise<Buffer> {
       // Universal TCE Footer
       doc.moveTo(50, 715).lineTo(550, 715).strokeColor("#000000").lineWidth(0.5).stroke();
       doc.font("Roboto-Regular").fontSize(8).fillColor("#4b5563");
-      doc.text("Office No . 22 Inside Aneesa Centre Opp. MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
       doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk", 50, 734, { align: "center", width: 500 });
 
       doc.end();
@@ -647,7 +662,7 @@ export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
       // Universal TCE Footer
       doc.moveTo(50, 715).lineTo(550, 715).strokeColor("#000000").lineWidth(0.5).stroke();
       doc.font("Roboto-Regular").fontSize(8).fillColor("#4b5563");
-      doc.text("Office No . 22 Inside Aneesa Centre Opp. MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
       doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk", 50, 734, { align: "center", width: 500 });
 
       doc.end();
@@ -806,7 +821,7 @@ export function generateEmployeeFormPDF(employee: any): Promise<Buffer> {
       // Universal TCE Footer
       doc.moveTo(50, 715).lineTo(550, 715).strokeColor("#000000").lineWidth(0.5).stroke();
       doc.font("Roboto-Regular").fontSize(8).fillColor("#4b5563");
-      doc.text("Office No . 22 Inside Aneesa Centre Opp. MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 50, 722, { align: "center", width: 500 });
       doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk", 50, 734, { align: "center", width: 500 });
 
       doc.end();
@@ -1062,7 +1077,7 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       doc.font("Roboto-Bold").fontSize(8).fillColor("#64748b").text("MAKE YOUR DESIRE CLIMATE", 40, 60);
 
       doc.font("Roboto-Regular").fontSize(7.5).fillColor("#475569");
-      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD MULTAN", 40, 72);
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 40, 72);
       doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 40, 83);
 
       doc.moveTo(40, 96).lineTo(555, 96).strokeColor("#0f172a").lineWidth(1.5).stroke();
@@ -1333,7 +1348,7 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
       doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
 
       doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("OFFICE NO. 22 INSIDE ANEESA CENTRE OPP. MASHALLAH ELECTRONICS KHANEWAL ROAD PUNJAB", 130, 76, { width: 420 });
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
       doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
 
       // Title Banner

@@ -126,6 +126,7 @@ function SalesPageContent() {
   const [postingOption, setPostingOption] = useState<"CUSTOMER_LEDGER" | "GENERAL_LEDGER" | "NO_LEDGER">("CUSTOMER_LEDGER");
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [site, setSite] = useState("");
   const [selectedComplaintId, setSelectedComplaintId] = useState("");
   const [complaints, setComplaints] = useState<any[]>([]);
   const [invLines, setInvLines] = useState<any[]>([
@@ -151,6 +152,7 @@ function SalesPageContent() {
   const [editClientName, setEditClientName] = useState("");
   const [editClientPhone, setEditClientPhone] = useState("");
   const [editClientAddress, setEditClientAddress] = useState("");
+  const [editSite, setEditSite] = useState("");
   const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editIsGst, setEditIsGst] = useState(true);
@@ -577,6 +579,7 @@ function SalesPageContent() {
       clientName,
       clientPhone,
       clientAddress,
+      site,
       date: invoiceDate,
       lineItems: formattedLines,
       payments: paymentsList,
@@ -607,6 +610,7 @@ function SalesPageContent() {
       setInvoiceDate(getLocalDateString());
       setClientPhone("");
       setClientAddress("");
+      setSite("");
       setNotes("");
       setDiscountType("FIXED");
       setDiscountValue("0");
@@ -634,6 +638,7 @@ function SalesPageContent() {
     setEditDate(formatDateForInput(inv.date));
 
     const meta = parseInvoiceMetadata(inv.notes, inv);
+    setEditSite(meta.site || (inv as any).site || "");
     setEditNotes(meta.userNotes || "");
     setEditIsGst(meta.isGst);
     setEditSalesTaxRate(meta.taxRate || salesTaxRate || 18);
@@ -734,6 +739,7 @@ function SalesPageContent() {
           clientName: editClientName.trim(),
           clientPhone: editClientPhone.trim(),
           clientAddress: editClientAddress.trim(),
+          site: editSite.trim(),
           date: editDate || formatDateForInput(editingInvoice.date),
           lineItems: formattedLines,
           notes: editNotes,
@@ -2394,7 +2400,7 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
                   <input
@@ -2403,6 +2409,16 @@ function SalesPageContent() {
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
                     value={clientAddress}
                     onChange={(e) => setClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Site / Project Location (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Site #4, Gulberg, Multan"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={site}
+                    onChange={(e) => setSite(e.target.value)}
                   />
                 </div>
                 <div>
@@ -2991,7 +3007,7 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
                   <input
@@ -3000,6 +3016,16 @@ function SalesPageContent() {
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
                     value={editClientAddress}
                     onChange={(e) => setEditClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Site / Project Location (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Site #4, Gulberg, Multan"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
+                    value={editSite}
+                    onChange={(e) => setEditSite(e.target.value)}
                   />
                 </div>
                 <div>

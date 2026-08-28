@@ -104,6 +104,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         discountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        site: meta.site || "",
       });
 
       // 3. Create Live Invoice

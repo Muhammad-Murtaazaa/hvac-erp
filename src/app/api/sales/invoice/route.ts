@@ -69,11 +69,13 @@ export async function POST(req: Request) {
   }
 
   try {
+    const body = await req.json();
     const {
       customerId: inputCustomerId,
       clientName,
       clientPhone,
       clientAddress,
+      site,
       date,
       lineItems,
       doId,
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
       subjectDescription,
       isGst,
       postingOption,
-    } = await req.json();
+    } = body;
 
     const finalClientName = (clientName || "").trim();
     const finalClientPhone = (clientPhone || "").trim();
@@ -232,7 +234,7 @@ export async function POST(req: Request) {
       const taxAmount = isGst !== false ? Math.round(taxableAmount * (salesTaxRate / 100)) : 0;
       const finalTotalAmount = Math.round(taxableAmount + taxAmount);
 
-      // Format notes payload including discount and tax metadata
+      // Format notes payload including discount, tax and site metadata
       const formattedNotes = formatInvoiceNotesPayload({
         userNotes: notes || "",
         isGst: isGst !== false,
@@ -243,6 +245,7 @@ export async function POST(req: Request) {
         discountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        site: site || body.site || "",
       });
 
       // If converting from DO, check and verify the DO status

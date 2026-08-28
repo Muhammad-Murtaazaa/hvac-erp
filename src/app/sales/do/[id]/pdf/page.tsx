@@ -356,7 +356,7 @@ export default function DeliveryOrderPdfPage() {
         <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
           <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
             <span>📍</span>
-            <span>Office No . 22 Inside Aneesa Centre Opp. MashAllah Electronics Khanewal Road Multan.</span>
+            <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
           </div>
           <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
             <span className="flex items-center gap-1">

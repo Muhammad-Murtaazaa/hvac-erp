@@ -8,6 +8,7 @@ export interface InvoiceMetadata {
   discountAmount: number;
   subtotalAmount: number;
   totalAmount: number;
+  site?: string;
 }
 
 export function parseInvoiceMetadata(notes: string | null | undefined, invoice?: any): InvoiceMetadata {
@@ -20,6 +21,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
   let discountAmount = 0;
   let subtotalAmount = 0;
   let totalAmount = invoice ? Number(invoice.totalAmount || 0) : 0;
+  let site = invoice?.site ? String(invoice.site) : "";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -35,6 +37,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
         if (parsed.discountAmount !== undefined) discountAmount = Number(parsed.discountAmount);
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
+        if (parsed.site !== undefined && parsed.site !== null) site = String(parsed.site);
       } catch {
         userNotes = notes;
       }
@@ -75,6 +78,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
     discountAmount,
     subtotalAmount,
     totalAmount,
+    site,
   };
 }
 
@@ -88,6 +92,7 @@ export function formatInvoiceNotesPayload(data: {
   discountAmount: number;
   subtotalAmount: number;
   totalAmount: number;
+  site?: string;
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -99,5 +104,6 @@ export function formatInvoiceNotesPayload(data: {
     discountAmount: Number(data.discountAmount || 0),
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
+    site: data.site ? data.site.trim() : "",
   });
 }

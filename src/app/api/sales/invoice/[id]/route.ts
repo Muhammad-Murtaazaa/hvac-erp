@@ -52,6 +52,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       clientName,
       clientPhone,
       clientAddress,
+      site,
       date,
       lineItems,
       complaintId,
@@ -212,6 +213,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         discountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        site: site || body.site || "",
       });
 
       // 5. Calculate Status & Synchronize Payments
