@@ -247,7 +247,7 @@ export default function ProductSelect({
       {isOpen && !disabled && (
         <div
           ref={listRef}
-          className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[60] max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 animate-fadeIn text-xs min-w-[280px]"
+          className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-[60] max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 animate-fadeIn text-xs min-w-[340px] sm:min-w-[440px] max-w-[90vw] sm:max-w-[560px]"
         >
           {filteredProducts.length === 0 ? (
             <div className="p-3 text-center text-slate-400 dark:text-slate-500 space-y-1">
@@ -270,7 +270,7 @@ export default function ProductSelect({
                   type="button"
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   onClick={() => handleSelect(p)}
-                  className={`w-full text-left px-3 py-2.5 flex items-center justify-between gap-3 transition-colors ${
+                  className={`w-full text-left px-3.5 py-2.5 flex items-start justify-between gap-3 transition-colors ${
                     isHighlighted
                       ? "bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-100"
                       : isSelected
@@ -279,13 +279,13 @@ export default function ProductSelect({
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <div className="flex items-start gap-1.5 flex-wrap mb-1">
                       {p.sku && (
-                        <span className="font-mono text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                        <span className="font-mono text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 shrink-0 mt-0.5">
                           {p.sku}
                         </span>
                       )}
-                      <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xs leading-snug break-words whitespace-normal">
                         {p.name}
                       </span>
                     </div>

@@ -1,6 +1,8 @@
 import prisma from "@/lib/db";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
+export type PartyLedgerType = "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "CONSOLIDATED";
+
 export interface LedgerTransactionItem {
   id: string;
   date: string;
@@ -21,7 +23,7 @@ export async function getPartyLedgerReportData({
   startDateStr,
   endDateStr,
 }: {
-  partyType: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+  partyType: PartyLedgerType;
   partyId?: string;
   partyName?: string;
   startDateStr?: string;
@@ -41,6 +43,7 @@ export async function getPartyLedgerReportData({
     address: string;
     contactPerson: string;
     email: string;
+    roles?: string[];
   } = {
     code: "",
     name: partyName || "Party Account",
@@ -48,9 +51,11 @@ export async function getPartyLedgerReportData({
     address: "",
     contactPerson: "",
     email: "",
+    roles: [],
   };
 
-  if (partyType === "CUSTOMER") {
+  // 1. Resolve Profile Information across Customer, Vendor, and Employee directories
+  if (partyType === "CUSTOMER" || partyType === "CONSOLIDATED") {
     if (partyId) {
       const cust = await prisma.customer.findUnique({ where: { id: partyId } });
       if (cust) {
@@ -62,6 +67,7 @@ export async function getPartyLedgerReportData({
           address: cust.address || "Multan, Pakistan",
           contactPerson: "",
           email: cust.email || "",
+          roles: ["CUSTOMER"],
         };
       }
     }
@@ -78,6 +84,7 @@ export async function getPartyLedgerReportData({
           address: custByName.address || "Multan, Pakistan",
           contactPerson: "",
           email: custByName.email || "",
+          roles: ["CUSTOMER"],
         };
       } else {
         const sampleInv = await prisma.invoice.findFirst({
@@ -93,12 +100,15 @@ export async function getPartyLedgerReportData({
             address: sampleInv.clientAddress || "Multan, Pakistan",
             contactPerson: "",
             email: "",
+            roles: ["CUSTOMER"],
           };
         }
       }
     }
-  } else if (partyType === "VENDOR") {
-    if (partyId) {
+  }
+
+  if (partyType === "VENDOR" || partyType === "CONSOLIDATED") {
+    if (partyId && !resolvedPartyInfo.id) {
       const vendor = await prisma.vendor.findUnique({ where: { id: partyId } });
       if (vendor) {
         resolvedPartyInfo = {
@@ -109,27 +119,44 @@ export async function getPartyLedgerReportData({
           address: vendor.address || "Multan, Pakistan",
           contactPerson: vendor.contactPerson || "",
           email: vendor.email || "",
+          roles: [...(resolvedPartyInfo.roles || []), "VENDOR"],
         };
       }
     }
-    if (!resolvedPartyInfo.code && partyName) {
+    if (partyName) {
       const vendorByName = await prisma.vendor.findFirst({
         where: { name: { equals: partyName, mode: "insensitive" } },
       });
       if (vendorByName) {
-        resolvedPartyInfo = {
-          id: vendorByName.id,
-          code: (vendorByName as any).vendorCode || `VEN-${vendorByName.id.slice(-6).toUpperCase()}`,
-          name: vendorByName.name,
-          phone: vendorByName.phone || "",
-          address: vendorByName.address || "Multan, Pakistan",
-          contactPerson: vendorByName.contactPerson || "",
-          email: vendorByName.email || "",
-        };
+        if (!resolvedPartyInfo.code) {
+          resolvedPartyInfo = {
+            id: vendorByName.id,
+            code: (vendorByName as any).vendorCode || `VEN-${vendorByName.id.slice(-6).toUpperCase()}`,
+            name: vendorByName.name,
+            phone: vendorByName.phone || "",
+            address: vendorByName.address || "Multan, Pakistan",
+            contactPerson: vendorByName.contactPerson || "",
+            email: vendorByName.email || "",
+            roles: [...(resolvedPartyInfo.roles || []), "VENDOR"],
+          };
+        } else {
+          // Merge details in consolidated mode
+          if (!resolvedPartyInfo.contactPerson && vendorByName.contactPerson) {
+            resolvedPartyInfo.contactPerson = vendorByName.contactPerson;
+          }
+          if (!resolvedPartyInfo.phone && vendorByName.phone) {
+            resolvedPartyInfo.phone = vendorByName.phone;
+          }
+          if (resolvedPartyInfo.roles && !resolvedPartyInfo.roles.includes("VENDOR")) {
+            resolvedPartyInfo.roles.push("VENDOR");
+          }
+        }
       }
     }
-  } else if (partyType === "EMPLOYEE") {
-    if (partyId) {
+  }
+
+  if (partyType === "EMPLOYEE" || partyType === "CONSOLIDATED") {
+    if (partyId && !resolvedPartyInfo.id) {
       const emp = await prisma.employee.findUnique({ where: { id: partyId } });
       if (emp) {
         resolvedPartyInfo = {
@@ -140,28 +167,38 @@ export async function getPartyLedgerReportData({
           address: emp.address || "Multan, Pakistan",
           contactPerson: "",
           email: "",
+          roles: [...(resolvedPartyInfo.roles || []), "EMPLOYEE"],
         };
       }
     }
-    if (!resolvedPartyInfo.code && partyName) {
+    if (partyName) {
       const empByName = await prisma.employee.findFirst({
         where: { name: { equals: partyName, mode: "insensitive" } },
       });
       if (empByName) {
-        resolvedPartyInfo = {
-          id: empByName.id,
-          code: empByName.employeeNo || `EMP-${empByName.id.slice(-6).toUpperCase()}`,
-          name: empByName.name,
-          phone: empByName.phone || "",
-          address: empByName.address || "Multan, Pakistan",
-          contactPerson: "",
-          email: "",
-        };
+        if (!resolvedPartyInfo.code) {
+          resolvedPartyInfo = {
+            id: empByName.id,
+            code: empByName.employeeNo || `EMP-${empByName.id.slice(-6).toUpperCase()}`,
+            name: empByName.name,
+            phone: empByName.phone || "",
+            address: empByName.address || "Multan, Pakistan",
+            contactPerson: "",
+            email: "",
+            roles: [...(resolvedPartyInfo.roles || []), "EMPLOYEE"],
+          };
+        } else if (resolvedPartyInfo.roles && !resolvedPartyInfo.roles.includes("EMPLOYEE")) {
+          resolvedPartyInfo.roles.push("EMPLOYEE");
+        }
       }
     }
   }
 
-  // Pull all manual vouchers / ledger entries matching this party
+  if (partyType === "CONSOLIDATED" && resolvedPartyInfo.roles && resolvedPartyInfo.roles.length > 1) {
+    resolvedPartyInfo.code = `PAR-${resolvedPartyInfo.code.replace(/^[A-Z]+-/, "") || "360"}`;
+  }
+
+  // 2. Pull all manual vouchers / ledger entries matching this party
   const partyLedgerEntries = await prisma.ledgerEntry.findMany({
     where: {
       OR: [
@@ -183,7 +220,7 @@ export async function getPartyLedgerReportData({
     dueDate?: Date;
   }[] = [];
 
-  // 1. Process Vouchers & Manual Ledger entries
+  // Process Vouchers & Manual Ledger entries
   partyLedgerEntries.forEach((le) => {
     // Strictly exclude internal COGS and inventory movements from party statements
     if (
@@ -195,16 +232,27 @@ export async function getPartyLedgerReportData({
       return;
     }
 
-    // For customer invoices, skip raw INV ledger entries if we have the master invoice records to avoid duplicates/stale amounts on edits
-    if (partyType === "CUSTOMER" && (le.voucherType === "INV" || le.referenceType === "INVOICE")) {
+    // Skip raw INV ledger entries when we pull master invoice records (to prevent stale/duplicated amounts)
+    if ((partyType === "CUSTOMER" || partyType === "CONSOLIDATED") && (le.voucherType === "INV" || le.referenceType === "INVOICE")) {
       return;
     }
 
     let debit = 0;
     let credit = 0;
+    let includeEntry = true;
 
     if (partyType === "CUSTOMER") {
+      // Exclude pure vendor disbursements & vendor bills from Customer statements
       if (
+        le.partyType === "VENDOR" ||
+        le.voucherType === "CPV" ||
+        le.voucherType === "BPV" ||
+        le.voucherType === "GRN" ||
+        le.referenceType === "PO_RECEIPT" ||
+        le.referenceType === "VENDOR_RETURN"
+      ) {
+        includeEntry = false;
+      } else if (
         le.creditAccount.toLowerCase().includes("customer") ||
         le.creditAccount.toLowerCase().includes("receivable") ||
         le.voucherType === "CRV" ||
@@ -220,7 +268,19 @@ export async function getPartyLedgerReportData({
         debit = Number(le.amount);
       }
     } else if (partyType === "VENDOR") {
+      // Exclude customer sales invoices, receipts, and customer repair charges from Vendor statements
       if (
+        le.partyType === "CUSTOMER" ||
+        le.voucherType === "CRV" ||
+        le.voucherType === "BRV" ||
+        le.voucherType === "INV" ||
+        le.referenceType === "INVOICE" ||
+        le.referenceType === "COMPLAINT" ||
+        le.debitAccount.toLowerCase().includes("receivable") ||
+        le.creditAccount.toLowerCase().includes("revenue")
+      ) {
+        includeEntry = false;
+      } else if (
         le.debitAccount.toLowerCase().includes("vendor") ||
         le.debitAccount.toLowerCase().includes("payable") ||
         le.voucherType === "CPV" ||
@@ -229,20 +289,66 @@ export async function getPartyLedgerReportData({
         debit = Number(le.amount);
       } else if (
         le.creditAccount.toLowerCase().includes("vendor") ||
-        le.creditAccount.toLowerCase().includes("payable")
+        le.creditAccount.toLowerCase().includes("payable") ||
+        le.voucherType === "GRN"
       ) {
         credit = Number(le.amount);
       } else {
-        credit = Number(le.amount);
+        includeEntry = false;
       }
     } else if (partyType === "EMPLOYEE") {
-      if (le.debitAccount.toLowerCase().includes("employee") || le.voucherType === "EAV") {
+      if (
+        le.debitAccount.toLowerCase().includes("employee") ||
+        le.voucherType === "EAV" ||
+        le.referenceType === "PAYROLL"
+      ) {
         debit = Number(le.amount);
       } else if (le.creditAccount.toLowerCase().includes("employee")) {
         credit = Number(le.amount);
       } else {
-        debit = Number(le.amount);
+        includeEntry = false;
       }
+    } else if (partyType === "CONSOLIDATED") {
+      // In 360° Consolidated view, merge both customer and vendor dealing correctly:
+      // Debits = Money billed to party (Sales Invoices) + Payments disbursed to party (CPV/BPV/Staff Advances)
+      // Credits = Money received from party (CRV/BRV) + Goods/services supplied by party (GRN/Vendor Bills)
+      if (le.voucherType === "CRV" || le.voucherType === "BRV") {
+        credit = Number(le.amount);
+      } else if (le.voucherType === "CPV" || le.voucherType === "BPV") {
+        debit = Number(le.amount);
+      } else if (le.voucherType === "EAV") {
+        debit = Number(le.amount);
+      } else if (le.voucherType === "GRN" || le.referenceType === "PO_RECEIPT") {
+        credit = Number(le.amount);
+      } else if (
+        le.creditAccount.toLowerCase().includes("customer") ||
+        le.creditAccount.toLowerCase().includes("receivable")
+      ) {
+        credit = Number(le.amount);
+      } else if (
+        le.debitAccount.toLowerCase().includes("customer") ||
+        le.debitAccount.toLowerCase().includes("receivable")
+      ) {
+        debit = Number(le.amount);
+      } else if (
+        le.debitAccount.toLowerCase().includes("payable") ||
+        le.debitAccount.toLowerCase().includes("vendor")
+      ) {
+        debit = Number(le.amount);
+      } else if (
+        le.creditAccount.toLowerCase().includes("payable") ||
+        le.creditAccount.toLowerCase().includes("vendor")
+      ) {
+        credit = Number(le.amount);
+      } else {
+        if (le.partyType === "CUSTOMER") debit = Number(le.amount);
+        else if (le.partyType === "VENDOR") credit = Number(le.amount);
+        else debit = Number(le.amount);
+      }
+    }
+
+    if (!includeEntry || (debit === 0 && credit === 0)) {
+      return;
     }
 
     let displayDesc = le.description || "";
@@ -286,10 +392,10 @@ export async function getPartyLedgerReportData({
     if (item.referenceNumber) loggedRefKeys.add(item.referenceNumber.toLowerCase());
   });
 
-  // 2. Add System Invoices & Payments for Customer if partyName given
-  if (partyType === "CUSTOMER" && (partyName || partyId)) {
+  // 3. Add Master System Invoices & Customer Payments
+  if ((partyType === "CUSTOMER" || partyType === "CONSOLIDATED") && (partyName || partyId)) {
     const [invoices, complaints] = await Promise.all([
-      (prisma as any).invoice.findMany({
+      prisma.invoice.findMany({
         where: {
           OR: [
             { customerId: partyId || undefined },
@@ -299,7 +405,7 @@ export async function getPartyLedgerReportData({
         },
         include: { payments: true },
       }),
-      (prisma as any).complaint.findMany({
+      prisma.complaint.findMany({
         where: {
           OR: [
             { customerId: partyId || undefined },
@@ -335,7 +441,10 @@ export async function getPartyLedgerReportData({
       }
 
       (inv.payments || []).forEach((p: any) => {
-        const isPayCaptured = loggedRefKeys.has(p.id.toLowerCase()) || loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
+        const isPayCaptured =
+          loggedRefKeys.has(p.id.toLowerCase()) ||
+          loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) ||
+          loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
         if (!isPayCaptured) {
           rawItems.push({
             date: p.paymentDate,
@@ -356,7 +465,10 @@ export async function getPartyLedgerReportData({
     complaints.forEach((comp: any) => {
       const compAmount = Number(comp.amount || 0);
       if (compAmount > 0 && comp.amountStatus !== "WAIVED") {
-        const isCaptured = comp.invoice || loggedRefKeys.has(comp.complaintNumber.toLowerCase()) || loggedRefKeys.has(comp.id.toLowerCase());
+        const isCaptured =
+          comp.invoice ||
+          loggedRefKeys.has(comp.complaintNumber.toLowerCase()) ||
+          loggedRefKeys.has(comp.id.toLowerCase());
         if (!isCaptured) {
           rawItems.push({
             date: comp.date || comp.createdAt,
@@ -384,8 +496,8 @@ export async function getPartyLedgerReportData({
     });
   }
 
-  // 3. Add POs & GRNs for Vendor if partyId/partyName given
-  if (partyType === "VENDOR" && (partyId || partyName)) {
+  // 4. Add POs & GRNs for Vendor
+  if ((partyType === "VENDOR" || partyType === "CONSOLIDATED") && (partyId || partyName)) {
     const pos = await prisma.purchaseOrder.findMany({
       where: {
         OR: [
@@ -413,13 +525,15 @@ export async function getPartyLedgerReportData({
             credit: Math.round(grnTotal * 100) / 100,
             dueDate: grn.receivedAt,
           });
+          loggedRefKeys.add(grn.grnNumber.toLowerCase());
+          loggedRefKeys.add(grn.id.toLowerCase());
         }
       });
     });
   }
 
-  // 4. Add Payroll for Employee if partyId/partyName given
-  if (partyType === "EMPLOYEE" && (partyId || partyName)) {
+  // 5. Add Payroll for Employee
+  if ((partyType === "EMPLOYEE" || partyType === "CONSOLIDATED") && (partyId || partyName)) {
     const payrolls = await prisma.payrollRun.findMany({
       where: {
         OR: [
@@ -443,11 +557,13 @@ export async function getPartyLedgerReportData({
           credit: Math.round(Number(pr.baseSalary) * 100) / 100,
           dueDate: pr.paymentDate || pr.createdAt,
         });
+        loggedRefKeys.add(ref.toLowerCase());
+        loggedRefKeys.add(pr.id.toLowerCase());
       }
     });
   }
 
-  // Sort all records chronologically
+  // 6. Sort all records chronologically
   rawItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   // Compute Opening Balance before startDate
@@ -456,7 +572,7 @@ export async function getPartyLedgerReportData({
 
   rawItems.forEach((item) => {
     const itemTime = new Date(item.date).getTime();
-    const change = partyType === "VENDOR" ? (item.credit - item.debit) : (item.debit - item.credit);
+    const change = partyType === "VENDOR" ? item.credit - item.debit : item.debit - item.credit;
 
     if (itemTime < startDate.getTime()) {
       openingBalance += change;
@@ -472,7 +588,7 @@ export async function getPartyLedgerReportData({
   rawItems.forEach((item, idx) => {
     const itemTime = new Date(item.date).getTime();
     if (itemTime >= startDate.getTime() && itemTime <= endDate.getTime()) {
-      const delta = partyType === "VENDOR" ? (item.credit - item.debit) : (item.debit - item.credit);
+      const delta = partyType === "VENDOR" ? item.credit - item.debit : item.debit - item.credit;
       runningBalance += delta;
       runningBalance = Math.round(runningBalance * 100) / 100;
 
@@ -498,6 +614,21 @@ export async function getPartyLedgerReportData({
   totalCredit = Math.round(totalCredit * 100) / 100;
   const closingBalance = runningBalance;
 
+  const statusLabel =
+    closingBalance > 0
+      ? partyType === "CUSTOMER"
+        ? "Receivable (Customer Owes Us)"
+        : partyType === "VENDOR"
+        ? "Payable (We Owe Vendor)"
+        : "Receivable (Party Owes Us)"
+      : closingBalance < 0
+      ? partyType === "CUSTOMER"
+        ? "Advance Credit Held"
+        : partyType === "VENDOR"
+        ? "Advance Paid to Vendor"
+        : "Payable (We Owe Party)"
+      : "Balanced / Settled";
+
   return {
     partyInfo: resolvedPartyInfo,
     partyType,
@@ -515,12 +646,17 @@ export async function getPartyLedgerReportData({
         closingBalance > 0
           ? partyType === "CUSTOMER"
             ? "RECEIVABLE"
-            : "PAYABLE"
+            : partyType === "VENDOR"
+            ? "PAYABLE"
+            : "RECEIVABLE"
           : closingBalance < 0
           ? partyType === "CUSTOMER"
             ? "ADVANCE_HELD"
-            : "ADVANCE_PAID"
+            : partyType === "VENDOR"
+            ? "ADVANCE_PAID"
+            : "PAYABLE"
           : "SETTLED",
+      statusLabel,
     },
   };
 }

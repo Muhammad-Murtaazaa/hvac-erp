@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
-import { getPartyLedgerReportData } from "@/lib/partyLedger";
+import { getPartyLedgerReportData, PartyLedgerType } from "@/lib/partyLedger";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +12,22 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const partyType = searchParams.get("partyType") as "CUSTOMER" | "VENDOR" | "EMPLOYEE" | null;
+    const rawPartyType = searchParams.get("partyType")?.toUpperCase();
+    const partyType: PartyLedgerType =
+      rawPartyType === "VENDOR"
+        ? "VENDOR"
+        : rawPartyType === "EMPLOYEE"
+        ? "EMPLOYEE"
+        : rawPartyType === "CONSOLIDATED" || rawPartyType === "ALL" || rawPartyType === "UNIFIED"
+        ? "CONSOLIDATED"
+        : "CUSTOMER";
     const partyId = searchParams.get("partyId") || undefined;
     const partyName = searchParams.get("partyName") || undefined;
     const startDateStr = searchParams.get("startDate") || undefined;
     const endDateStr = searchParams.get("endDate") || undefined;
 
-    if (!partyType) {
-      return NextResponse.json({ error: "partyType is required (CUSTOMER, VENDOR, EMPLOYEE)" }, { status: 400 });
+    if (!partyName && !partyId) {
+      return NextResponse.json({ error: "partyName or partyId is required" }, { status: 400 });
     }
 
     const reportData = await getPartyLedgerReportData({

@@ -1113,7 +1113,8 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
 
       // ================= PAGE 1 HEADER =================
       // 1. Top-Left Statement Title
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#27496d").text("Statement", 35, 35);
+      const titleText = soaData.partyType === "CONSOLIDATED" ? "Consolidated Statement" : "Statement";
+      doc.font("Roboto-Bold").fontSize(20).fillColor("#27496d").text(titleText, 35, 35);
 
       // 2. Document Info Metadata Block (under Statement title)
       const docDateStr = formatDateShort(new Date());
@@ -1156,7 +1157,7 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       doc.text("Phone No. +92-321-8304978  |  +92-300-8636100", 395, compY + 44, { width: 165, align: "left" });
 
       // 4. Recipient Party Information (Left side at y = 120)
-      const partyCode = soaData.partyInfo?.code || (soaData.partyType === "CUSTOMER" ? "CUS-000011" : soaData.partyType === "VENDOR" ? "VEN-000012" : "EMP-000015");
+      const partyCode = soaData.partyInfo?.code || (soaData.partyType === "CUSTOMER" ? "CUS-000011" : soaData.partyType === "VENDOR" ? "VEN-000012" : soaData.partyType === "CONSOLIDATED" ? "PAR-360" : "EMP-000015");
       const partyName = (soaData.partyInfo?.name || "Valued Account").toUpperCase();
       
       let contactPerson = soaData.partyInfo?.contactPerson || "";
@@ -1679,20 +1680,25 @@ export function generateStockValuationPDF(data: {
       const drawTableHeader = (posY: number) => {
         doc.rect(40, posY, 515, 18).fill("#3A1984");
         doc.font("Roboto-Bold").fontSize(7.5).fillColor("#ffffff");
-        doc.text("#", 45, posY + 5, { width: 20 });
-        doc.text("SKU", 68, posY + 5, { width: 62 });
-        doc.text("Product Description", 135, posY + 5, { width: 175 });
-        doc.text("Category", 315, posY + 5, { width: 65 });
-        doc.text("In Stock", 385, posY + 5, { width: 40, align: "right" });
-        doc.text("Avg Cost (PKR)", 430, posY + 5, { width: 55, align: "right" });
-        doc.text("Valuation (PKR)", 490, posY + 5, { width: 60, align: "right" });
+        doc.text("#", 44, posY + 5, { width: 16 });
+        doc.text("SKU", 62, posY + 5, { width: 54 });
+        doc.text("Product Description", 118, posY + 5, { width: 210 });
+        doc.text("Category", 332, posY + 5, { width: 60 });
+        doc.text("In Stock", 395, posY + 5, { width: 38, align: "right" });
+        doc.text("Avg Cost (PKR)", 436, posY + 5, { width: 54, align: "right" });
+        doc.text("Valuation (PKR)", 494, posY + 5, { width: 58, align: "right" });
       };
 
       drawTableHeader(y);
       y += 18;
 
       inStockItems.forEach((p, idx) => {
-        if (y > 750) {
+        doc.font("Roboto-Bold").fontSize(7.2);
+        const descText = p.name || "Unnamed Product";
+        const descHeight = doc.heightOfString(descText, { width: 210, lineGap: 1 });
+        const rowHeight = Math.max(18, Math.ceil(descHeight) + 8);
+
+        if (y + rowHeight > 750) {
           doc.addPage({ margin: 40, size: "A4", font: fontRegularPath });
           registerAppFonts(doc);
           drawHeader();
@@ -1702,18 +1708,21 @@ export function generateStockValuationPDF(data: {
         }
 
         const bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-        doc.rect(40, y, 515, 17).fill(bg);
-        doc.rect(40, y, 515, 17).strokeColor("#f1f5f9").lineWidth(0.5).stroke();
+        doc.rect(40, y, 515, rowHeight).fill(bg);
+        doc.rect(40, y, 515, rowHeight).strokeColor("#f1f5f9").lineWidth(0.5).stroke();
 
-        doc.font("Roboto-Regular").fontSize(7).fillColor("#64748b").text(String(idx + 1), 45, y + 5, { width: 20 });
-        doc.font("Roboto-Bold").fontSize(7).fillColor("#2563eb").text(p.sku || "-", 68, y + 5, { width: 62 });
-        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(p.name || "Unnamed Product", 135, y + 5, { width: 175, height: 12, ellipsis: true });
-        doc.font("Roboto-Regular").fontSize(7).fillColor("#64748b").text(p.category || "General", 315, y + 5, { width: 65, height: 12, ellipsis: true });
-        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(Number(p.onHandQty || 0).toLocaleString(), 385, y + 5, { width: 40, align: "right" });
-        doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(Math.round(Number(p.averageCost || 0)).toLocaleString(), 430, y + 5, { width: 55, align: "right" });
-        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#059669").text(Math.round(Number(p.totalValue || 0)).toLocaleString(), 490, y + 5, { width: 60, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#64748b").text(String(idx + 1), 44, y + 5, { width: 16 });
+        doc.font("Roboto-Bold").fontSize(7).fillColor("#2563eb").text(p.sku || "-", 62, y + 5, { width: 54 });
+        
+        // Full product name / model description without any truncation
+        doc.font("Roboto-Bold").fontSize(7.2).fillColor("#0f172a").text(descText, 118, y + 5, { width: 210, lineGap: 1 });
+        
+        doc.font("Roboto-Regular").fontSize(6.8).fillColor("#64748b").text(p.category || "General", 332, y + 5, { width: 60 });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0f172a").text(Number(p.onHandQty || 0).toLocaleString(), 395, y + 5, { width: 38, align: "right" });
+        doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(Math.round(Number(p.averageCost || 0)).toLocaleString(), 436, y + 5, { width: 54, align: "right" });
+        doc.font("Roboto-Bold").fontSize(7.5).fillColor("#059669").text(Math.round(Number(p.totalValue || 0)).toLocaleString(), 494, y + 5, { width: 58, align: "right" });
 
-        y += 17;
+        y += rowHeight;
       });
 
       // Total Closing Bar
@@ -1727,9 +1736,9 @@ export function generateStockValuationPDF(data: {
       y += 5;
       doc.rect(40, y, 515, 20).fill("#1e293b");
       doc.font("Roboto-Bold").fontSize(8).fillColor("#ffffff");
-      doc.text("TOTAL IN-STOCK VALUATION", 68, y + 6);
-      doc.text(`${computedTotalUnits.toLocaleString()} Units`, 385, y + 6, { width: 40, align: "right" });
-      doc.text(`PKR ${Math.round(computedTotalValuation).toLocaleString("en-US")}`, 465, y + 6, { width: 85, align: "right" });
+      doc.text("TOTAL IN-STOCK VALUATION", 62, y + 6);
+      doc.text(`${computedTotalUnits.toLocaleString()} Units`, 395, y + 6, { width: 38, align: "right" });
+      doc.text(`PKR ${Math.round(computedTotalValuation).toLocaleString("en-US")}`, 465, y + 6, { width: 87, align: "right" });
 
       // Sign-off section
       y += 35;

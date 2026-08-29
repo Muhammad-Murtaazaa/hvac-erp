@@ -150,7 +150,15 @@ export async function GET(req: Request) {
       pdfBuffer = await generateMonthlySalarySheetPDF({ month, year, monthName, items });
       fileName = `salary-sheet-${monthName}-${year}.pdf`;
     } else if (type === "soa") {
-      const partyType = (searchParams.get("partyType") || "CUSTOMER") as "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+      const rawPartyType = searchParams.get("partyType")?.toUpperCase();
+      const partyType =
+        rawPartyType === "VENDOR"
+          ? "VENDOR"
+          : rawPartyType === "EMPLOYEE"
+          ? "EMPLOYEE"
+          : rawPartyType === "CONSOLIDATED" || rawPartyType === "ALL" || rawPartyType === "UNIFIED"
+          ? "CONSOLIDATED"
+          : "CUSTOMER";
       const partyId = searchParams.get("partyId") || undefined;
       const partyName = searchParams.get("partyName") || undefined;
       const startDateStr = searchParams.get("startDate") || undefined;
