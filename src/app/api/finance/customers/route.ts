@@ -13,8 +13,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    // 1. Gather all customers from Invoices, DOs, Complaints, and LedgerEntries
-    const [invoices, dos, complaints, ledgerEntries] = await Promise.all([
+    // 1. Gather all customers from Customer profiles, Invoices, DOs, Complaints, and LedgerEntries
+    const [customersDb, invoices, dos, complaints, ledgerEntries] = await Promise.all([
+      prisma.customer.findMany({
+        select: { id: true, name: true, phone: true, email: true, address: true, ntn: true },
+      }),
       prisma.invoice.findMany({
         select: { clientName: true, clientPhone: true, clientAddress: true, totalAmount: true, amountPaid: true, date: true },
       }),
@@ -42,11 +45,30 @@ export async function GET(req: Request) {
       invoiceCount: number;
     }>();
 
+    // Process registered customer profiles
+    for (const c of customersDb) {
+      const name = (c.name || "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      customerMap.set(key, {
+        name,
+        phone: c.phone || "",
+        email: c.email || undefined,
+        address: c.address || "",
+        ntn: c.ntn || undefined,
+        totalBilled: 0,
+        totalPaid: 0,
+        balance: 0,
+        invoiceCount: 0,
+      });
+    }
+
     // Process invoices
     for (const inv of invoices) {
       const name = (inv.clientName || "").trim();
       if (!name) continue;
-      const cur = customerMap.get(name) || {
+      const key = name.toLowerCase();
+      const cur = customerMap.get(key) || {
         name,
         phone: inv.clientPhone || "",
         address: inv.clientAddress || "",
@@ -60,14 +82,15 @@ export async function GET(req: Request) {
       cur.totalBilled += Number(inv.totalAmount || 0);
       cur.totalPaid += Number(inv.amountPaid || 0);
       cur.invoiceCount += 1;
-      customerMap.set(name, cur);
+      customerMap.set(key, cur);
     }
 
     // Process DOs
     for (const d of dos) {
       const name = (d.clientName || "").trim();
       if (!name) continue;
-      const cur = customerMap.get(name) || {
+      const key = name.toLowerCase();
+      const cur = customerMap.get(key) || {
         name,
         phone: d.clientPhone || "",
         address: d.deliveryAddress || "",
@@ -78,14 +101,15 @@ export async function GET(req: Request) {
       };
       if (!cur.phone && d.clientPhone) cur.phone = d.clientPhone;
       if (!cur.address && d.deliveryAddress) cur.address = d.deliveryAddress;
-      customerMap.set(name, cur);
+      customerMap.set(key, cur);
     }
 
     // Process Complaints
     for (const c of complaints) {
       const name = (c.customerName || "").trim();
       if (!name) continue;
-      const cur = customerMap.get(name) || {
+      const key = name.toLowerCase();
+      const cur = customerMap.get(key) || {
         name,
         phone: c.customerPhone || "",
         address: c.customerAddress || "",
@@ -96,14 +120,15 @@ export async function GET(req: Request) {
       };
       if (!cur.phone && c.customerPhone) cur.phone = c.customerPhone;
       if (!cur.address && c.customerAddress) cur.address = c.customerAddress;
-      customerMap.set(name, cur);
+      customerMap.set(key, cur);
     }
 
     // Process Ledger entries for parties
     for (const l of ledgerEntries) {
       const name = (l.partyName || "").trim();
       if (!name) continue;
-      const cur = customerMap.get(name) || {
+      const key = name.toLowerCase();
+      const cur = customerMap.get(key) || {
         name,
         phone: "",
         address: "",
@@ -112,7 +137,7 @@ export async function GET(req: Request) {
         balance: 0,
         invoiceCount: 0,
       };
-      customerMap.set(name, cur);
+      customerMap.set(key, cur);
     }
 
     const customers = Array.from(customerMap.values())

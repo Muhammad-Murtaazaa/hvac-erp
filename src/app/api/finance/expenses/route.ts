@@ -10,11 +10,25 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
-    const where: any = {};
+    const where: any = {
+      NOT: {
+        OR: [
+          { voucherType: "INV" },
+          { voucherType: "CRV" },
+          { voucherType: "BRV" },
+          { creditAccount: "Sales Revenue" },
+          { creditAccount: "Service & Maintenance Income" },
+        ],
+      },
+    };
     if (startDate || endDate) {
       where.entryDate = {};
       if (startDate) where.entryDate.gte = new Date(startDate);
-      if (endDate) where.entryDate.lte = new Date(endDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.entryDate.lte = end;
+      }
     }
 
     const entries = await prisma.ledgerEntry.findMany({
@@ -32,24 +46,46 @@ export async function GET(req: NextRequest) {
       OTHER_OPERATING: { label: "Other Operating Expenses", totalAmount: 0, count: 0 },
     };
 
-    const taggedExpenses = entries.map((entry) => {
-      const { category, label } = autoTagExpense(entry.description, entry.referenceType);
-      const amt = Number(entry.amount);
+    const taggedExpenses = entries
+      .filter((entry) => {
+        const debitLower = (entry.debitAccount || "").toLowerCase();
+        const refType = entry.referenceType || "";
+        const vType = entry.voucherType || "";
 
-      categoryTotals[category].totalAmount += amt;
-      categoryTotals[category].count += 1;
+        // Only include true expenses, outflows, COGS, and payroll
+        return (
+          debitLower.includes("expense") ||
+          debitLower.includes("cost of goods sold") ||
+          debitLower.includes("rent") ||
+          debitLower.includes("utility") ||
+          debitLower.includes("salary") ||
+          debitLower.includes("logistics") ||
+          debitLower.includes("inventory asset") ||
+          vType === "CPV" ||
+          vType === "BPV" ||
+          vType === "COGS" ||
+          refType === "PO_RECEIPT" ||
+          refType === "PAYROLL"
+        );
+      })
+      .map((entry) => {
+        const { category, label } = autoTagExpense(entry.description, entry.referenceType);
+        const amt = Number(entry.amount);
 
-      return {
-        id: entry.id,
-        date: entry.entryDate.toISOString().split("T")[0],
-        description: entry.description,
-        amount: amt,
-        category,
-        categoryLabel: label,
-        referenceType: entry.referenceType,
-        referenceId: entry.referenceId,
-      };
-    });
+        categoryTotals[category].totalAmount += amt;
+        categoryTotals[category].count += 1;
+
+        return {
+          id: entry.id,
+          date: entry.entryDate.toISOString().split("T")[0],
+          description: entry.description,
+          amount: amt,
+          category,
+          categoryLabel: label,
+          referenceType: entry.referenceType,
+          referenceId: entry.referenceId,
+        };
+      });
 
     const totalExpenseSum = Object.values(categoryTotals).reduce((acc, cat) => acc + cat.totalAmount, 0);
 

@@ -72,7 +72,13 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
-  if (!session || !hasPermission(session, "MANAGE_INVENTORY")) { // requires finance/admin capability
+  if (
+    !session ||
+    (!hasPermission(session, "MANAGE_FINANCIALS") &&
+      !hasPermission(session, "VIEW_FINANCIALS") &&
+      !hasPermission(session, "ADMIN") &&
+      !hasPermission(session, "MANAGE_INVENTORY"))
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
