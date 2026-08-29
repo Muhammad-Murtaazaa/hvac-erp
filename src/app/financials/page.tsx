@@ -276,6 +276,16 @@ function UniversalPartyCombobox({
               filtered.map((party: any) => {
                 const isSelected = (selectedId && party.id === selectedId) || (selectedName && party.name === selectedName);
                 const isMultiRole = party.types && party.types.length > 1;
+                const initials = party.name
+                  ? party.name
+                      .split(" ")
+                      .filter(Boolean)
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
+                  : "AC";
+
                 return (
                   <div
                     key={`${party.type}-${party.id || party.name}`}
@@ -292,16 +302,14 @@ function UniversalPartyCombobox({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`w-7 h-7 rounded-xl flex items-center justify-center font-mono font-bold text-[10px] uppercase shrink-0 ${
-                          isMultiRole
-                            ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xs"
-                            : party.type === "CUSTOMER"
+                          party.type === "CUSTOMER"
                             ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                             : party.type === "VENDOR"
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
                             : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
                         }`}
                       >
-                        {isMultiRole ? "360" : party.type === "CUSTOMER" ? "CU" : party.type === "VENDOR" ? "VE" : "ST"}
+                        {initials}
                       </div>
                       <div className="truncate">
                         <div className="font-bold text-xs truncate flex items-center gap-1.5">
@@ -309,7 +317,7 @@ function UniversalPartyCombobox({
                           <span
                             className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase ${
                               isMultiRole
-                                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-2xs"
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                                 : party.type === "CUSTOMER"
                                 ? "bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
                                 : party.type === "VENDOR"
@@ -318,7 +326,7 @@ function UniversalPartyCombobox({
                             }`}
                           >
                             {isMultiRole
-                              ? `360° Party (${party.types.map((t: string) => t === "CUSTOMER" ? "Customer" : t === "VENDOR" ? "Vendor" : "Staff").join(" • ")})`
+                              ? party.types.map((t: string) => t === "CUSTOMER" ? "Customer" : t === "VENDOR" ? "Vendor" : "Staff").join(" & ")
                               : party.type === "CUSTOMER"
                               ? "Customer"
                               : party.type === "VENDOR"
@@ -1900,7 +1908,7 @@ function FinancialsPageContent() {
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
-                  <span>🌐 360° Consolidated Statement</span>
+                  <span>Consolidated Statement (All Transactions)</span>
                 </button>
 
                 <button
@@ -2102,7 +2110,7 @@ function FinancialsPageContent() {
                             : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
                         }`}
                       >
-                        {partyType === "CONSOLIDATED" ? "360° Consolidated Statement" : `${partyType} Statement`}
+                        {partyType === "CONSOLIDATED" ? "Consolidated Statement" : `${partyType} Statement`}
                       </span>
                       {soaData.partyInfo?.phone && (
                         <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
