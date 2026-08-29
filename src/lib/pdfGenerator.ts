@@ -1132,7 +1132,7 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       doc.text("Phone No. +92-321-8304978  |  +92-300-8636100", 35, compY + 28, { width: 220 });
 
       // 2. Top-Right: Statement Title & Document Info Block
-      const titleText = soaData.partyType === "CONSOLIDATED" ? "Consolidated Statement" : "Statement";
+      const titleText = "Statement";
       doc.font("Roboto-Bold").fontSize(18).fillColor("#27496d").text(titleText, 300, 28, { width: 260, align: "right" });
 
       const docDateStr = formatDateShort(new Date());

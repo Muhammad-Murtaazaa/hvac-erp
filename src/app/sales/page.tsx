@@ -263,6 +263,15 @@ function SalesPageContent() {
   const [vReturnLines, setVReturnLines] = useState<any[]>([]);
   const [vReturnReason, setVReturnReason] = useState("");
 
+  // Double-Click Prevention In-Flight States
+  const [submittingInvoice, setSubmittingInvoice] = useState(false);
+  const [submittingDo, setSubmittingDo] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [submittingRefund, setSubmittingRefund] = useState(false);
+  const [submittingVendorReturn, setSubmittingVendorReturn] = useState(false);
+  const [submittingConvertId, setSubmittingConvertId] = useState<string | null>(null);
+
   const fetchData = async () => {
     setLoading(true);
     const token = localStorage.getItem("token");
@@ -522,6 +531,7 @@ function SalesPageContent() {
 
   const handleInvoiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingInvoice) return;
 
     const formattedLines = invLines.map((l) => {
       const lineUnit = (l.unit || "Nos").trim();
@@ -552,6 +562,8 @@ function SalesPageContent() {
       toast({ title: "Missing Information", message: "Please enter client details and fill out all item lines.", type: "warning" });
       return;
     }
+
+    setSubmittingInvoice(true);
 
     const subtotal = formattedLines.reduce((acc, l) => acc + Number(l.quantity) * Number(l.salesPrice), 0);
     let discountAmount = 0;
@@ -624,6 +636,8 @@ function SalesPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "Invoice Creation Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingInvoice(false);
     }
   };
 
@@ -1012,7 +1026,10 @@ function SalesPageContent() {
   };
 
   const handleConvertQuotationToInvoice = async (quo: any) => {
+    if (submittingConvertId) return;
     if (!confirm(`Convert Quotation ${quo.quotationNumber} into an official live Sales Invoice? This will post to the customer ledger and generate standard invoice records.`)) return;
+    
+    setSubmittingConvertId(quo.id);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(`/api/sales/quotations/${quo.id}/convert`, {
@@ -1030,6 +1047,8 @@ function SalesPageContent() {
       setActiveTab("invoices");
     } catch (err: any) {
       toast({ title: "Conversion Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingConvertId(null);
     }
   };
 
@@ -1037,6 +1056,7 @@ function SalesPageContent() {
 
   const handleDoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingDo) return;
     setDoError("");
 
     const formattedLines = doLines
@@ -1068,6 +1088,7 @@ function SalesPageContent() {
       }
     }
 
+    setSubmittingDo(true);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/sales/do", {
@@ -1106,11 +1127,13 @@ function SalesPageContent() {
       setDoVehicle("");
       setDoPoNumber("");
       setSelectedDoInvoiceId("");
-      setDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "" }]);
+      setDoLines([{ productId: "", description: "", quantity: "1", salesPrice: "0" }]);
       fetchData();
     } catch (err: any) {
       setDoError(err.message);
-      toast({ title: "DO Creation Failed", message: err.message, type: "error" });
+      toast({ title: "Delivery Order Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingDo(false);
     }
   };
 
@@ -1199,11 +1222,13 @@ function SalesPageContent() {
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingPayment) return;
     if (isNaN(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
       toast({ title: "Invalid Amount", message: "Please enter a valid payment amount.", type: "warning" });
       return;
     }
 
+    setSubmittingPayment(true);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(`/api/sales/invoice/${selectedInvoice.id}/payment`, {
@@ -1225,6 +1250,8 @@ function SalesPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "Payment Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingPayment(false);
     }
   };
 
@@ -1260,6 +1287,7 @@ function SalesPageContent() {
 
   const handleReturnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingReturn) return;
     const token = localStorage.getItem("token");
     const activeLines = returnLines.filter((l) => l.quantityToReturn > 0);
 
@@ -1268,6 +1296,7 @@ function SalesPageContent() {
       return;
     }
 
+    setSubmittingReturn(true);
     try {
       const res = await fetch("/api/sales/returns", {
         method: "POST",
@@ -1294,16 +1323,20 @@ function SalesPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "Return Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingReturn(false);
     }
   };
 
   const handleRefundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRefund) return;
     if (isNaN(Number(refundAmount)) || Number(refundAmount) <= 0) {
       toast({ title: "Invalid Amount", message: "Enter a valid refund amount.", type: "warning" });
       return;
     }
 
+    setSubmittingRefund(true);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/sales/refunds", {
@@ -1326,6 +1359,8 @@ function SalesPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "Refund Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingRefund(false);
     }
   };
 

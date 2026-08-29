@@ -109,6 +109,7 @@ function ProcurementPageContent() {
   const [newPoIsGst, setNewPoIsGst] = useState(false);
   const [newPoTaxRate, setNewPoTaxRate] = useState(18);
   const [poNotes, setPoNotes] = useState("");
+  const [creatingPo, setCreatingPo] = useState(false);
 
   // Edit PO state
   const [isEditPoOpen, setIsEditPoOpen] = useState(false);
@@ -130,6 +131,7 @@ function ProcurementPageContent() {
   // GRN states
   const [grnLines, setGrnLines] = useState<any[]>([]);
   const [grnNotes, setGrnNotes] = useState("");
+  const [submittingGrn, setSubmittingGrn] = useState(false);
 
   // Shortage Resolve state
   const [selectedPendingItem, setSelectedPendingItem] = useState<any>(null);
@@ -177,11 +179,13 @@ function ProcurementPageContent() {
 
   const handleSubmitPO = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creatingPo) return;
     if (!newPoVendor || newPoLines.some((l) => !l.productId || !l.quantityOrdered || !l.unitCost)) {
       toast({ title: "Missing Information", message: "Please fill out vendor and all PO lines.", type: "warning" });
       return;
     }
 
+    setCreatingPo(true);
     const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/procurement/po", {
@@ -224,6 +228,8 @@ function ProcurementPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "PO Creation Failed", message: err.message, type: "error" });
+    } finally {
+      setCreatingPo(false);
     }
   };
 
@@ -436,6 +442,7 @@ function ProcurementPageContent() {
 
   const handleGrnSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingGrn) return;
     const token = localStorage.getItem("token");
 
     // Filter out rows where quantityReceived is 0 or empty
@@ -446,6 +453,7 @@ function ProcurementPageContent() {
       return;
     }
 
+    setSubmittingGrn(true);
     try {
       const res = await fetch("/api/procurement/grn", {
         method: "POST",
@@ -466,6 +474,8 @@ function ProcurementPageContent() {
       fetchData();
     } catch (err: any) {
       toast({ title: "GRN Logging Failed", message: err.message, type: "error" });
+    } finally {
+      setSubmittingGrn(false);
     }
   };
 

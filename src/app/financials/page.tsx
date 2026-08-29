@@ -958,10 +958,20 @@ function FinancialsPageContent() {
   };
 
   const simpleLedgerEntries = useMemo(() => {
-    return generalLedgerEntries.map((entry) => ({
-      entry,
-      details: getSimpleLedgerDetails(entry),
-    }));
+    // For non-accountant users, filter out internal COGS releases from the simplified ledger
+    // so they see ONE crystal-clear line per Invoice, Payment, Purchase, and Voucher
+    return generalLedgerEntries
+      .filter((entry) => {
+        const narration = (entry.narration || "").toLowerCase();
+        if (narration.startsWith("cogs release") || narration.includes("cogs release for invoice")) {
+          return false;
+        }
+        return true;
+      })
+      .map((entry) => ({
+        entry,
+        details: getSimpleLedgerDetails(entry),
+      }));
   }, [generalLedgerEntries]);
 
   const displayedLedgerList = useMemo(() => {
@@ -2714,34 +2724,6 @@ function FinancialsPageContent() {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* View Switcher: Simple vs Double-Entry */}
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setLedgerViewMode("simple")}
-                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    ledgerViewMode === "simple"
-                      ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-2xs font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Simple Ledger</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLedgerViewMode("accounting")}
-                  className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    ledgerViewMode === "accounting"
-                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Scale className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Double-Entry View</span>
-                </button>
-              </div>
-
               <button
                 type="button"
                 onClick={fetchGeneralLedger}
