@@ -1112,51 +1112,53 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       };
 
       // ================= PAGE 1 HEADER =================
-      // 1. Top-Left Statement Title
-      const titleText = soaData.partyType === "CONSOLIDATED" ? "Consolidated Statement" : "Statement";
-      doc.font("Roboto-Bold").fontSize(20).fillColor("#27496d").text(titleText, 35, 35);
-
-      // 2. Document Info Metadata Block (under Statement title)
-      const docDateStr = formatDateShort(new Date());
-      const statementNo = soaData.statementNumber || (soaData.partyInfo?.id ? soaData.partyInfo.id.slice(0, 8).toUpperCase() : "86");
-      const startDateStr = formatDateShort(soaData.period?.startDate);
-      const endDateStr = formatDateShort(soaData.period?.endDate);
-
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#334155");
-      doc.text("Document Date", 35, 66);
-      doc.font("Roboto-Bold").text(docDateStr, 115, 66);
-
-      doc.font("Roboto-Regular").text("Statement", 35, 78);
-      doc.font("Roboto-Bold").text(statementNo, 115, 78);
-
-      doc.font("Roboto-Regular").text("Starting Date", 35, 90);
-      doc.font("Roboto-Bold").text(startDateStr, 115, 90);
-
-      doc.font("Roboto-Regular").text("Ending Date", 35, 102);
-      doc.font("Roboto-Bold").text(endDateStr, 115, 102);
-
-      // 3. Top-Right Company Header Block
+      // 1. Top-Left: TCE Logo & Company Info Block
       let logoLoaded = false;
       try {
         let logoPath = path.resolve("LOGO.png");
         if (!fs.existsSync(logoPath)) logoPath = path.resolve("public/logo.png");
         if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 395, 30, { width: 90 });
+          doc.image(logoPath, 35, 28, { width: 62 });
           logoLoaded = true;
         }
       } catch (e) {
         console.error("Logo load error in SOA:", e);
       }
 
-      const compY = logoLoaded ? 70 : 35;
-      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#1e3a8a").text("AIR CONDITIONERS", 395, compY, { align: "left" });
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#0f172a").text("TECHNICOOL ENGINEERING", 395, compY + 12, { align: "left" });
+      const compY = logoLoaded ? 64 : 30;
+      doc.font("Roboto-Bold").fontSize(9).fillColor("#0f172a").text("TECHNICOOL ENGINEERING", 35, compY);
+      doc.font("Roboto-Regular").fontSize(6.8).fillColor("#475569");
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 35, compY + 11, { width: 220 });
+      doc.text("Phone No. +92-321-8304978  |  +92-300-8636100", 35, compY + 28, { width: 220 });
 
-      doc.font("Roboto-Regular").fontSize(7).fillColor("#475569");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 395, compY + 23, { width: 165, align: "left" });
-      doc.text("Phone No. +92-321-8304978  |  +92-300-8636100", 395, compY + 44, { width: 165, align: "left" });
+      // 2. Top-Right: Statement Title & Document Info Block
+      const titleText = soaData.partyType === "CONSOLIDATED" ? "Consolidated Statement" : "Statement";
+      doc.font("Roboto-Bold").fontSize(18).fillColor("#27496d").text(titleText, 300, 28, { width: 260, align: "right" });
 
-      // 4. Recipient Party Information (Left side at y = 120)
+      const docDateStr = formatDateShort(new Date());
+      const statementNo = soaData.statementNumber || (soaData.partyInfo?.id ? soaData.partyInfo.id.slice(0, 8).toUpperCase() : "86");
+      const startDateStr = formatDateShort(soaData.period?.startDate);
+      const endDateStr = formatDateShort(soaData.period?.endDate);
+
+      const metaY = 54;
+      const labelX = 370;
+      const valX = 460;
+      const valW = 100;
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#475569");
+      doc.text("Document Date", labelX, metaY);
+      doc.font("Roboto-Bold").text(docDateStr, valX, metaY, { width: valW, align: "right" });
+
+      doc.font("Roboto-Regular").text("Statement", labelX, metaY + 12);
+      doc.font("Roboto-Bold").text(statementNo, valX, metaY + 12, { width: valW, align: "right" });
+
+      doc.font("Roboto-Regular").text("Starting Date", labelX, metaY + 24);
+      doc.font("Roboto-Bold").text(startDateStr, valX, metaY + 24, { width: valW, align: "right" });
+
+      doc.font("Roboto-Regular").text("Ending Date", labelX, metaY + 36);
+      doc.font("Roboto-Bold").text(endDateStr, valX, metaY + 36, { width: valW, align: "right" });
+
+      // 3. Recipient Party Information (Left side at y = 110)
       const partyCode = soaData.partyInfo?.code || (soaData.partyType === "CUSTOMER" ? "CUS-000011" : soaData.partyType === "VENDOR" ? "VEN-000012" : soaData.partyType === "CONSOLIDATED" ? "PAR-360" : "EMP-000015");
       const partyName = (soaData.partyInfo?.name || "Valued Account").toUpperCase();
       
@@ -1169,7 +1171,7 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
       const partyAddress = soaData.partyInfo?.address || "MULTAN, PUNJAB, Pakistan";
       const partyPhone = soaData.partyInfo?.phone || "";
 
-      let partyY = 122;
+      let partyY = 110;
       doc.font("Roboto-Bold").fontSize(8).fillColor("#0f172a").text(partyCode, 35, partyY);
       partyY += 10;
       doc.font("Roboto-Bold").fontSize(8.5).fillColor("#0f172a").text(partyName, 35, partyY, { width: 260 });
@@ -1179,14 +1181,14 @@ export function generateSOAPDF(soaData: any): Promise<Buffer> {
         partyY += 10;
       }
       doc.font("Roboto-Regular").fontSize(7).fillColor("#475569").text(partyAddress, 35, partyY, { width: 250 });
-      partyY += 18;
+      partyY += 16;
       if (partyPhone) {
         doc.text(`Phone: ${partyPhone}`, 35, partyY);
         partyY += 10;
       }
 
       // ================= TABLE RENDERING =================
-      let y = Math.max(partyY + 6, 185);
+      let y = Math.max(partyY + 8, 175);
       drawTableHeader(y);
       y += 20;
 
