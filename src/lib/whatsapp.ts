@@ -104,7 +104,7 @@ export async function sendWhatsAppTemplate(
       template: {
         name: options.templateName,
         language: {
-          code: options.languageCode || "en_US",
+          code: options.languageCode || "en",
         },
         components: [
           {
@@ -179,7 +179,7 @@ export async function sendCustomerComplaintWhatsApp(
   return await sendWhatsAppTemplate({
     to: customerPhone,
     templateName: "customer_complaint",
-    languageCode: languageCode || "en_US",
+    languageCode: languageCode || "en",
     bodyParameters: [
       customerName || "Valued Customer",
       ticketNumber || "N/A",
@@ -209,7 +209,7 @@ export async function sendTechnicianComplaintWhatsApp(
   return await sendWhatsAppTemplate({
     to: technicianPhone,
     templateName: "complaint",
-    languageCode: languageCode || "en_US",
+    languageCode: languageCode || "en",
     bodyParameters: [
       customerName || "Customer",
       customerPhone || "N/A",
