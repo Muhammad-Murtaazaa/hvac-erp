@@ -1892,75 +1892,6 @@ function FinancialsPageContent() {
               </div>
             </div>
 
-            {/* 4 Mode Selector Bar (Consolidated 360, Customer, Vendor, Staff) */}
-            <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Statement View:</span>
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl text-xs font-bold gap-1 border border-slate-200/60 dark:border-slate-700/60 shadow-inner">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPartyType("CONSOLIDATED");
-                    if (selectedPartyName) fetchPartyLedger(selectedPartyName, selectedPartyId, "CONSOLIDATED");
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "CONSOLIDATED"
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <span>Consolidated Statement (All Transactions)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPartyType("CUSTOMER");
-                    if (selectedPartyName) fetchPartyLedger(selectedPartyName, selectedPartyId, "CUSTOMER");
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "CUSTOMER"
-                      ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" />
-                  <span>Customer Ledger</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPartyType("VENDOR");
-                    if (selectedPartyName) fetchPartyLedger(selectedPartyName, selectedPartyId, "VENDOR");
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "VENDOR"
-                      ? "bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>Vendor Ledger</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPartyType("EMPLOYEE");
-                    if (selectedPartyName) fetchPartyLedger(selectedPartyName, selectedPartyId, "EMPLOYEE");
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                    partyType === "EMPLOYEE"
-                      ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm font-black"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Staff Advances</span>
-                </button>
-              </div>
-            </div>
-
             {/* Selector Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
               {/* Universal Party Search Bar */}
@@ -1968,17 +1899,15 @@ function FinancialsPageContent() {
                 <UniversalPartyCombobox
                   selectedName={selectedPartyName}
                   selectedId={selectedPartyId}
-                  selectedType={partyType}
+                  selectedType="CONSOLIDATED"
                   parties={universalPartiesList}
                   placeholder="Search customer, vendor, or staff by name, phone..."
                   onSelect={(party) => {
                     if (party) {
-                      const isMultiRole = party.types && party.types.length > 1;
-                      const nextType = isMultiRole || partyType === "CONSOLIDATED" ? "CONSOLIDATED" : party.type;
-                      setPartyType(nextType);
+                      setPartyType("CONSOLIDATED");
                       setSelectedPartyName(party.name);
                       setSelectedPartyId(party.id || "");
-                      fetchPartyLedger(party.name, party.id || "", nextType);
+                      fetchPartyLedger(party.name, party.id || "", "CONSOLIDATED");
                     } else {
                       setSelectedPartyName("");
                       setSelectedPartyId("");
@@ -2099,18 +2028,8 @@ function FinancialsPageContent() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest ${
-                          partyType === "CONSOLIDATED"
-                            ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                            : partyType === "CUSTOMER"
-                            ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                            : partyType === "VENDOR"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
-                        }`}
-                      >
-                        {partyType === "CONSOLIDATED" ? "Consolidated Statement" : `${partyType} Statement`}
+                      <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                        Statement of Account
                       </span>
                       {soaData.partyInfo?.phone && (
                         <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
