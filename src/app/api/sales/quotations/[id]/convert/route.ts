@@ -107,13 +107,24 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         site: meta.site || "",
       });
 
+      // Resolve or connect customer profile strictly by name
+      let resolvedCustomerId = quotation.customerId || null;
+      if (!resolvedCustomerId && quotation.clientName) {
+        const existingCust = await tx.customer.findFirst({
+          where: { name: { equals: quotation.clientName, mode: "insensitive" } },
+        });
+        if (existingCust) {
+          resolvedCustomerId = existingCust.id;
+        }
+      }
+
       // 3. Create Live Invoice
       const invoiceDate = parseDateForStorage(new Date());
 
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
-          customerId: quotation.customerId || undefined,
+          customer: resolvedCustomerId ? { connect: { id: resolvedCustomerId } } : undefined,
           clientName: quotation.clientName,
           clientPhone: quotation.clientPhone || null,
           clientAddress: quotation.clientAddress || null,
@@ -142,8 +153,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
 
       // 4. Hit Financial General Ledger and Customer Party Ledger
-      const isPartyPosting = !!quotation.customerId;
-
       await recordLedgerEntry(tx, {
         entryDate: invoiceDate,
         description: `Revenue for Invoice ${invoiceNumber} issued to ${quotation.clientName} (Converted from Quotation ${quotation.quotationNumber})`,
@@ -152,8 +161,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         amount: taxableAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
-        partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-        partyId: quotation.customerId || null,
+        partyType: "CUSTOMER",
+        partyId: resolvedCustomerId || null,
         partyName: quotation.clientName,
         voucherType: "INV",
         voucherNumber: invoiceNumber,
@@ -168,8 +177,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           amount: taxAmount,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
-          partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-          partyId: quotation.customerId || null,
+          partyType: "CUSTOMER",
+          partyId: resolvedCustomerId || null,
           partyName: quotation.clientName,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
@@ -180,7 +189,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const revenueLines = [
         {
           accountName: "Accounts Receivable (Trade Debtors)",
-          partyId: quotation.customerId || null,
+          partyId: resolvedCustomerId || null,
           debit: finalTotalAmount,
           credit: 0,
         },

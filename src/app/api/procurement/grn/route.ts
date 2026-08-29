@@ -35,11 +35,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Cannot receive items against PO in ${po.status} status` }, { status: 400 });
     }
 
-    const grnCount = await prisma.goodsReceivedNote.count();
-    const grnNumber = `GRN-${10001 + grnCount}`;
-
     // Wrap the entire stock-in + ledger-write in a single database transaction with extended timeout for cloud databases
     const grn = await prisma.$transaction(async (tx) => {
+      const lastGRN = await tx.goodsReceivedNote.findFirst({
+        orderBy: { receivedAt: "desc" },
+        select: { grnNumber: true },
+      });
+
+      let nextNum = 10001;
+      if (lastGRN && lastGRN.grnNumber) {
+        const match = lastGRN.grnNumber.match(/GRN-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let grnNumber = `GRN-${nextNum}`;
+      while (await tx.goodsReceivedNote.findUnique({ where: { grnNumber } })) {
+        nextNum++;
+        grnNumber = `GRN-${nextNum}`;
+      }
+
       // 1. Create GoodsReceivedNote header
       const createdGRN = await tx.goodsReceivedNote.create({
         data: {

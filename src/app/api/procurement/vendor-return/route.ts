@@ -38,10 +38,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Vendor and return items are required" }, { status: 400 });
     }
 
-    const count = await prisma.vendorReturn.count();
-    const vendorReturnNumber = `VRET-${10001 + count}`;
-
     const vendorReturn = await prisma.$transaction(async (tx) => {
+      const lastVRet = await tx.vendorReturn.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { vendorReturnNumber: true },
+      });
+
+      let nextNum = 10001;
+      if (lastVRet && lastVRet.vendorReturnNumber) {
+        const match = lastVRet.vendorReturnNumber.match(/VRET-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let vendorReturnNumber = `VRET-${nextNum}`;
+      while (await tx.vendorReturn.findUnique({ where: { vendorReturnNumber } })) {
+        nextNum++;
+        vendorReturnNumber = `VRET-${nextNum}`;
+      }
+
       let totalAmount = 0;
 
       // Create the Vendor Return header
@@ -100,6 +116,26 @@ export async function POST(req: Request) {
 
         if (product.onHandQty < qtyToReturn) {
           throw new Error(`Insufficient stock for ${product.sku}. On hand: ${product.onHandQty}, Return: ${qtyToReturn}`);
+        }
+
+        // Reconcile PO line item if linked to allow receiving replacement
+        if (grnLine.goodsReceivedNote.poId) {
+          const poLine = await tx.pOLineItem.findFirst({
+            where: {
+              poId: grnLine.goodsReceivedNote.poId,
+              productId: productId,
+            },
+          });
+          if (poLine && poLine.quantityReceived >= qtyToReturn) {
+            await tx.pOLineItem.update({
+              where: { id: poLine.id },
+              data: {
+                quantityReceived: {
+                  decrement: qtyToReturn,
+                },
+              },
+            });
+          }
         }
 
         const originalUnitCost = Number(grnLine.unitCost);

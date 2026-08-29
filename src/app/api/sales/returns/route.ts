@@ -43,10 +43,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    const count = await prisma.return.count();
-    const returnNumber = `RET-${10001 + count}`;
-
     const customerReturn = await prisma.$transaction(async (tx) => {
+      const lastRet = await tx.return.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { returnNumber: true },
+      });
+
+      let nextNum = 10001;
+      if (lastRet && lastRet.returnNumber) {
+        const match = lastRet.returnNumber.match(/RET-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let returnNumber = `RET-${nextNum}`;
+      while (await tx.return.findUnique({ where: { returnNumber } })) {
+        nextNum++;
+        returnNumber = `RET-${nextNum}`;
+      }
+
       // Create Return Header
       const createdReturn = await tx.return.create({
         data: {

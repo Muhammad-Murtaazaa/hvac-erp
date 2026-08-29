@@ -86,10 +86,26 @@ export async function POST(req: Request) {
       notes: "Created via Support Ticket",
     });
 
-    const count = await prisma.complaint.count();
-    const complaintNumber = `COMP-${10001 + count}`;
-
     const complaint = await prisma.$transaction(async (tx) => {
+      const lastComp = await tx.complaint.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { complaintNumber: true },
+      });
+
+      let nextNum = 10001;
+      if (lastComp && lastComp.complaintNumber) {
+        const match = lastComp.complaintNumber.match(/COMP-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let complaintNumber = `COMP-${nextNum}`;
+      while (await tx.complaint.findUnique({ where: { complaintNumber } })) {
+        nextNum++;
+        complaintNumber = `COMP-${nextNum}`;
+      }
+
       const ticket = await tx.complaint.create({
         data: {
           complaintNumber,

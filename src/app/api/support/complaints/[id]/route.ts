@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry } from "@/lib/ledger";
+import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
 import { sendTechnicianPushNotification } from "@/lib/push-notify";
@@ -116,8 +117,25 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       let linkedInvoiceId = ticket.invoice?.id || null;
 
       if (generateInvoice && finalAmount > 0 && !ticket.invoice) {
-        const invCount = await tx.invoice.count();
-        const invoiceNumber = `INV-${10001 + invCount}`;
+        const lastInv = await tx.invoice.findFirst({
+          orderBy: { createdAt: "desc" },
+          select: { invoiceNumber: true },
+        });
+
+        let nextNum = 10001;
+        if (lastInv && lastInv.invoiceNumber) {
+          const match = lastInv.invoiceNumber.match(/INV-(\d+)/);
+          if (match && match[1]) {
+            nextNum = parseInt(match[1], 10) + 1;
+          }
+        }
+
+        let invoiceNumber = `INV-${nextNum}`;
+        while (await tx.invoice.findUnique({ where: { invoiceNumber } })) {
+          nextNum++;
+          invoiceNumber = `INV-${nextNum}`;
+        }
+
         const invoiceDate = parseDateForStorage(new Date());
 
         // Create Sales Service Invoice (no stock deducts)
@@ -147,7 +165,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
         linkedInvoiceId = inv.id;
 
-        // Post ledger entries: Debit AR / Credit Revenue
+        // Post ledger entries: Debit AR / Credit Service Revenue
         await recordLedgerEntry(tx, {
           entryDate: invoiceDate,
           description: `Service billing for Complaint ${ticket.complaintNumber} (${invoiceNumber})`,
@@ -157,9 +175,33 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           referenceType: "INVOICE",
           referenceId: inv.id,
           partyType: "CUSTOMER",
+          partyId: finalCustomerId || null,
           partyName: finalCustomerName,
           voucherType: "INV",
           voucherNumber: invoiceNumber,
+        });
+
+        // Double-entry journal
+        await postJournalEntry(tx, {
+          entryDate: invoiceDate,
+          narration: `Service billing for Complaint ${ticket.complaintNumber} (${invoiceNumber})`,
+          sourceType: "INVOICE",
+          sourceId: inv.id,
+          idempotencyKey: `INVOICE:${inv.id}:service-income`,
+          lines: [
+            {
+              accountName: "Accounts Receivable (Trade Debtors)",
+              partyId: finalCustomerId || null,
+              debit: finalAmount,
+              credit: 0,
+            },
+            {
+              accountName: "Service & Maintenance Income",
+              partyId: null,
+              debit: 0,
+              credit: finalAmount,
+            },
+          ],
         });
 
         timelineLogs.push({

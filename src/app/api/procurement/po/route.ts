@@ -94,14 +94,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Vendor and line items are required" }, { status: 400 });
     }
 
-    let poNumber = customPoNumber ? customPoNumber.trim() : "";
-    if (!poNumber) {
-      const count = await prisma.purchaseOrder.count();
-      poNumber = `PO-${10001 + count}`;
-    }
     const poStatus = status || "APPROVED";
 
     const purchaseOrder = await prisma.$transaction(async (tx: any) => {
+      let poNumber = customPoNumber ? customPoNumber.trim() : "";
+      if (!poNumber) {
+        const lastPO = await tx.purchaseOrder.findFirst({
+          orderBy: { createdAt: "desc" },
+          select: { poNumber: true },
+        });
+
+        let nextNum = 10001;
+        if (lastPO && lastPO.poNumber) {
+          const match = lastPO.poNumber.match(/PO-(\d+)/);
+          if (match && match[1]) {
+            nextNum = parseInt(match[1], 10) + 1;
+          }
+        }
+
+        poNumber = `PO-${nextNum}`;
+        while (await tx.purchaseOrder.findUnique({ where: { poNumber } })) {
+          nextNum++;
+          poNumber = `PO-${nextNum}`;
+        }
+      }
+
       let subtotalAmount = 0;
       lineItems.forEach((item: any) => {
         subtotalAmount += Math.round(parseInt(item.quantityOrdered) * Number(item.unitCost));

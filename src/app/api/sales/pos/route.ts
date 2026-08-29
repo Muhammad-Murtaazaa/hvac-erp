@@ -22,10 +22,38 @@ export async function POST(req: Request) {
     const customerName = clientName || "Walk-in Customer";
     const payMethod = paymentMethod || "CASH";
 
-    const count = await prisma.invoice.count();
-    const invoiceNumber = `INV-${10001 + count}`;
-
     const invoice = await prisma.$transaction(async (tx) => {
+      // 1. Generate unique collision-proof invoice number
+      const lastInv = await tx.invoice.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { invoiceNumber: true },
+      });
+
+      let nextNum = 10001;
+      if (lastInv && lastInv.invoiceNumber) {
+        const match = lastInv.invoiceNumber.match(/INV-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let invoiceNumber = `INV-${nextNum}`;
+      while (await tx.invoice.findUnique({ where: { invoiceNumber } })) {
+        nextNum++;
+        invoiceNumber = `INV-${nextNum}`;
+      }
+
+      // 2. Resolve customer account if not walk-in
+      let resolvedCustomerId: string | null = null;
+      if (clientName && clientName.trim() !== "Walk-in Customer") {
+        const existingCust = await tx.customer.findFirst({
+          where: { name: { equals: clientName.trim(), mode: "insensitive" } },
+        });
+        if (existingCust) {
+          resolvedCustomerId = existingCust.id;
+        }
+      }
+
       let totalAmount = 0;
       let totalCogs = 0;
 
@@ -60,12 +88,13 @@ export async function POST(req: Request) {
         });
       }
 
-      // 1. Create Invoice with status PAID
+      // 3. Create Invoice with status PAID
       const invoiceDate = parseDateForStorage(date || new Date());
 
       const createdInvoice = await tx.invoice.create({
         data: {
           invoiceNumber,
+          customer: resolvedCustomerId ? { connect: { id: resolvedCustomerId } } : undefined,
           clientName: customerName,
           clientPhone: clientPhone || null,
           status: "PAID",
@@ -85,7 +114,7 @@ export async function POST(req: Request) {
         },
       });
 
-      // 2. Decrement stock and create StockLedger log
+      // 4. Decrement stock and create StockLedger log
       for (const line of lineItemsWithInfo) {
         await recordStockMovement(tx, {
           productId: line.productId,
@@ -95,8 +124,9 @@ export async function POST(req: Request) {
         });
       }
 
-      // 3. Ledger Entries: Revenue
+      // 5. Ledger Entries: Revenue
       // Debit Accounts Receivable / Credit Sales Revenue
+      const isPartyPosting = !!resolvedCustomerId;
       await recordLedgerEntry(tx, {
         entryDate: invoiceDate,
         description: `POS sale Revenue (${invoiceNumber})`,
@@ -105,9 +135,14 @@ export async function POST(req: Request) {
         amount: totalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
+        partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+        partyId: resolvedCustomerId,
+        partyName: isPartyPosting ? customerName : null,
+        voucherType: "INV",
+        voucherNumber: invoiceNumber,
       });
 
-      // Native Double-Entry: POS Revenue (partyId null for walk-in)
+      // Native Double-Entry: POS Revenue
       await postJournalEntry(tx, {
         entryDate: invoiceDate,
         narration: `POS sale Revenue (${invoiceNumber})`,
@@ -117,7 +152,7 @@ export async function POST(req: Request) {
         lines: [
           {
             accountName: "Accounts Receivable (Trade Debtors)",
-            partyId: null,
+            partyId: resolvedCustomerId,
             debit: totalAmount,
             credit: 0,
           },
@@ -130,8 +165,7 @@ export async function POST(req: Request) {
         ],
       });
 
-      // 4. Ledger Entries: COGS
-      // Debit COGS / Credit Inventory Asset
+      // 6. Ledger Entries: COGS
       if (totalCogs > 0) {
         await recordLedgerEntry(tx, {
           entryDate: invoiceDate,
@@ -141,6 +175,9 @@ export async function POST(req: Request) {
           amount: totalCogs,
           referenceType: "INVOICE",
           referenceId: createdInvoice.id,
+          partyType: "GENERAL",
+          voucherType: "COGS",
+          voucherNumber: invoiceNumber,
         });
 
         // Native Double-Entry: POS COGS
@@ -167,7 +204,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // 5. Create Payment record (fully paid)
+      // 7. Create Payment record (fully paid)
       await tx.payment.create({
         data: {
           invoiceId: createdInvoice.id,
@@ -176,7 +213,7 @@ export async function POST(req: Request) {
         },
       });
 
-      // 6. Ledger Entries: Payment collection
+      // 8. Ledger Entries: Payment collection
       // Debit Cash/Bank / Credit Accounts Receivable
       const isBank = payMethod === "BANK_TRANSFER" || payMethod === "CHEQUE" || payMethod === "ONLINE" || payMethod === "CARD";
       const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
@@ -189,6 +226,12 @@ export async function POST(req: Request) {
         amount: totalAmount,
         referenceType: "INVOICE",
         referenceId: createdInvoice.id,
+        partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
+        partyId: resolvedCustomerId,
+        partyName: isPartyPosting ? customerName : null,
+        voucherType: isBank ? "BRV" : "CRV",
+        voucherNumber: invoiceNumber,
+        paymentMethod: payMethod,
       });
 
       // Native Double-Entry: POS Payment
@@ -207,7 +250,7 @@ export async function POST(req: Request) {
           },
           {
             accountName: "Accounts Receivable (Trade Debtors)",
-            partyId: null,
+            partyId: resolvedCustomerId,
             debit: 0,
             credit: totalAmount,
           },

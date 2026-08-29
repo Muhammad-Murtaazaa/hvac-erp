@@ -53,10 +53,27 @@ export async function POST(req: Request) {
       );
     }
 
-    const count = await prisma.stockAdjustment.count();
-    const adjDoc = `ADJ-${10001 + count}`;
-
     const adjustment = await prisma.$transaction(async (tx) => {
+      const lastAdj = await tx.stockLedger.findFirst({
+        where: { referenceDoc: { startsWith: "ADJ-" } },
+        orderBy: { timestamp: "desc" },
+        select: { referenceDoc: true },
+      });
+
+      let nextNum = 10001;
+      if (lastAdj && lastAdj.referenceDoc) {
+        const match = lastAdj.referenceDoc.match(/ADJ-(\d+)/);
+        if (match && match[1]) {
+          nextNum = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      let adjDoc = `ADJ-${nextNum}`;
+      while (await tx.stockLedger.findFirst({ where: { referenceDoc: adjDoc } })) {
+        nextNum++;
+        adjDoc = `ADJ-${nextNum}`;
+      }
+
       // 1. Create StockAdjustment record
       const createdAdj = await tx.stockAdjustment.create({
         data: {
