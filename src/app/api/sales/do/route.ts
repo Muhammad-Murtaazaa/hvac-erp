@@ -95,17 +95,11 @@ export async function POST(req: Request) {
     const doStatus = status || "DISPATCHED";
 
     const deliveryOrder = await prisma.$transaction(async (tx: any) => {
-      // 1. Resolve or create customer profile
+      // 1. Resolve or create customer profile strictly by entity/company name
       let resolvedCustomerId = inputCustomerId || null;
       if (!resolvedCustomerId && finalClientName) {
-        const phoneToMatch = finalClientPhone || "0300-0000000";
         const existingCust = await tx.customer.findFirst({
-          where: {
-            OR: [
-              { phone: phoneToMatch },
-              { name: { equals: finalClientName, mode: "insensitive" } },
-            ],
-          },
+          where: { name: { equals: finalClientName, mode: "insensitive" } },
         });
 
         if (existingCust) {
@@ -121,9 +115,20 @@ export async function POST(req: Request) {
             });
             resolvedCustomerId = newCust.id;
           } catch {
-            // In case of unique constraint conflict, find by phone
-            const fallbackCust = await tx.customer.findFirst({ where: { phone: phoneToMatch } });
-            if (fallbackCust) resolvedCustomerId = fallbackCust.id;
+            // Handle unique phone collision if shared with sister company
+            try {
+              const uniquePhone = `${finalClientPhone || "0300-0000000"}-${Math.floor(100 + Math.random() * 900)}`;
+              const newCust = await tx.customer.create({
+                data: {
+                  name: finalClientName,
+                  phone: uniquePhone,
+                  address: finalAddress !== "Standard Delivery" ? finalAddress : null,
+                },
+              });
+              resolvedCustomerId = newCust.id;
+            } catch {
+              resolvedCustomerId = null;
+            }
           }
         }
       }

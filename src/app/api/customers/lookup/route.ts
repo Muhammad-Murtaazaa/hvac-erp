@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     }>();
 
     for (const c of customersDb) {
-      const key = (c.phone || c.name).toLowerCase().trim();
+      const key = (c.name || c.phone || "").toLowerCase().trim();
       customerMap.set(key, {
         name: c.name,
         phone: c.phone,
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const c of complaints) {
-      const key = (c.customerPhone || c.customerName).toLowerCase().trim();
+      const key = (c.customerName || c.customerPhone || "").toLowerCase().trim();
       if (!customerMap.has(key)) {
         customerMap.set(key, {
           name: c.customerName,
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const inv of invoices) {
-      const key = (inv.clientPhone || inv.clientName).toLowerCase().trim();
+      const key = (inv.clientName || inv.clientPhone || "").toLowerCase().trim();
       if (!customerMap.has(key)) {
         customerMap.set(key, {
           name: inv.clientName,

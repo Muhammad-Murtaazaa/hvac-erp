@@ -21,23 +21,7 @@ export async function ensureCustomer(data: CustomerInput) {
   const email = (data.email || "").trim() || null;
   const notes = data.notes || "Auto-synced Customer Account";
 
-  // Check by phone first if provided
-  if (phone) {
-    const existingByPhone = await prisma.customer.findUnique({
-      where: { phone },
-    });
-    if (existingByPhone) {
-      if (!existingByPhone.address && address) {
-        await prisma.customer.update({
-          where: { id: existingByPhone.id },
-          data: { address },
-        }).catch(() => {});
-      }
-      return existingByPhone;
-    }
-  }
-
-  // Check by name (case-insensitive)
+  // 1. Check by exact company / customer name (case-insensitive) FIRST
   const existingByName = await prisma.customer.findFirst({
     where: {
       name: { equals: name, mode: "insensitive" },
@@ -61,24 +45,19 @@ export async function ensureCustomer(data: CustomerInput) {
     return existingByName;
   }
 
-  // If no phone provided, generate a deterministic unique phone based on name
+  // 2. If no phone provided, generate a deterministic unique phone based on name
   if (!phone) {
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
     }
-    phone = `0300-${String(hash % 9000000 + 1000000)}`;
+    phone = `0300-${String((hash % 9000000) + 1000000)}`;
   }
 
+  // 3. Create a distinct record for this company name
   try {
-    return await prisma.customer.upsert({
-      where: { phone },
-      update: {
-        name,
-        address: address || undefined,
-        email: email || undefined,
-      },
-      create: {
+    return await prisma.customer.create({
+      data: {
         name,
         phone,
         address: address || null,
@@ -87,17 +66,19 @@ export async function ensureCustomer(data: CustomerInput) {
       },
     });
   } catch (error) {
-    // If phone conflict on create, try with randomized suffix
-    const fallbackPhone = `0300-${Math.floor(1000000 + Math.random() * 9000000)}`;
-    return await prisma.customer.create({
-      data: {
-        name,
-        phone: fallbackPhone,
-        address: address || null,
-        email,
-        notes,
-      },
-    }).catch(() => null);
+    // If phone conflict on create (shared phone with sister company), create with safe unique phone
+    const fallbackPhone = `${phone}-${Math.floor(100 + Math.random() * 900)}`;
+    return await prisma.customer
+      .create({
+        data: {
+          name,
+          phone: fallbackPhone,
+          address: address || null,
+          email,
+          notes,
+        },
+      })
+      .catch(() => null);
   }
 }
 

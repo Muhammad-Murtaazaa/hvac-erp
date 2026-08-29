@@ -82,17 +82,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     }
 
     const updatedQuotation = await prisma.$transaction(async (tx: any) => {
-      // 1. Resolve customer
+      // 1. Resolve customer strictly by entity/company name
       let resolvedCustomerId = inputCustomerId || null;
       if (!resolvedCustomerId && finalClientName) {
-        const phoneToMatch = finalClientPhone || "0300-0000000";
         const existingCust = await tx.customer.findFirst({
-          where: {
-            OR: [
-              { phone: phoneToMatch },
-              { name: { equals: finalClientName, mode: "insensitive" } },
-            ],
-          },
+          where: { name: { equals: finalClientName, mode: "insensitive" } },
         });
 
         if (existingCust) {
@@ -108,8 +102,20 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             });
             resolvedCustomerId = newCust.id;
           } catch {
-            const fallbackCust = await tx.customer.findFirst({ where: { phone: phoneToMatch } });
-            if (fallbackCust) resolvedCustomerId = fallbackCust.id;
+            // Handle unique phone collision if shared with sister company
+            try {
+              const uniquePhone = `${finalClientPhone || "0300-0000000"}-${Math.floor(100 + Math.random() * 900)}`;
+              const newCust = await tx.customer.create({
+                data: {
+                  name: finalClientName,
+                  phone: uniquePhone,
+                  address: finalClientAddress || null,
+                },
+              });
+              resolvedCustomerId = newCust.id;
+            } catch {
+              resolvedCustomerId = null;
+            }
           }
         }
       }
