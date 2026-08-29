@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rollbackSnapshot } from "@/lib/audit";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const session = await getCurrentUser(req);
+  if (!session || !hasPermission(session, "ADMIN")) {
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin privileges required" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
-    const { snapshotId, actor } = body;
+    const { snapshotId } = body;
 
     if (!snapshotId) {
       return NextResponse.json({ success: false, error: "Missing snapshotId" }, { status: 400 });
     }
 
-    const currentActor = actor || { id: "system-admin", email: "admin@erp.local" };
+    const currentActor = { id: session.id, email: session.email };
 
     const result = await rollbackSnapshot(snapshotId, currentActor);
     return NextResponse.json(result);

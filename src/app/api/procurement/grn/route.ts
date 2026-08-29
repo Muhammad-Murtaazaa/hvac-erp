@@ -64,8 +64,11 @@ export async function POST(req: Request) {
         const product = await tx.product.findUnique({ where: { id: productId } });
         if (!product) throw new Error(`Product not found: ${productId}`);
 
-        // Find the original PO line item to update quantityReceived
-        const poLine = po.lineItems.find((l) => l.productId === productId);
+        // Find the original PO line item (by explicit poLineItemId first, then by pending productId)
+        const poLine = item.poLineItemId
+          ? po.lineItems.find((l) => l.id === item.poLineItemId)
+          : po.lineItems.find((l) => l.productId === productId && l.quantityReceived < l.quantityOrdered) ||
+            po.lineItems.find((l) => l.productId === productId);
         if (!poLine) {
           throw new Error(`Product ${product.sku} is not part of this Purchase Order`);
         }

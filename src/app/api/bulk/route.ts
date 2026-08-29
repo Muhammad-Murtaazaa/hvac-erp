@@ -1,17 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
+  const session = await getCurrentUser(req);
+  if (!session) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
-    const { action, ids, data, actor } = body;
+    const { action, ids, data } = body;
 
     if (!action || !ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ success: false, error: "Missing required fields (action, ids array)" }, { status: 400 });
     }
 
-    const currentActor = actor || { id: "bulk-user", email: "admin@erp.local" };
+    // Role-based authorization per action
+    if (action === "ASSIGN_TECHNICIAN" || action === "UPDATE_COMPLAINT_STATUS") {
+      if (!hasPermission(session, "MANAGE_SUPPORT") && !hasPermission(session, "ADMIN")) {
+        return NextResponse.json({ success: false, error: "Forbidden: Support management permission required" }, { status: 403 });
+      }
+    } else if (action === "UPDATE_INVOICE_STATUS") {
+      if (!hasPermission(session, "MANAGE_SALES") && !hasPermission(session, "ADMIN")) {
+        return NextResponse.json({ success: false, error: "Forbidden: Sales management permission required" }, { status: 403 });
+      }
+    } else if (action === "DELETE_PRODUCTS") {
+      if (!hasPermission(session, "MANAGE_INVENTORY") && !hasPermission(session, "ADMIN")) {
+        return NextResponse.json({ success: false, error: "Forbidden: Inventory management permission required" }, { status: 403 });
+      }
+    } else if (!hasPermission(session, "ADMIN")) {
+      return NextResponse.json({ success: false, error: "Forbidden: Administrator permission required" }, { status: 403 });
+    }
+
+    const currentActor = { id: session.id, email: session.email };
 
     switch (action) {
       // 1. Bulk Assign Technicians to Complaints

@@ -53,11 +53,16 @@ export async function GET(req: Request) {
       attMap.set(att.employeeId, cur);
     });
 
-    // 4. Fetch logged employee advances in this month
+    // 4. Fetch logged employee advances in this month (supporting all standard advance aliases & EAV vouchers)
     const advances = await prisma.ledgerEntry.findMany({
       where: {
         partyType: "EMPLOYEE",
-        debitAccount: { contains: "Employee Advance", mode: "insensitive" },
+        OR: [
+          { debitAccount: { contains: "Employee Advance", mode: "insensitive" } },
+          { debitAccount: { contains: "Staff Advance", mode: "insensitive" } },
+          { debitAccount: { contains: "Employee Loan", mode: "insensitive" } },
+          { voucherType: "EAV" },
+        ],
         entryDate: { gte: startDate, lte: endDate },
       },
     });

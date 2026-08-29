@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { sendMail } from "@/lib/mail";
+import { getCurrentUser, hasPermission } from "@/lib/auth";
 
 export async function POST(req: Request) {
+  const session = await getCurrentUser(req);
+  if (!session || (!hasPermission(session, "ADMIN") && !hasPermission(session, "MANAGE_SETTINGS"))) {
+    return NextResponse.json({ success: false, error: "Unauthorized: Admin permissions required" }, { status: 401 });
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const targetEmail = (body.to || "").trim();
