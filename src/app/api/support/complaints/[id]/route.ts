@@ -6,6 +6,7 @@ import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
 import { sendTechnicianPushNotification } from "@/lib/push-notify";
 import { parseDateForStorage } from "@/lib/dateUtils";
+import { sendCustomerComplaintWhatsApp, sendTechnicianComplaintWhatsApp } from "@/lib/whatsapp";
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -228,7 +229,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       afterState: updatedTicket,
     });
 
-    // If technician was assigned or reassigned, send push notification
+    // If technician was assigned or reassigned, send push & WhatsApp notifications
     if (updatedTicket.assignedTechnicianId && updatedTicket.assignedTechnicianId !== ticket.assignedTechnicianId) {
       sendTechnicianPushNotification({
         technicianEmployeeId: updatedTicket.assignedTechnicianId,
@@ -240,6 +241,36 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           type: "JOB_ASSIGNED",
         },
       }).catch((err) => console.error("[Complaint Update Push Trigger] Error:", err));
+
+      // Asynchronous Dual WhatsApp Notifications on Reassignment
+      const assignedTech = updatedTicket.technician;
+      if (assignedTech) {
+        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        const jobPortalUrl = `${baseUrl}/support?ticket=${updatedTicket.complaintNumber}`;
+
+        Promise.allSettled([
+          sendCustomerComplaintWhatsApp({
+            customerPhone: updatedTicket.customerPhone,
+            customerName: updatedTicket.customerName,
+            ticketNumber: updatedTicket.complaintNumber,
+            technicianName: assignedTech.name,
+            technicianPhone: assignedTech.phone || "N/A",
+            scope: updatedTicket.description,
+          }),
+          sendTechnicianComplaintWhatsApp({
+            technicianPhone: assignedTech.phone,
+            customerName: updatedTicket.customerName,
+            customerPhone: updatedTicket.customerPhone,
+            location: updatedTicket.customerAddress,
+            issueScope: updatedTicket.description,
+            pdfUrl: jobPortalUrl,
+          }),
+        ])
+          .then((results) => {
+            console.log(`[Complaint PUT] Dual WhatsApp notifications dispatched for ${updatedTicket.complaintNumber}`);
+          })
+          .catch((err) => console.error("[Complaint Update WhatsApp Dispatch] Error:", err));
+      }
     }
 
     return NextResponse.json({ complaint: updatedTicket });

@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
 import { sendTechnicianPushNotification } from "@/lib/push-notify";
+import { sendCustomerComplaintWhatsApp, sendTechnicianComplaintWhatsApp } from "@/lib/whatsapp";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -144,7 +145,7 @@ export async function POST(req: Request) {
       afterState: complaint,
     });
 
-    // Trigger push notification to assigned technician if applicable
+    // Trigger notifications if technician is assigned
     if (complaint.assignedTechnicianId) {
       sendTechnicianPushNotification({
         technicianEmployeeId: complaint.assignedTechnicianId,
@@ -156,6 +157,43 @@ export async function POST(req: Request) {
           type: "JOB_ASSIGNED",
         },
       }).catch((err) => console.error("[Complaint Push Trigger] Error:", err));
+
+      // Asynchronous Dual WhatsApp Notifications (Customer & Assigned Technician)
+      prisma.employee
+        .findUnique({
+          where: { id: complaint.assignedTechnicianId },
+          select: { id: true, name: true, phone: true },
+        })
+        .then((tech) => {
+          if (!tech) return;
+          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+          const jobPortalUrl = `${baseUrl}/support?ticket=${complaint.complaintNumber}`;
+
+          return Promise.allSettled([
+            sendCustomerComplaintWhatsApp({
+              customerPhone: complaint.customerPhone,
+              customerName: complaint.customerName,
+              ticketNumber: complaint.complaintNumber,
+              technicianName: tech.name,
+              technicianPhone: tech.phone || "N/A",
+              scope: complaint.description,
+            }),
+            sendTechnicianComplaintWhatsApp({
+              technicianPhone: tech.phone,
+              customerName: complaint.customerName,
+              customerPhone: complaint.customerPhone,
+              location: complaint.customerAddress,
+              issueScope: complaint.description,
+              pdfUrl: jobPortalUrl,
+            }),
+          ]);
+        })
+        .then((results) => {
+          if (results) {
+            console.log(`[Complaint POST] Dual WhatsApp notifications dispatched for ${complaint.complaintNumber}`);
+          }
+        })
+        .catch((err) => console.error("[Complaint Creation WhatsApp Dispatch] Error:", err));
     }
 
     return NextResponse.json({ complaint });
