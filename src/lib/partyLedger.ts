@@ -400,7 +400,6 @@ export async function getPartyLedgerReportData({
           OR: [
             { customerId: partyId || undefined },
             { clientName: { equals: partyName, mode: "insensitive" } },
-            { clientPhone: resolvedPartyInfo.phone || undefined },
           ],
         },
         include: { payments: true },
@@ -410,7 +409,6 @@ export async function getPartyLedgerReportData({
           OR: [
             { customerId: partyId || undefined },
             { customerName: { equals: partyName, mode: "insensitive" } },
-            { customerPhone: resolvedPartyInfo.phone || undefined },
           ],
         },
         include: { invoice: true },

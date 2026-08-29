@@ -1035,14 +1035,12 @@ function FinancialsPageContent() {
       }
     >();
 
-    const getNormalizedKey = (name: string, phone?: string) => {
-      const cleanName = (name || "").toLowerCase().trim();
-      const cleanPhone = (phone || "").replace(/\D/g, "");
-      return cleanName || cleanPhone;
+    const getNormalizedKey = (name: string) => {
+      return (name || "").toLowerCase().trim();
     };
 
     (partiesList.customers || []).forEach((c: any) => {
-      const key = getNormalizedKey(c.name, c.phone);
+      const key = getNormalizedKey(c.name);
       if (!key) return;
       partyMap.set(key, {
         id: c.id,
@@ -1058,7 +1056,7 @@ function FinancialsPageContent() {
     });
 
     (partiesList.vendors || []).forEach((v: any) => {
-      const key = getNormalizedKey(v.name, v.phone);
+      const key = getNormalizedKey(v.name);
       if (!key) return;
       const existing = partyMap.get(key);
       if (existing) {
@@ -1086,7 +1084,7 @@ function FinancialsPageContent() {
     });
 
     (partiesList.employees || []).forEach((e: any) => {
-      const key = getNormalizedKey(e.name, e.phone);
+      const key = getNormalizedKey(e.name);
       if (!key) return;
       const existing = partyMap.get(key);
       if (existing) {

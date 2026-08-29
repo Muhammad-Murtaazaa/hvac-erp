@@ -121,10 +121,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     (prisma as any).invoice.findMany({
       where: {
         customerId: null,
-        OR: [
-          { clientPhone: customer.phone },
-          { clientName: { equals: customer.name, mode: "insensitive" } },
-        ],
+        clientName: { equals: customer.name, mode: "insensitive" },
       },
       include: {
         lineItems: {
@@ -144,10 +141,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     (prisma as any).complaint.findMany({
       where: {
         customerId: null,
-        OR: [
-          { customerPhone: customer.phone },
-          { customerName: { equals: customer.name, mode: "insensitive" } },
-        ],
+        customerName: { equals: customer.name, mode: "insensitive" },
       },
       include: {
         technician: true,
@@ -164,10 +158,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     (prisma as any).deliveryOrder.findMany({
       where: {
         customerId: null,
-        OR: [
-          { clientPhone: customer.phone },
-          { clientName: { equals: customer.name, mode: "insensitive" } },
-        ],
+        clientName: { equals: customer.name, mode: "insensitive" },
       },
       include: {
         lineItems: {
