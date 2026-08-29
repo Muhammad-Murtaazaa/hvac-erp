@@ -167,7 +167,7 @@ export async function POST(req: Request) {
         .then((tech) => {
           if (!tech) return;
           const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-          const jobPortalUrl = `${baseUrl}/support?ticket=${complaint.complaintNumber}`;
+          const complaintPdfUrl = `${baseUrl}/api/pdf?type=complaint&id=${complaint.id}&inline=true`;
 
           return Promise.allSettled([
             sendCustomerComplaintWhatsApp({
@@ -184,7 +184,7 @@ export async function POST(req: Request) {
               customerPhone: complaint.customerPhone,
               location: complaint.customerAddress,
               issueScope: complaint.description,
-              pdfUrl: jobPortalUrl,
+              pdfUrl: complaintPdfUrl,
             }),
           ]);
         })

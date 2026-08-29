@@ -246,7 +246,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const assignedTech = updatedTicket.technician;
       if (assignedTech) {
         const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-        const jobPortalUrl = `${baseUrl}/support?ticket=${updatedTicket.complaintNumber}`;
+        const complaintPdfUrl = `${baseUrl}/api/pdf?type=complaint&id=${updatedTicket.id}&inline=true`;
 
         Promise.allSettled([
           sendCustomerComplaintWhatsApp({
@@ -263,7 +263,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             customerPhone: updatedTicket.customerPhone,
             location: updatedTicket.customerAddress,
             issueScope: updatedTicket.description,
-            pdfUrl: jobPortalUrl,
+            pdfUrl: complaintPdfUrl,
           }),
         ])
           .then((results) => {
