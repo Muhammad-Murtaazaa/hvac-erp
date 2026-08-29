@@ -106,7 +106,8 @@ function UniversalPartyCombobox({
   parties: Array<{
     id: string;
     name: string;
-    type: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
+    type: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "CONSOLIDATED";
+    types?: Array<"CUSTOMER" | "VENDOR" | "EMPLOYEE">;
     phone?: string;
     email?: string;
     extra?: string;
@@ -135,7 +136,7 @@ function UniversalPartyCombobox({
   const filtered = useMemo(() => {
     let list = parties;
     if (filterType !== "ALL") {
-      list = list.filter((p) => p.type === filterType);
+      list = list.filter((p) => p.type === filterType || (p.types && p.types.includes(filterType as any)));
     }
     if (!search) return list;
     const s = search.toLowerCase();
@@ -242,7 +243,7 @@ function UniversalPartyCombobox({
                 }`}
               >
                 <User className="w-3 h-3" />
-                Customers ({parties.filter((p) => p.type === "CUSTOMER").length})
+                Customers ({parties.filter((p) => p.type === "CUSTOMER" || (p.types && p.types.includes("CUSTOMER"))).length})
               </button>
               <button
                 type="button"
@@ -254,7 +255,7 @@ function UniversalPartyCombobox({
                 }`}
               >
                 <Building2 className="w-3 h-3" />
-                Vendors ({parties.filter((p) => p.type === "VENDOR").length})
+                Vendors ({parties.filter((p) => p.type === "VENDOR" || (p.types && p.types.includes("VENDOR"))).length})
               </button>
               <button
                 type="button"
@@ -266,7 +267,7 @@ function UniversalPartyCombobox({
                 }`}
               >
                 <Users className="w-3 h-3" />
-                Staff ({parties.filter((p) => p.type === "EMPLOYEE").length})
+                Staff ({parties.filter((p) => p.type === "EMPLOYEE" || (p.types && p.types.includes("EMPLOYEE"))).length})
               </button>
             </div>
 
@@ -274,6 +275,7 @@ function UniversalPartyCombobox({
             {filtered.length > 0 ? (
               filtered.map((party: any) => {
                 const isSelected = (selectedId && party.id === selectedId) || (selectedName && party.name === selectedName);
+                const isMultiRole = party.types && party.types.length > 1;
                 return (
                   <div
                     key={`${party.type}-${party.id || party.name}`}
@@ -290,28 +292,38 @@ function UniversalPartyCombobox({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`w-7 h-7 rounded-xl flex items-center justify-center font-mono font-bold text-[10px] uppercase shrink-0 ${
-                          party.type === "CUSTOMER"
+                          isMultiRole
+                            ? "bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xs"
+                            : party.type === "CUSTOMER"
                             ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                             : party.type === "VENDOR"
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
                             : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
                         }`}
                       >
-                        {party.type === "CUSTOMER" ? "CU" : party.type === "VENDOR" ? "VE" : "ST"}
+                        {isMultiRole ? "360" : party.type === "CUSTOMER" ? "CU" : party.type === "VENDOR" ? "VE" : "ST"}
                       </div>
                       <div className="truncate">
                         <div className="font-bold text-xs truncate flex items-center gap-1.5">
                           <span>{party.name}</span>
                           <span
                             className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold uppercase ${
-                              party.type === "CUSTOMER"
+                              isMultiRole
+                                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-2xs"
+                                : party.type === "CUSTOMER"
                                 ? "bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
                                 : party.type === "VENDOR"
                                 ? "bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                                 : "bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
                             }`}
                           >
-                            {party.type === "CUSTOMER" ? "Customer" : party.type === "VENDOR" ? "Vendor" : "Staff"}
+                            {isMultiRole
+                              ? `360° Party (${party.types.map((t: string) => t === "CUSTOMER" ? "Customer" : t === "VENDOR" ? "Vendor" : "Staff").join(" • ")})`
+                              : party.type === "CUSTOMER"
+                              ? "Customer"
+                              : party.type === "VENDOR"
+                              ? "Vendor"
+                              : "Staff"}
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
@@ -996,23 +1008,40 @@ function FinancialsPageContent() {
   const [documentsList, setDocumentsList] = useState<any>({ invoices: [], purchaseOrders: [], deliveryOrders: [], complaints: [] });
   const [accountsLoading, setAccountsLoading] = useState(false);
 
-  // Unified List of all Customers, Vendors, and Employees for Universal Search
+  // Unified List of all Customers, Vendors, and Employees for Universal Search (Deduplicated)
   const universalPartiesList = useMemo(() => {
-    const list: Array<{
-      id: string;
-      name: string;
-      type: "CUSTOMER" | "VENDOR" | "EMPLOYEE";
-      phone?: string;
-      email?: string;
-      extra?: string;
-      balance?: number;
-    }> = [];
+    const partyMap = new Map<
+      string,
+      {
+        id: string;
+        customerId?: string;
+        vendorId?: string;
+        employeeId?: string;
+        name: string;
+        type: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "CONSOLIDATED";
+        types: Array<"CUSTOMER" | "VENDOR" | "EMPLOYEE">;
+        phone?: string;
+        email?: string;
+        extra?: string;
+        balance?: number;
+      }
+    >();
+
+    const getNormalizedKey = (name: string, phone?: string) => {
+      const cleanName = (name || "").toLowerCase().trim();
+      const cleanPhone = (phone || "").replace(/\D/g, "");
+      return cleanName || cleanPhone;
+    };
 
     (partiesList.customers || []).forEach((c: any) => {
-      list.push({
+      const key = getNormalizedKey(c.name, c.phone);
+      if (!key) return;
+      partyMap.set(key, {
         id: c.id,
+        customerId: c.id,
         name: c.name,
         type: "CUSTOMER",
+        types: ["CUSTOMER"],
         phone: c.phone || "",
         email: c.email || "",
         extra: c.address || "",
@@ -1021,30 +1050,58 @@ function FinancialsPageContent() {
     });
 
     (partiesList.vendors || []).forEach((v: any) => {
-      list.push({
-        id: v.id,
-        name: v.name,
-        type: "VENDOR",
-        phone: v.phone || "",
-        email: v.email || "",
-        extra: v.contactPerson ? `Contact: ${v.contactPerson}` : "",
-        balance: v.balance,
-      });
+      const key = getNormalizedKey(v.name, v.phone);
+      if (!key) return;
+      const existing = partyMap.get(key);
+      if (existing) {
+        existing.vendorId = v.id;
+        if (!existing.types.includes("VENDOR")) existing.types.push("VENDOR");
+        existing.type = "CONSOLIDATED";
+        if (!existing.phone && v.phone) existing.phone = v.phone;
+        if (!existing.email && v.email) existing.email = v.email;
+        if (v.contactPerson) {
+          existing.extra = existing.extra ? `${existing.extra} • Contact: ${v.contactPerson}` : `Contact: ${v.contactPerson}`;
+        }
+      } else {
+        partyMap.set(key, {
+          id: v.id,
+          vendorId: v.id,
+          name: v.name,
+          type: "VENDOR",
+          types: ["VENDOR"],
+          phone: v.phone || "",
+          email: v.email || "",
+          extra: v.contactPerson ? `Contact: ${v.contactPerson}` : "",
+          balance: v.balance,
+        });
+      }
     });
 
     (partiesList.employees || []).forEach((e: any) => {
-      list.push({
-        id: e.id,
-        name: e.name,
-        type: "EMPLOYEE",
-        phone: e.phone || "",
-        email: e.email || "",
-        extra: e.department ? `${e.department} - ${e.position || "Staff"}` : "Staff Member",
-        balance: e.balance,
-      });
+      const key = getNormalizedKey(e.name, e.phone);
+      if (!key) return;
+      const existing = partyMap.get(key);
+      if (existing) {
+        existing.employeeId = e.id;
+        if (!existing.types.includes("EMPLOYEE")) existing.types.push("EMPLOYEE");
+        existing.type = "CONSOLIDATED";
+        if (!existing.phone && e.phone) existing.phone = e.phone;
+      } else {
+        partyMap.set(key, {
+          id: e.id,
+          employeeId: e.id,
+          name: e.name,
+          type: "EMPLOYEE",
+          types: ["EMPLOYEE"],
+          phone: e.phone || "",
+          email: e.email || "",
+          extra: e.department ? `${e.department} - ${e.position || "Staff"}` : "Staff Member",
+          balance: e.balance,
+        });
+      }
     });
 
-    return list;
+    return Array.from(partyMap.values());
   }, [partiesList]);
 
   // Document Linking State
@@ -1908,7 +1965,8 @@ function FinancialsPageContent() {
                   placeholder="Search customer, vendor, or staff by name, phone..."
                   onSelect={(party) => {
                     if (party) {
-                      const nextType = partyType === "CONSOLIDATED" ? "CONSOLIDATED" : party.type;
+                      const isMultiRole = party.types && party.types.length > 1;
+                      const nextType = isMultiRole || partyType === "CONSOLIDATED" ? "CONSOLIDATED" : party.type;
                       setPartyType(nextType);
                       setSelectedPartyName(party.name);
                       setSelectedPartyId(party.id || "");
