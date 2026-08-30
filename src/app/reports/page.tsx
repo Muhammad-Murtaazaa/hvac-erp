@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import * as XLSX from "xlsx";
 import {
   FileSpreadsheet,
   Printer,
@@ -121,55 +122,54 @@ function ReportsContent() {
   // =========================================================================
   // DYNAMIC CSV EXPORT
   // =========================================================================
-  const exportToCSV = () => {
-    if (!reportData) return;
+  const getReportHeadersAndRows = (): { headers: string[]; rows: any[] } => {
+    if (!reportData) return { headers: [], rows: [] };
 
     let headers: string[] = [];
     let rows: any[] = [];
-    const fileName = `${reportType}_report_${startDate}_to_${endDate}.csv`;
 
     if (reportType === "trial_balance") {
       headers = ["Account Code", "Account Name", "Classification", "Normal Side", "Period Debit (PKR)", "Period Credit (PKR)", "Closing Debit (PKR)", "Closing Credit (PKR)", "Net Balance (PKR)"];
       rows = (reportData.rows || []).map((r: any) => [
         r.code,
-        `"${r.name}"`,
+        r.name,
         r.type,
         r.normal,
-        Number(r.periodDebit).toFixed(2),
-        Number(r.periodCredit).toFixed(2),
-        Number(r.closingDebit).toFixed(2),
-        Number(r.closingCredit).toFixed(2),
-        Number(r.netBalance).toFixed(2),
+        Number(r.periodDebit),
+        Number(r.periodCredit),
+        Number(r.closingDebit),
+        Number(r.closingCredit),
+        Number(r.netBalance),
       ]);
       rows.push([
         "TOTALS",
         "",
         "",
         "",
-        Number(reportData.totals?.totalPeriodDebit || 0).toFixed(2),
-        Number(reportData.totals?.totalPeriodCredit || 0).toFixed(2),
-        Number(reportData.totals?.totalClosingDebit || 0).toFixed(2),
-        Number(reportData.totals?.totalClosingCredit || 0).toFixed(2),
+        Number(reportData.totals?.totalPeriodDebit || 0),
+        Number(reportData.totals?.totalPeriodCredit || 0),
+        Number(reportData.totals?.totalClosingDebit || 0),
+        Number(reportData.totals?.totalClosingCredit || 0),
         "",
       ]);
     } else if (reportType === "pnl") {
       headers = ["Financial Statement Line Item", "Amount (PKR)"];
       rows = [
-        ["Invoiced Sales Revenue", Number(reportData.salesRevenue || 0).toFixed(2)],
-        ["Service & Maintenance Income", Number(reportData.serviceIncome || 0).toFixed(2)],
-        ["Less: Sales Returns", Number(reportData.salesReturns || 0).toFixed(2)],
-        ["Total Net Revenue", Number(reportData.totalRevenue || 0).toFixed(2)],
-        ["Less: Cost of Goods Sold (COGS)", Number(reportData.cogs || 0).toFixed(2)],
-        ["Gross Operating Profit", Number(reportData.grossProfit || 0).toFixed(2)],
+        ["Invoiced Sales Revenue", Number(reportData.salesRevenue || 0)],
+        ["Service & Maintenance Income", Number(reportData.serviceIncome || 0)],
+        ["Less: Sales Returns", Number(reportData.salesReturns || 0)],
+        ["Total Net Revenue", Number(reportData.totalRevenue || 0)],
+        ["Less: Cost of Goods Sold (COGS)", Number(reportData.cogs || 0)],
+        ["Gross Operating Profit", Number(reportData.grossProfit || 0)],
         ["Gross Margin %", `${Number(reportData.grossMargin || 0).toFixed(1)}%`],
         ["Operating Expenses:", ""],
-        ["  Salary & Payroll Expense", Number(reportData.expenses?.salaryExpense || 0).toFixed(2)],
-        ["  Office Rent & Utilities", Number(reportData.expenses?.rentUtilitiesExpense || 0).toFixed(2)],
-        ["  Transportation & Freight", Number(reportData.expenses?.freightExpense || 0).toFixed(2)],
-        ["  Inventory Adjustments", Number(reportData.expenses?.inventoryAdjustments || 0).toFixed(2)],
-        ["  Miscellaneous Overhead", Number(reportData.expenses?.miscExpenses || 0).toFixed(2)],
-        ["Total Operating Expenses", Number(reportData.totalExpenses || 0).toFixed(2)],
-        ["Net Net Income / (Loss)", Number(reportData.netProfit || 0).toFixed(2)],
+        ["  Salary & Payroll Expense", Number(reportData.expenses?.salaryExpense || 0)],
+        ["  Office Rent & Utilities", Number(reportData.expenses?.rentUtilitiesExpense || 0)],
+        ["  Transportation & Freight", Number(reportData.expenses?.freightExpense || 0)],
+        ["  Inventory Adjustments", Number(reportData.expenses?.inventoryAdjustments || 0)],
+        ["  Miscellaneous Overhead", Number(reportData.expenses?.miscExpenses || 0)],
+        ["Total Operating Expenses", Number(reportData.totalExpenses || 0)],
+        ["Net Net Income / (Loss)", Number(reportData.netProfit || 0)],
         ["Net Profit Margin %", `${Number(reportData.netMargin || 0).toFixed(1)}%`],
       ];
     } else if (reportType === "cash_flow") {
@@ -177,45 +177,45 @@ function ReportsContent() {
       rows = (reportData.transactions || []).map((t: any) => [
         new Date(t.date).toLocaleDateString(),
         t.type,
-        `"${t.account}"`,
-        `"${t.party || ""}"`,
-        `"${(t.description || "").replace(/"/g, '""')}"`,
-        Number(t.amount).toFixed(2),
+        t.account,
+        t.party || "",
+        t.description || "",
+        Number(t.amount),
       ]);
     } else if (reportType === "customer_balances") {
       headers = ["Customer Name", "Contact Phone", "Billing Address", "Total Invoiced (PKR)", "Total Paid (PKR)", "Net Due Balance (PKR)"];
       rows = (reportData.customers || []).map((c: any) => [
-        `"${c.name}"`,
+        c.name,
         c.phone || "",
-        `"${(c.address || "").replace(/"/g, '""')}"`,
-        Number(c.totalBilled).toFixed(2),
-        Number(c.totalPaid).toFixed(2),
-        Number(c.balance).toFixed(2),
+        c.address || "",
+        Number(c.totalBilled),
+        Number(c.totalPaid),
+        Number(c.balance),
       ]);
     } else if (reportType === "vendor_balances") {
       headers = ["Vendor / Supplier Name", "Contact Person", "Phone", "Total Purchases (PKR)", "Total Disbursed (PKR)", "Net Payable Balance (PKR)"];
       rows = (reportData.vendors || []).map((v: any) => [
-        `"${v.name}"`,
-        `"${v.contactPerson || ""}"`,
+        v.name,
+        v.contactPerson || "",
         v.phone || "",
-        Number(v.totalPurchases).toFixed(2),
-        Number(v.totalPaid).toFixed(2),
-        Number(v.balance).toFixed(2),
+        Number(v.totalPurchases),
+        Number(v.totalPaid),
+        Number(v.balance),
       ]);
     } else if (reportType === "valuation") {
       headers = ["SKU", "Product Name", "Category", "On Hand Qty", "Avg Cost (PKR)", "Total Valuation (PKR)"];
       rows = (reportData.items || []).map((p: any) => [
         p.sku,
-        `"${p.name.replace(/"/g, '""')}"`,
+        p.name,
         p.category,
         p.onHandQty,
-        Number(p.averageCost).toFixed(2),
-        Number(p.totalValue).toFixed(2),
+        Number(p.averageCost),
+        Number(p.totalValue),
       ]);
     } else if (reportType === "aging") {
       headers = ["Document #", "Party Name", "Document Date", "Age (Days)", "Aging Bracket", "Due Balance (PKR)"];
       (reportData.receivablesList || []).forEach((r: any) => {
-        rows.push([r.number, `"${r.party}"`, new Date(r.date).toLocaleDateString(), r.ageDays, r.bracket, Number(r.due).toFixed(2)]);
+        rows.push([r.number, r.party, new Date(r.date).toLocaleDateString(), r.ageDays, r.bracket, Number(r.due)]);
       });
     } else if (reportType === "ledger") {
       headers = ["Entry Date", "Voucher #", "Type", "Party", "Debit Account", "Credit Account", "Amount (PKR)", "Description"];
@@ -223,15 +223,33 @@ function ReportsContent() {
         new Date(e.entryDate).toLocaleDateString(),
         e.voucherNumber || "",
         e.voucherType || "",
-        `"${e.partyName || ""}"`,
+        e.partyName || "",
         e.debitAccount,
         e.creditAccount,
-        Number(e.amount).toFixed(2),
-        `"${(e.description || "").replace(/"/g, '""')}"`,
+        Number(e.amount),
+        e.description || "",
       ]);
     }
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    return { headers, rows };
+  };
+
+  const exportToCSV = () => {
+    const { headers, rows } = getReportHeadersAndRows();
+    if (headers.length === 0) return;
+    const fileName = `${reportType}_report_${startDate}_to_${endDate}.csv`;
+
+    const escapedRows = rows.map((r) =>
+      r.map((cell: any) => {
+        const s = String(cell);
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      })
+    );
+
+    const csvContent = [headers.join(","), ...escapedRows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -240,6 +258,17 @@ function ReportsContent() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportToExcel = () => {
+    const { headers, rows } = getReportHeadersAndRows();
+    if (headers.length === 0) return;
+    const fileName = `${reportType}_report_${startDate}_to_${endDate}.xlsx`;
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, fileName);
   };
 
   const handlePrint = () => {
@@ -307,31 +336,10 @@ function ReportsContent() {
               </p>
             </div>
           </div>
-
-          {/* Export & Print Tools */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={exportToCSV}
-              disabled={loading || !reportData}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-2xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-2 disabled:opacity-50"
-            >
-              <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Export CSV / Excel</span>
-            </button>
-
-            <button
-              onClick={handlePrint}
-              disabled={loading || !reportData}
-              className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition-all shadow-md shadow-blue-500/25 flex items-center gap-2 disabled:opacity-50"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print / Save PDF</span>
-            </button>
-          </div>
         </div>
 
         {/* Global Date Controls & Presets */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-slate-100 dark:border-slate-800/80 pt-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-t border-slate-100 dark:border-slate-800/80 pt-4 no-print">
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold border border-slate-200/60 dark:border-slate-700/60">
             {(["this_month", "last_30", "quarter", "ytd", "all"] as const).map((preset) => (
               <button
@@ -378,7 +386,7 @@ function ReportsContent() {
       {/* ========================================================================= */}
       {/* REPORT CATALOG SELECTOR PILLS                                             */}
       {/* ========================================================================= */}
-      <div className="space-y-4">
+      <div className="space-y-4 no-print">
         {reportCatalog.map((cat, idx) => (
           <div key={idx} className="space-y-2">
             <span className="text-[10.5px] font-black uppercase tracking-widest text-slate-400 px-1">
@@ -450,6 +458,40 @@ function ReportsContent() {
           <div className="p-8 text-center text-slate-400 text-xs">No report data generated.</div>
         ) : (
           <>
+            {/* Global Search & Actions inside Report Viewport Card */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print mb-5">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search / Filter items in this report..."
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 shadow-xs"
+                />
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={exportToExcel}
+                  disabled={loading || !reportData}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-2xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-2 disabled:opacity-50"
+                  title="Export to Excel Spreadsheet"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Excel</span>
+                </button>
+
+                <button
+                  onClick={handlePrint}
+                  disabled={loading || !reportData}
+                  className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-black transition-all shadow-md shadow-blue-500/25 flex items-center gap-2 disabled:opacity-50 print-include"
+                  title="Print Report or Save as PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print / Save PDF</span>
+                </button>
+              </div>
+            </div>
             {/* --------------------------------------------------------------------- */}
             {/* REPORT 1: PROFIT & LOSS STATEMENT                                     */}
             {/* --------------------------------------------------------------------- */}
@@ -650,7 +692,14 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                      {(reportData.rows || []).map((r: any) => (
+                      {(reportData.rows || [])
+                        .filter((r: any) =>
+                          !tableSearch ||
+                          r.code?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          r.name?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          r.type?.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
+                        .map((r: any) => (
                         <tr key={r.code} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                           <td className="p-3 font-mono font-bold text-blue-600">{r.code}</td>
                           <td className="p-3 font-bold text-slate-800 dark:text-slate-200">{r.name}</td>
@@ -742,7 +791,15 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(reportData.transactions || []).map((t: any) => (
+                      {(reportData.transactions || [])
+                        .filter((t: any) =>
+                          !tableSearch ||
+                          t.account?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          t.party?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          t.description?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          t.type?.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
+                        .map((t: any) => (
                         <tr key={t.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 font-medium">
                           <td className="p-3 font-mono text-slate-500">{new Date(t.date).toLocaleDateString()}</td>
                           <td className="p-3">
@@ -804,18 +861,6 @@ function ReportsContent() {
                   </div>
                 </div>
 
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search customer name, phone, address..."
-                    value={tableSearch}
-                    onChange={(e) => setTableSearch(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
                 {/* Table */}
                 <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
                   <table className="w-full text-left text-xs">
@@ -833,7 +878,8 @@ function ReportsContent() {
                         .filter((c: any) =>
                           !tableSearch ||
                           c.name?.toLowerCase().includes(tableSearch.toLowerCase()) ||
-                          c.phone?.includes(tableSearch)
+                          c.phone?.includes(tableSearch) ||
+                          (c.address || "").toLowerCase().includes(tableSearch.toLowerCase())
                         )
                         .map((c: any) => (
                           <tr key={c.name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
@@ -893,7 +939,14 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(reportData.vendors || []).map((v: any) => (
+                      {(reportData.vendors || [])
+                        .filter((v: any) =>
+                          !tableSearch ||
+                          v.name?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          v.contactPerson?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          v.phone?.includes(tableSearch)
+                        )
+                        .map((v: any) => (
                         <tr key={v.id || v.name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                           <td className="p-3 font-bold text-slate-900 dark:text-white">{v.name}</td>
                           <td className="p-3 text-slate-600 dark:text-slate-400">{v.contactPerson || "-"}</td>
@@ -916,17 +969,6 @@ function ReportsContent() {
             {/* --------------------------------------------------------------------- */}
             {reportType === "ledger" && (
               <div className="space-y-4">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search journal entries, accounts, descriptions, vouchers..."
-                    value={tableSearch}
-                    onChange={(e) => setTableSearch(e.target.value)}
-                    className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
                 <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-x-auto shadow-xs">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 uppercase tracking-wider font-bold border-b border-slate-200 dark:border-slate-800">
@@ -1033,6 +1075,12 @@ function ReportsContent() {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {(reportData.items || [])
                         .filter((p: any) => Number(p.onHandQty || 0) > 0)
+                        .filter((p: any) =>
+                          !tableSearch ||
+                          p.sku?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          p.name?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          p.category?.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
                         .map((p: any) => (
                           <tr key={p.sku} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 font-medium">
                             <td className="p-3 font-mono font-bold text-blue-600">{p.sku}</td>
@@ -1096,7 +1144,14 @@ function ReportsContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(reportData.receivablesList || []).map((r: any) => (
+                      {(reportData.receivablesList || [])
+                        .filter((r: any) =>
+                          !tableSearch ||
+                          r.number?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          r.party?.toLowerCase().includes(tableSearch.toLowerCase()) ||
+                          r.bracket?.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
+                        .map((r: any) => (
                         <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 font-medium">
                           <td className="p-3 font-mono font-bold text-blue-600">{r.number}</td>
                           <td className="p-3 font-bold text-slate-900 dark:text-white">{r.party}</td>
@@ -1159,7 +1214,11 @@ function ReportsContent() {
                       Sales Breakdown by Client
                     </h3>
                     <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
-                      {Object.entries(reportData.salesByClient || {}).map(([client, stat]: any) => (
+                      {Object.entries(reportData.salesByClient || {})
+                        .filter(([client]: any) =>
+                          !tableSearch || client.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
+                        .map(([client, stat]: any) => (
                         <div key={client} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs">
                           <span className="font-bold text-slate-800 dark:text-white">{client}</span>
                           <span className="font-mono font-black text-blue-600">
@@ -1176,7 +1235,11 @@ function ReportsContent() {
                       Product Velocity & Revenue
                     </h3>
                     <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
-                      {Object.entries(reportData.salesByProduct || {}).map(([key, stat]: any) => (
+                      {Object.entries(reportData.salesByProduct || {})
+                        .filter(([key, stat]: any) =>
+                          !tableSearch || stat.name?.toLowerCase().includes(tableSearch.toLowerCase())
+                        )
+                        .map(([key, stat]: any) => (
                         <div key={key} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs">
                           <div className="truncate max-w-xs">
                             <span className="font-bold text-slate-800 dark:text-white block truncate">{stat.name}</span>

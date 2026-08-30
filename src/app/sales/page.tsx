@@ -7,6 +7,7 @@ import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import CustomerSelect from "@/components/shared/CustomerSelect";
 import ProductSelect from "@/components/shared/ProductSelect";
+import ComplaintSelect from "@/components/shared/ComplaintSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -2347,47 +2348,37 @@ function SalesPageContent() {
                     </button>
                   )}
                 </div>
-                <select
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800/80 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedComplaintId}
-                  onChange={(e) => {
-                    const compId = e.target.value;
-                    setSelectedComplaintId(compId);
-                    if (!compId) return;
-                    const comp = complaints.find((c) => c.id === compId);
-                    if (comp) {
-                      if (comp.customerName) setClientName(comp.customerName);
-                      if (comp.customerPhone) setClientPhone(comp.customerPhone);
-                      if (comp.customerAddress) setClientAddress(comp.customerAddress);
-                      if (comp.customerId) setSelectedCustomerId(comp.customerId);
-                      setSubjectHeading(`Service & Repair Work (${comp.complaintNumber})`);
-                      setSubjectDescription(comp.description || "");
-                      if (Number(comp.amount || 0) > 0) {
-                        setInvLines([
-                          {
-                            productId: "",
-                            description: `Service Charges (Ticket ${comp.complaintNumber}): ${comp.description}`,
-                            quantity: "1",
-                            salesPrice: String(comp.amount),
-                            unit: "Job",
-                            isCustom: true,
-                            extraFields: {},
-                          },
-                        ]);
-                      }
+                <ComplaintSelect
+                  complaints={complaints}
+                  selectedId={selectedComplaintId}
+                  onSelect={(comp) => {
+                    if (!comp) {
+                      setSelectedComplaintId("");
+                      return;
+                    }
+                    setSelectedComplaintId(comp.id);
+                    if (comp.customerName) setClientName(comp.customerName);
+                    if (comp.customerPhone) setClientPhone(comp.customerPhone);
+                    if (comp.customerAddress) setClientAddress(comp.customerAddress);
+                    if (comp.customerId) setSelectedCustomerId(comp.customerId);
+                    setSubjectHeading(`Service & Repair Work (${comp.complaintNumber})`);
+                    setSubjectDescription(comp.description || "");
+                    if (Number(comp.amount || 0) > 0) {
+                      setInvLines([
+                        {
+                          productId: "",
+                          description: `Service Charges (Ticket ${comp.complaintNumber}): ${comp.description}`,
+                          quantity: "1",
+                          salesPrice: String(comp.amount),
+                          unit: "Job",
+                          isCustom: true,
+                          extraFields: {},
+                        },
+                      ]);
                     }
                   }}
-                >
-                  <option value="">-- No linked complaint ticket (Standard Sale) --</option>
-                  {complaints
-                    .filter((c) => !c.invoice || c.id === selectedComplaintId)
-                    .map((comp) => (
-                      <option key={comp.id} value={comp.id}>
-                        {comp.complaintNumber} - {comp.customerName} - {comp.description.slice(0, 40)}... (PKR {Number(comp.amount || 0).toLocaleString()}) [{comp.status}]
-                      </option>
-                    ))}
-                </select>
-                <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1">
+                />
+                <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1.5">
                   Selecting a complaint auto-fills customer details, job description, repair cost, and syncs the ledger.
                 </p>
               </div>

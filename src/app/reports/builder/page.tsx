@@ -1,27 +1,27 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Sliders,
-  Play,
-  Save,
-  Download,
-  Plus,
-  Trash2,
   Table,
-  CheckCircle2,
-  Layers,
   FileSpreadsheet,
-  CheckSquare,
-  Square,
   AlertCircle,
   Hash,
   Coins,
   Filter,
   RefreshCw,
+  Search,
+  Printer,
+  Receipt,
+  Package,
+  ArrowDownToLine,
+  ShoppingCart,
+  AlertTriangle,
+  Users,
+  UserCheck,
+  Check,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { convertToCSV } from "@/lib/export";
 import { useToast } from "@/components/shared/ToastProvider";
 import { formatDateDisplay } from "@/lib/dateUtils";
 
@@ -49,7 +49,7 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     ],
   },
   PRODUCT: {
-    label: "Inventory / Stock Intelligence",
+    label: "Stock & Inventory",
     fields: [
       "sku",
       "name",
@@ -72,7 +72,7 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     ],
   },
   GRN: {
-    label: "Stock Receipts & GRNs (Purchased Intake)",
+    label: "Stock Receipts & GRNs",
     fields: [
       "grnNumber",
       "poNumber",
@@ -85,7 +85,7 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     ],
   },
   PURCHASE_ORDER: {
-    label: "Purchase Orders (Procurement)",
+    label: "Purchase Orders",
     fields: [
       "poNumber",
       "vendorName",
@@ -144,7 +144,6 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
 };
 
 const FIELD_LABELS: Record<string, string> = {
-  // Invoice
   invoiceNumber: "Invoice #",
   clientName: "Client / Customer",
   clientPhone: "Client Phone",
@@ -155,7 +154,6 @@ const FIELD_LABELS: Record<string, string> = {
   amountPaid: "Amount Paid (PKR)",
   isGst: "Tax / GST",
   subjectHeading: "Subject",
-  // Product / Stock Intelligence
   sku: "SKU Code",
   name: "Product Description",
   category: "Category",
@@ -173,12 +171,10 @@ const FIELD_LABELS: Record<string, string> = {
   totalValuation: "Ready Stock Valuation (PKR)",
   incomingQty: "Incoming / In-Transit Qty",
   reorderLevel: "Reorder Level",
-  // GRN / Receipts
   grnNumber: "GRN #",
   receivedAt: "Receipt Date",
   receivedBy: "Received By Officer",
   totalUnits: "Total Units Received",
-  // Complaint
   complaintNumber: "Complaint #",
   customerName: "Customer Name",
   customerPhone: "Phone Number",
@@ -188,25 +184,21 @@ const FIELD_LABELS: Record<string, string> = {
   amountStatus: "Payment Status",
   description: "Description",
   remarks: "Remarks",
-  // Purchase Order
   poNumber: "PO #",
   vendorName: "Vendor / Supplier",
   totalOrderedQty: "Total Ordered Units",
   totalReceivedQty: "Total Received Units",
   discount: "Discount (PKR)",
   notes: "Notes / Terms",
-  // Employee
   cnic: "CNIC / ID",
   phone: "Phone",
   department: "Department",
   position: "Position",
   baseSalary: "Base Salary (PKR)",
   joiningDate: "Joining Date",
-  // Customer
   email: "Email Address",
   address: "Address",
   ntn: "NTN Number",
-  // Shared
   createdAt: "Created Date",
   updatedAt: "Updated Date",
 };
@@ -237,203 +229,141 @@ export default function ReportBuilderPage() {
   const { toast } = useToast();
   const [selectedEntity, setSelectedEntity] = useState<string>("INVOICE");
   const [selectedFields, setSelectedFields] = useState<string[]>(ENTITY_CONFIGS.INVOICE.fields);
-  const [filters, setFilters] = useState<Array<{ field: string; operator: string; value: string; secondValue?: string }>>([]);
   const [results, setResults] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [templateTitle, setTemplateTitle] = useState("");
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tableSearch, setTableSearch] = useState("");
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
+  const sections = [
+    { id: "INVOICE", label: "Sales Invoices", icon: Receipt },
+    { id: "PRODUCT", label: "Stock & Inventory", icon: Package },
+    { id: "GRN", label: "Stock Receipts (GRNs)", icon: ArrowDownToLine },
+    { id: "PURCHASE_ORDER", label: "Purchase Orders", icon: ShoppingCart },
+    { id: "COMPLAINT", label: "Customer Complaints", icon: AlertTriangle },
+    { id: "EMPLOYEE", label: "Human Resources / Staff", icon: Users },
+    { id: "CUSTOMER", label: "Registered Customers", icon: UserCheck },
+  ];
 
-  const fetchTemplates = async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    try {
-      const res = await fetch("/api/reports/templates", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setTemplates(json.data);
-      }
-    } catch (e) {
-      console.error("Failed to load templates:", e);
-    }
-  };
-
-  const handleEntityChange = (entity: string) => {
-    setSelectedEntity(entity);
-    setSelectedFields(ENTITY_CONFIGS[entity]?.fields || []);
-    setFilters([]);
-    setResults(null);
-  };
-
-  const selectAllFields = () => {
-    setSelectedFields(ENTITY_CONFIGS[selectedEntity]?.fields || []);
-  };
-
-  const clearAllFields = () => {
-    const all = ENTITY_CONFIGS[selectedEntity]?.fields || [];
-    setSelectedFields(all.slice(0, 1));
-  };
-
-  const addFilter = () => {
-    const defaultField = ENTITY_CONFIGS[selectedEntity]?.fields[0] || "";
-    setFilters([...filters, { field: defaultField, operator: "EQUALS", value: "", secondValue: "" }]);
-  };
-
-  const removeFilter = (index: number) => {
-    setFilters(filters.filter((_, idx) => idx !== index));
-  };
-
-  const toggleField = (field: string) => {
-    if (selectedFields.includes(field)) {
-      if (selectedFields.length > 1) {
-        setSelectedFields(selectedFields.filter((f) => f !== field));
-      } else {
-        toast({ title: "Column Required", message: "At least one column must remain visible.", type: "warning" });
-      }
-    } else {
-      setSelectedFields([...selectedFields, field]);
-    }
-  };
-
-  const runReport = async () => {
+  const fetchDataForEntity = async (entity: string) => {
     setLoading(true);
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    setError(null);
     try {
-      const cleanFilters = filters
-        .filter((f) => f.value && f.value.trim() !== "")
-        .map((f) => ({
-          field: f.field,
-          operator: f.operator,
-          value: f.value.trim(),
-          secondValue: f.secondValue ? f.secondValue.trim() : undefined,
-        }));
-
+      const allFields = ENTITY_CONFIGS[entity].fields;
       const res = await fetch("/api/reports/builder", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entity: selectedEntity,
-          fields: selectedFields,
-          filters: cleanFilters,
+          entity,
+          fields: allFields,
+          filters: [],
         }),
       });
-
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to compile custom report query.");
-      }
-
-      setResults(json.data || []);
-      toast({
-        title: "Report Generated",
-        message: `Loaded ${json.data ? json.data.length : 0} matching records.`,
-        type: "success",
-      });
+      if (!res.ok) throw new Error("Failed to fetch report data");
+      const data = await res.json();
+      setResults(data.data || []);
+      setSelectedFields(allFields);
+      setTableSearch("");
+      setSortField(null);
     } catch (e: any) {
-      console.error(e);
-      toast({
-        title: "Query Execution Failed",
-        message: e.message || "An unexpected error occurred while executing the query.",
-        type: "error",
-      });
+      setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveTemplate = async () => {
-    if (!templateTitle.trim()) {
-      toast({ title: "Title Required", message: "Please enter a preset title.", type: "warning" });
-      return;
+  useEffect(() => {
+    fetchDataForEntity(selectedEntity);
+  }, [selectedEntity]);
+
+  const handleHeaderClick = (field: string) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const toggleField = (field: string) => {
+    const allFields = ENTITY_CONFIGS[selectedEntity].fields;
+    let nextFields: string[];
+    if (selectedFields.includes(field)) {
+      if (selectedFields.length > 1) {
+        nextFields = selectedFields.filter((f) => f !== field);
+      } else {
+        toast({ title: "Keep One Column", message: "You must display at least one column.", type: "warning" });
+        return;
+      }
+    } else {
+      nextFields = [...selectedFields, field];
+    }
+    // Sort to maintain original defined order
+    nextFields.sort((a, b) => allFields.indexOf(a) - allFields.indexOf(b));
+    setSelectedFields(nextFields);
+  };
+
+  const showAllFields = () => {
+    setSelectedFields(ENTITY_CONFIGS[selectedEntity].fields);
+  };
+
+  const hideAllFields = () => {
+    setSelectedFields([ENTITY_CONFIGS[selectedEntity].fields[0]]);
+  };
+
+  const sortedAndFilteredResults = useMemo(() => {
+    if (!results) return [];
+    let list = [...results];
+
+    if (tableSearch.trim()) {
+      const term = tableSearch.toLowerCase();
+      list = list.filter((row) =>
+        selectedFields.some((field) => {
+          const val = row[field];
+          if (val === null || val === undefined) return false;
+          return String(val).toLowerCase().includes(term);
+        })
+      );
     }
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    try {
-      const res = await fetch("/api/reports/templates", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          title: templateTitle.trim(),
-          entity: selectedEntity,
-          config: {
-            fields: selectedFields,
-            filters: filters.filter((f) => f.value && f.value.trim() !== ""),
-          },
-        }),
+    if (sortField) {
+      list.sort((a, b) => {
+        const valA = a[sortField];
+        const valB = b[sortField];
+        if (valA === valB) return 0;
+        if (valA === null || valA === undefined) return 1;
+        if (valB === null || valB === undefined) return -1;
+
+        if (typeof valA === "number" && typeof valB === "number") {
+          return sortDirection === "asc" ? valA - valB : valB - valA;
+        }
+        return sortDirection === "asc"
+          ? String(valA).localeCompare(String(valB))
+          : String(valB).localeCompare(String(valA));
       });
-
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to save preset");
-      }
-
-      toast({ title: "Preset Saved", message: `Report preset "${templateTitle}" saved.`, type: "success" });
-      setTemplateTitle("");
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      fetchTemplates();
-    } catch (e: any) {
-      toast({ title: "Save Failed", message: e.message, type: "error" });
     }
-  };
 
-  const deleteTemplate = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    try {
-      const res = await fetch(`/api/reports/templates?id=${id}`, {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast({ title: "Preset Removed", message: "Preset deleted successfully.", type: "info" });
-        fetchTemplates();
-      }
-    } catch (err: any) {
-      toast({ title: "Delete Failed", message: err.message, type: "error" });
-    }
-  };
+    return list;
+  }, [results, tableSearch, selectedFields, sortField, sortDirection]);
 
-  const loadTemplate = (tmpl: any) => {
-    try {
-      const cfg = typeof tmpl.config === "string" ? JSON.parse(tmpl.config) : tmpl.config;
-      const entity = tmpl.entity.toUpperCase();
-      if (ENTITY_CONFIGS[entity]) {
-        setSelectedEntity(entity);
-        const validFields = (cfg.fields || []).filter((f: string) => ENTITY_CONFIGS[entity].fields.includes(f));
-        setSelectedFields(validFields.length > 0 ? validFields : ENTITY_CONFIGS[entity].fields);
-        setFilters(cfg.filters || []);
-        setResults(null);
-        toast({ title: "Preset Loaded", message: `Applied configuration from "${tmpl.title}". Click Execute to run.`, type: "info" });
-      }
-    } catch (e) {
-      console.error("Failed to load preset:", e);
-      toast({ title: "Load Error", message: "Preset format is invalid.", type: "error" });
-    }
-  };
+  const totalAmountSum = useMemo(() => {
+    return sortedAndFilteredResults.reduce((acc, row) => {
+      const sumField = selectedFields.find((f) => f === "totalValuation" || f === "totalAmount" || f === "amount" || f === "salesPrice");
+      return sumField && row[sumField] ? acc + Number(row[sumField]) : acc;
+    }, 0);
+  }, [sortedAndFilteredResults, selectedFields]);
 
-  const exportCurrentData = (format: "EXCEL" | "CSV") => {
-    if (!results || results.length === 0) {
-      toast({ title: "No Data", message: "Please execute the report before exporting.", type: "warning" });
-      return;
-    }
+  const exportToExcel = () => {
+    if (sortedAndFilteredResults.length === 0) return;
     const dateStr = new Date().toISOString().split("T")[0];
-    const filename = `Report_${selectedEntity.toLowerCase()}_${dateStr}`;
+    const filename = `TCE_Report_${selectedEntity.toLowerCase()}_${dateStr}`;
 
-    // Map rows with human-readable headers
-    const exportRows = results.map((row) => {
+    const exportRows = sortedAndFilteredResults.map((row) => {
       const formattedRow: Record<string, any> = {};
       selectedFields.forEach((field) => {
         const headerName = FIELD_LABELS[field] || field;
@@ -451,23 +381,11 @@ export default function ReportBuilderPage() {
       return formattedRow;
     });
 
-    if (format === "CSV") {
-      const csv = convertToCSV(exportRows);
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${filename}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Export Started", message: `Exported ${exportRows.length} rows to CSV.`, type: "success" });
-    } else {
-      const worksheet = XLSX.utils.json_to_sheet(exportRows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Custom Report");
-      XLSX.writeFile(workbook, `${filename}.xlsx`);
-      toast({ title: "Excel Ready", message: `Exported ${exportRows.length} rows to Excel.`, type: "success" });
-    }
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Custom Report");
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+    toast({ title: "Excel Ready", message: `Exported ${exportRows.length} rows to Excel.`, type: "success" });
   };
 
   const renderCellContent = (row: any, field: string) => {
@@ -553,304 +471,130 @@ export default function ReportBuilderPage() {
     return <span className="text-slate-700 dark:text-slate-200">{String(val)}</span>;
   };
 
-  // Compute live summary KPI
-  const totalAmountSum = results
-    ? results.reduce((acc, row) => {
-        const sumField = selectedFields.find((f) => f === "totalValuation" || f === "totalAmount" || f === "amount" || f === "salesPrice");
-        return sumField && row[sumField] ? acc + Number(row[sumField]) : acc;
-      }, 0)
-    : 0;
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Official TCE Branded Print Header (Visible ONLY on print) */}
+      <div className="hidden print:block border-b-2 border-slate-800 pb-4 mb-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-xl font-black tracking-wide text-slate-900">THERMOTECH CONSULTING ENGINEERS (TCE)</h1>
+            <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest mt-0.5">
+              HVAC System Design, Supply & Contracting Services
+            </p>
+            <p className="text-[9px] text-slate-500 mt-1">
+              Head Office: Multan, Pakistan | Contact: +92-321-8304978 | Web: www.tcehvac.com
+            </p>
+          </div>
+          <div className="text-right">
+            <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-800 rounded text-[9px] font-black uppercase">
+              System Audit Report
+            </span>
+            <p className="text-[9px] text-slate-500 mt-2">
+              Generated: {new Date().toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-[10px] font-bold text-slate-700">
+          <span>Data Source: {ENTITY_CONFIGS[selectedEntity]?.label}</span>
+          <span>Total Records: {sortedAndFilteredResults.length}</span>
+        </div>
+      </div>
+
+      {/* Screen Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 rounded-xl">
             <Sliders className="w-6 h-6" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">Custom Report Builder</h1>
-            <p className="text-xs text-slate-500">Visual query composer with multi-field filtering and one-click Excel export</p>
-          </div>
-        </div>
-
-        {results && results.length > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => exportCurrentData("CSV")}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg hover:border-violet-400 transition-colors shadow-2xs"
-            >
-              <Download className="w-3.5 h-3.5" /> CSV
-            </button>
-            <button
-              onClick={() => exportCurrentData("EXCEL")}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700 transition-colors shadow-2xs"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Builder Canvas Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Query Config */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Step 1: Base Entity */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              1. Select Data Source
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {Object.keys(ENTITY_CONFIGS).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleEntityChange(key)}
-                  className={`p-3 text-left rounded-xl border text-xs font-medium transition-all ${
-                    selectedEntity === key
-                      ? "border-violet-600 bg-violet-50/50 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 font-semibold shadow-xs"
-                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300"
-                  }`}
-                >
-                  {ENTITY_CONFIGS[key].label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Step 2: Choose Columns */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                2. Visible Columns (Fields)
-              </label>
-              <div className="flex items-center gap-3 text-xs">
-                <button
-                  onClick={selectAllFields}
-                  className="flex items-center gap-1 text-violet-600 dark:text-violet-400 hover:underline font-semibold"
-                >
-                  <CheckSquare className="w-3.5 h-3.5" /> Select All
-                </button>
-                <button
-                  onClick={clearAllFields}
-                  className="flex items-center gap-1 text-slate-500 hover:underline"
-                >
-                  <Square className="w-3.5 h-3.5" /> Reset
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {ENTITY_CONFIGS[selectedEntity]?.fields.map((f) => {
-                const active = selectedFields.includes(f);
-                return (
-                  <button
-                    key={f}
-                    onClick={() => toggleField(f)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      active
-                        ? "bg-violet-600 text-white border-violet-600"
-                        : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                    }`}
-                  >
-                    {FIELD_LABELS[f] || f}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Step 3: Filters */}
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                3. Query Filters (Optional)
-              </label>
-              <button
-                onClick={addFilter}
-                className="flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 font-semibold hover:underline"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Filter
-              </button>
-            </div>
-
-            {filters.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No filters added. The report will return all recent records.</p>
-            ) : (
-              <div className="space-y-2">
-                {filters.map((flt, idx) => (
-                  <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-                    <select
-                      value={flt.field}
-                      onChange={(e) => {
-                        const next = [...filters];
-                        next[idx].field = e.target.value;
-                        setFilters(next);
-                      }}
-                      className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium"
-                    >
-                      {ENTITY_CONFIGS[selectedEntity]?.fields.map((f) => (
-                        <option key={f} value={f}>
-                          {FIELD_LABELS[f] || f}
-                        </option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={flt.operator}
-                      onChange={(e) => {
-                        const next = [...filters];
-                        next[idx].operator = e.target.value;
-                        setFilters(next);
-                      }}
-                      className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium"
-                    >
-                      <option value="EQUALS">Equals</option>
-                      <option value="CONTAINS">Contains</option>
-                      <option value="GREATER_THAN">&gt;= Greater / On or After</option>
-                      <option value="LESS_THAN">&lt;= Less / On or Before</option>
-                      <option value="BETWEEN">Between</option>
-                    </select>
-
-                    {flt.field === "isGst" ? (
-                      <select
-                        value={flt.value}
-                        onChange={(e) => {
-                          const next = [...filters];
-                          next[idx].value = e.target.value;
-                          setFilters(next);
-                        }}
-                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs"
-                      >
-                        <option value="">-- Choose --</option>
-                        <option value="true">GST (Taxable)</option>
-                        <option value="false">Non-GST</option>
-                      </select>
-                    ) : (
-                      <input
-                        type={DATE_FIELDS.has(flt.field) ? "date" : "text"}
-                        value={flt.value}
-                        placeholder={DATE_FIELDS.has(flt.field) ? "Date" : "Filter Value"}
-                        onChange={(e) => {
-                          const next = [...filters];
-                          next[idx].value = e.target.value;
-                          setFilters(next);
-                        }}
-                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs"
-                      />
-                    )}
-
-                    {flt.operator === "BETWEEN" && (
-                      <input
-                        type={DATE_FIELDS.has(flt.field) ? "date" : "text"}
-                        value={flt.secondValue || ""}
-                        placeholder={DATE_FIELDS.has(flt.field) ? "To Date" : "To Value"}
-                        onChange={(e) => {
-                          const next = [...filters];
-                          next[idx].secondValue = e.target.value;
-                          setFilters(next);
-                        }}
-                        className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs"
-                      />
-                    )}
-
-                    <button
-                      onClick={() => removeFilter(idx)}
-                      className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg"
-                      title="Remove Filter"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Run & Save Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Preset Name (e.g. Unpaid Invoices)"
-                value={templateTitle}
-                onChange={(e) => setTemplateTitle(e.target.value)}
-                className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
-              />
-              <button
-                onClick={saveTemplate}
-                className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-700 transition-colors shadow-2xs"
-              >
-                <Save className="w-3.5 h-3.5" /> Save Preset
-              </button>
-              {saveSuccess && <span className="text-xs text-emerald-500 font-medium">Saved!</span>}
-            </div>
-
-            <button
-              onClick={runReport}
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:opacity-95 shadow-md transition-all disabled:opacity-50"
-            >
-              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-white" />}
-              {loading ? "Compiling Query..." : "Execute Report"}
-            </button>
-          </div>
-        </div>
-
-        {/* Right Col: Saved Presets */}
-        <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs h-full">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-              <Layers className="w-4 h-4 text-violet-500" />
-              <h3 className="font-semibold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
-                Saved Report Presets
-              </h3>
-            </div>
-
-            <div className="space-y-2 mt-4 max-h-[350px] overflow-y-auto">
-              {templates.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">No saved presets yet.</p>
-              ) : (
-                templates.map((t: any) => (
-                  <div
-                    key={t.id}
-                    onClick={() => loadTemplate(t)}
-                    className="p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-violet-400 bg-slate-50/50 dark:bg-slate-800/40 cursor-pointer transition-all flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-semibold text-xs text-slate-800 dark:text-slate-200">{t.title}</div>
-                      <span className="text-[10px] text-slate-400 font-mono">{t.entity}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-violet-600 dark:text-violet-400 font-medium">Load</span>
-                      <button
-                        onClick={(e) => deleteTemplate(t.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-500 rounded transition-opacity"
-                        title="Delete Preset"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <p className="text-xs text-slate-500">Instant database explorer with interactive excel-like table, filters and exports</p>
           </div>
         </div>
       </div>
+
+      {/* 1. SECTIONS / TABS (Instant Load) */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3 no-print">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Select Report Section</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+          {sections.map((sec) => {
+            const Icon = sec.icon;
+            const isSelected = selectedEntity === sec.id;
+            return (
+              <button
+                key={sec.id}
+                onClick={() => setSelectedEntity(sec.id)}
+                className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition-all ${
+                  isSelected
+                    ? "bg-violet-600 text-white border-violet-600 shadow-sm"
+                    : "bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
+                }`}
+              >
+                <Icon className="w-5 h-5 mb-1.5 shrink-0" />
+                <span className="text-[11px] font-bold tracking-tight line-clamp-1">{sec.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 2. VISIBLE COLUMNS TOGGLERS */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3.5 no-print">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Visible Columns (Show / Hide)</h3>
+          <div className="flex items-center gap-3 text-xs font-semibold text-violet-600 dark:text-violet-400">
+            <button onClick={showAllFields} className="hover:underline">Show All</button>
+            <span className="text-slate-300">|</span>
+            <button onClick={hideAllFields} className="hover:underline">Hide All</button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ENTITY_CONFIGS[selectedEntity]?.fields.map((f) => {
+            const isVisible = selectedFields.includes(f);
+            return (
+              <button
+                key={f}
+                onClick={() => toggleField(f)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  isVisible
+                    ? "bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-950/40 dark:border-violet-800 dark:text-violet-300"
+                    : "bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800/30 dark:border-slate-800 dark:text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                {isVisible && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                {FIELD_LABELS[f] || f}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Loading state / Errors */}
+      {loading && (
+        <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3 no-print">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-violet-600" />
+          <p className="text-xs font-bold text-slate-500">Loading custom report data...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-6 bg-rose-50 text-rose-700 border border-rose-200 rounded-2xl text-xs text-center no-print">
+          {error}
+        </div>
+      )}
 
       {/* Results Table & KPI Summary */}
-      {results !== null && (
-        <div className="space-y-3 mt-6">
+      {!loading && !error && results !== null && (
+        <div className="space-y-4">
           {/* Quick KPI Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 no-print">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl flex items-center gap-3">
               <div className="p-2 bg-violet-50 dark:bg-violet-950/50 text-violet-600 rounded-lg">
                 <Hash className="w-4 h-4" />
               </div>
               <div>
                 <div className="text-[10px] font-bold text-slate-400 uppercase">Records Found</div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white">{results.length}</div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">{sortedAndFilteredResults.length}</div>
               </div>
             </div>
 
@@ -871,36 +615,79 @@ export default function ReportBuilderPage() {
                 <Filter className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[10px] font-bold text-slate-400 uppercase">Columns / Filters</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Displayed Columns</div>
                 <div className="text-sm font-bold text-slate-900 dark:text-white">
-                  {selectedFields.length} Cols / {filters.filter((f) => f.value.trim() !== "").length} Filters
+                  {selectedFields.length} of {ENTITY_CONFIGS[selectedEntity]?.fields.length} Fields
                 </div>
               </div>
             </div>
           </div>
 
           {/* Table Container */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+            {/* Toolbar */}
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-800/40 no-print">
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
                 <Table className="w-4 h-4 text-violet-500" />
-                Report Results ({results.length} records found)
+                {ENTITY_CONFIGS[selectedEntity]?.label} Results ({sortedAndFilteredResults.length} records)
+              </div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Filter visible results..."
+                    value={tableSearch}
+                    onChange={(e) => setTableSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-medium focus:ring-1 focus:ring-violet-500"
+                  />
+                </div>
+                <button
+                  onClick={exportToExcel}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-violet-600 text-white text-xs font-semibold rounded-lg hover:bg-violet-700 transition-colors shadow-2xs"
+                  title="Export to Excel Spreadsheet"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg hover:border-violet-400 transition-colors shadow-2xs print-include"
+                  title="Print Report or Save as PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print PDF
+                </button>
               </div>
             </div>
 
+            {/* Grid Table */}
             <div className="overflow-x-auto max-h-[550px]">
-              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+              <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 border-collapse border-b border-slate-200 dark:border-slate-800">
                 <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold sticky top-0 shadow-2xs z-10">
                   <tr>
-                    {selectedFields.map((f) => (
-                      <th key={f} className="p-3 border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                        {FIELD_LABELS[f] || f}
-                      </th>
-                    ))}
+                    {selectedFields.map((f) => {
+                      const isSorted = sortField === f;
+                      return (
+                        <th
+                          key={f}
+                          onClick={() => handleHeaderClick(f)}
+                          className="p-3 border-b border-slate-200 dark:border-slate-700 whitespace-nowrap cursor-pointer hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors"
+                          title="Click to sort by this column"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span>{FIELD_LABELS[f] || f}</span>
+                            {isSorted && (
+                              <span className="text-[10px] text-violet-600 dark:text-violet-400">
+                                {sortDirection === "asc" ? "▲" : "▼"}
+                              </span>
+                            )}
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {results.length === 0 ? (
+                  {sortedAndFilteredResults.length === 0 ? (
                     <tr>
                       <td colSpan={selectedFields.length} className="p-8 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -910,10 +697,10 @@ export default function ReportBuilderPage() {
                       </td>
                     </tr>
                   ) : (
-                    results.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                    sortedAndFilteredResults.map((row, idx) => (
+                      <tr key={row.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                         {selectedFields.map((f) => (
-                          <td key={f} className="p-3 whitespace-nowrap">
+                          <td key={f} className="p-3 whitespace-nowrap border-r border-slate-100/50 dark:border-slate-800/30 last:border-0">
                             {renderCellContent(row, f)}
                           </td>
                         ))}
