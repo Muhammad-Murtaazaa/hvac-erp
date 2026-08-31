@@ -156,8 +156,15 @@ export default function DeliveryOrderPdfPage() {
 
           <div className="my-4 p-3 bg-slate-100 border border-black rounded-xl space-y-1 text-[13px]">
             <div className="font-extrabold text-sm uppercase text-black">{doRecord.clientName}</div>
-            <div className="text-black font-bold">{doRecord.clientPhone}</div>
-            <div className="text-black font-semibold">{doRecord.deliveryAddress}</div>
+            <div className="text-black font-bold text-xs">{doRecord.clientPhone}</div>
+            {(doRecord.customer?.address || doRecord.clientAddress) && (
+              <div className="text-black text-xs font-semibold leading-relaxed">
+                <span className="font-bold">Customer Address:</span> {doRecord.customer?.address || doRecord.clientAddress}
+              </div>
+            )}
+            <div className="text-black font-semibold text-xs pt-1.5 border-t border-black/20">
+              <span className="font-bold">Delivery Address:</span> {doRecord.deliveryAddress}
+            </div>
           </div>
 
           {qrDataUrl && (
@@ -219,9 +226,15 @@ export default function DeliveryOrderPdfPage() {
                 <span className="text-black font-bold">To:</span>{" "}
                 <span className="text-black uppercase font-extrabold">{doRecord.clientName}</span>
               </div>
-              <div>
-                <span className="text-black font-bold">{doRecord.clientPhone}</span>
+              <div className="text-black text-xs font-semibold leading-relaxed">
+                <span className="text-black font-bold">Customer Address:</span>{" "}
+                {doRecord.customer?.address || doRecord.clientAddress || "Office Address"}
               </div>
+              {doRecord.clientPhone && (
+                <div>
+                  <span className="text-black font-bold">Phone:</span> {doRecord.clientPhone}
+                </div>
+              )}
               <div>
                 <span className="text-black font-bold">Through:</span>{" "}
                 <span className="text-black uppercase">{doRecord.through || "BUS"}</span>
@@ -230,9 +243,9 @@ export default function DeliveryOrderPdfPage() {
                 <span className="text-black font-bold">Vehicle:</span>{" "}
                 <span className="text-black uppercase">{doRecord.vehicle || "-"}</span>
               </div>
-              <div>
-                <span className="text-black font-bold">To Address:</span>{" "}
-                <span className="text-black uppercase">{doRecord.deliveryAddress}</span>
+              <div className="mt-2 pt-1.5 border-t border-dashed border-black/30">
+                <span className="text-black font-bold block text-xs">Delivery Address:</span>{" "}
+                <span className="text-black uppercase font-extrabold text-xs leading-relaxed">{doRecord.deliveryAddress}</span>
               </div>
             </div>
 

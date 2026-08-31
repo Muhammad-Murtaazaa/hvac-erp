@@ -187,11 +187,22 @@ export default function InvoicePdfPage() {
             <div>
               <span className="text-black block font-bold">Bill To:</span>
               <div className="font-extrabold text-black text-sm mb-0.5">{invoice.clientName}</div>
-              <div className="text-black font-semibold leading-relaxed whitespace-pre-line">
-                {invoice.clientAddress || "Walk-in client"}
+              <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
+                <span className="font-bold text-black">Customer Address:</span>{" "}
+                {invoice.customer?.address || invoice.clientAddress || "Walk-in client"}
               </div>
               {invoice.clientPhone && (
-                <div className="text-black mt-0.5 font-bold">{invoice.clientPhone}</div>
+                <div className="text-black mt-0.5 font-bold text-xs">
+                  <span className="font-bold">Phone:</span> {invoice.clientPhone}
+                </div>
+              )}
+              {(meta.site || (invoice as any).site || invoice.deliveryOrder?.deliveryAddress) && (
+                <div className="mt-2 pt-1.5 border-t border-dashed border-black/30 text-black">
+                  <span className="font-bold block text-xs">Delivery / Site Address:</span>
+                  <div className="font-semibold text-xs leading-relaxed whitespace-pre-line">
+                    {(meta.site || (invoice as any).site || invoice.deliveryOrder?.deliveryAddress).trim()}
+                  </div>
+                </div>
               )}
             </div>
 

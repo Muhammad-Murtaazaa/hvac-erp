@@ -192,12 +192,13 @@ export default function POPdfPage() {
           {/* Vendor Details Grid */}
           <div className="grid grid-cols-2 gap-8 text-[13px] mb-5 font-normal text-black">
             <div>
-              <span className="text-black block font-normal">Vendor / Supplier:</span>
+              <span className="text-black block font-bold">Vendor / Supplier:</span>
               <div className="font-bold text-black text-sm mb-0.5">{po.vendor?.name || "Unknown Vendor"}</div>
-              <div className="text-black font-normal leading-relaxed whitespace-pre-line">
+              <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
+                <span className="font-bold text-black">Vendor Address:</span>{" "}
                 {po.vendor?.address || "Supplier Address"}
               </div>
-              <div className="text-black mt-0.5 font-normal">
+              <div className="text-black mt-0.5 font-normal text-xs">
                 Attn: {po.vendor?.contactPerson || "-"} ({po.vendor?.phone || "-"})
               </div>
               {po.vendor?.ntn && (
@@ -205,14 +206,12 @@ export default function POPdfPage() {
                   NTN: {po.vendor.ntn}
                 </div>
               )}
-              {meta.deliveryAddress && (
-                <div className="mt-2 pt-2 border-t border-dashed border-black/40">
-                  <span className="text-black block font-normal">Delivery Address:</span>
-                  <div className="text-black font-normal leading-relaxed whitespace-pre-line text-xs">
-                    {meta.deliveryAddress}
-                  </div>
+              <div className="mt-2 pt-1.5 border-t border-dashed border-black/40">
+                <span className="text-black block font-bold text-xs">Delivery Address:</span>
+                <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
+                  {meta.deliveryAddress || "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan"}
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="text-right flex flex-col items-end">

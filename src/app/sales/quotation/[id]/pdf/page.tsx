@@ -185,11 +185,22 @@ export default function QuotationPdfPage() {
             <div>
               <span className="text-black block font-bold">Quotation For:</span>
               <div className="font-extrabold text-black text-sm mb-0.5">{quotation.clientName}</div>
-              <div className="text-black font-semibold leading-relaxed whitespace-pre-line">
-                {quotation.clientAddress || "Walk-in client"}
+              <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
+                <span className="font-bold text-black">Customer Address:</span>{" "}
+                {quotation.customer?.address || quotation.clientAddress || "Walk-in client"}
               </div>
               {quotation.clientPhone && (
-                <div className="text-black mt-0.5 font-bold">{quotation.clientPhone}</div>
+                <div className="text-black mt-0.5 font-bold text-xs">
+                  <span className="font-bold">Phone:</span> {quotation.clientPhone}
+                </div>
+              )}
+              {(meta.site || (quotation as any).site) && (
+                <div className="mt-2 pt-1.5 border-t border-dashed border-black/30 text-black">
+                  <span className="font-bold block text-xs">Delivery / Site Address:</span>
+                  <div className="font-semibold text-xs leading-relaxed whitespace-pre-line">
+                    {(meta.site || (quotation as any).site).trim()}
+                  </div>
+                </div>
               )}
             </div>
 

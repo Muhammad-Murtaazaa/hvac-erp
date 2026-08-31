@@ -5,6 +5,7 @@ import { recordLedgerEntry } from "@/lib/ledger";
 import { postJournalEntry } from "@/lib/journal";
 import { parseInvoiceMetadata, formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
 import { parseDateForStorage } from "@/lib/dateUtils";
+import { ensureCustomer } from "@/lib/customerSync";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -36,6 +37,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     const meta = parseInvoiceMetadata(quotation.notes, quotation);
+
+    // Resolve or connect customer profile safely BEFORE transaction
+    let resolvedCustomerId = quotation.customerId || null;
+    if (!resolvedCustomerId && quotation.clientName) {
+      const cust = await ensureCustomer({
+        name: quotation.clientName,
+        phone: quotation.clientPhone || null,
+        address: quotation.clientAddress || null,
+        notes: "Auto-synced Customer on Quotation Convert",
+      });
+      if (cust) {
+        resolvedCustomerId = cust.id;
+      }
+    }
 
     const result = await prisma.$transaction(async (tx: any) => {
       // 1. Generate unique invoice number
@@ -106,17 +121,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         totalAmount: finalTotalAmount,
         site: meta.site || "",
       });
-
-      // Resolve or connect customer profile strictly by name
-      let resolvedCustomerId = quotation.customerId || null;
-      if (!resolvedCustomerId && quotation.clientName) {
-        const existingCust = await tx.customer.findFirst({
-          where: { name: { equals: quotation.clientName, mode: "insensitive" } },
-        });
-        if (existingCust) {
-          resolvedCustomerId = existingCust.id;
-        }
-      }
 
       // 3. Create Live Invoice
       const invoiceDate = parseDateForStorage(new Date());

@@ -82,22 +82,23 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
       const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
-      const siteVal = (meta.site || invoiceData.site || "").trim();
+      const siteVal = (meta.site || invoiceData.site || invoiceData.deliveryOrder?.deliveryAddress || "").trim();
       let leftY = 148;
       doc.text(`Date: ${formatDateDisplay(invoiceData.date, "en-GB")}`, 50, leftY);
       leftY += 14;
-      if (siteVal) {
-        doc.text(`Site: ${siteVal}`, 50, leftY);
-        leftY += 14;
-      }
       doc.text(`Client Name: ${invoiceData.clientName}`, 50, leftY);
       leftY += 14;
+      const custAddr = invoiceData.customer?.address || invoiceData.clientAddress;
+      if (custAddr) {
+        doc.text(`Customer Address: ${custAddr}`, 50, leftY, { width: 280 });
+        leftY += 14;
+      }
       if (invoiceData.clientPhone) {
         doc.text(`Client Phone: ${invoiceData.clientPhone}`, 50, leftY);
         leftY += 14;
       }
-      if (invoiceData.clientAddress) {
-        doc.text(`Client Address: ${invoiceData.clientAddress}`, 50, leftY, { width: 280 });
+      if (siteVal) {
+        doc.text(`Delivery / Site Address: ${siteVal}`, 50, leftY, { width: 280 });
         leftY += 18;
       }
 
@@ -292,10 +293,24 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`DO NUMBER: ${doData.doNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`Date: ${formatDateDisplay(doData.date, "en-GB")}`, 50, 148);
-      doc.text(`Client Name: ${doData.clientName}`, 50, 162);
-      if (doData.clientPhone) doc.text(`Client Phone: ${doData.clientPhone}`, 50, 176);
-      if (doData.deliveryAddress) doc.text(`Delivery Address: ${doData.deliveryAddress}`, 50, 190, { width: 280 });
+      let leftY = 148;
+      doc.text(`Date: ${formatDateDisplay(doData.date, "en-GB")}`, 50, leftY);
+      leftY += 14;
+      doc.text(`Client Name: ${doData.clientName}`, 50, leftY);
+      leftY += 14;
+      const doCustAddr = doData.customer?.address || doData.clientAddress;
+      if (doCustAddr) {
+        doc.text(`Customer Address: ${doCustAddr}`, 50, leftY, { width: 280 });
+        leftY += 14;
+      }
+      if (doData.clientPhone) {
+        doc.text(`Client Phone: ${doData.clientPhone}`, 50, leftY);
+        leftY += 14;
+      }
+      if (doData.deliveryAddress) {
+        doc.text(`Delivery Address: ${doData.deliveryAddress}`, 50, leftY, { width: 280 });
+        leftY += 18;
+      }
 
       doc.text(`DO Status: ${doData.status}`, 340, 148);
       if (doData.poNumber) {
