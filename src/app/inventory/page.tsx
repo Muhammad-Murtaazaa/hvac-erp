@@ -8,6 +8,32 @@ import BulkActionBar from "@/components/shared/BulkActionBar";
 import { useToast } from "@/components/shared/ToastProvider";
 import { createPortal } from "react-dom";
 
+const STANDARD_UNITS = [
+  { value: "Nos", label: "Nos (Number / Item)" },
+  { value: "Rft", label: "Rft (Running Feet)" },
+  { value: "Job", label: "Job (Job / Service)" },
+  { value: "Mtr", label: "Mtr (Meter)" },
+  { value: "Coil", label: "Coil (Roll / Cable)" },
+  { value: "Kg", label: "Kg (Kilogram)" },
+  { value: "Ltr", label: "Ltr (Liter)" },
+  { value: "Box", label: "Box (Pack)" },
+  { value: "Set", label: "Set" },
+  { value: "Ton", label: "Ton (Tonnage / TR)" },
+  { value: "Sft", label: "Sft (Square Feet)" },
+  { value: "Lot", label: "Lot (Lump Sum)" },
+  { value: "Ft", label: "Ft (Feet)" },
+  { value: "Pcs", label: "Pcs (Pieces)" },
+  { value: "Bundle", label: "Bundle" },
+  { value: "Packet", label: "Packet / Pkt" },
+  { value: "Cylinder", label: "Cylinder" },
+  { value: "Drum", label: "Drum" },
+  { value: "Roll", label: "Roll" },
+  { value: "Bag", label: "Bag" },
+  { value: "Hrs", label: "Hrs (Hours)" },
+  { value: "Days", label: "Days" },
+  { value: "Month", label: "Month" },
+];
+
 export default function InventoryPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +49,7 @@ export default function InventoryPage() {
   const [newName, setNewName] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newUnit, setNewUnit] = useState("Nos");
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [newReorderLevel, setNewReorderLevel] = useState("5");
   const [newAvgCost, setNewAvgCost] = useState("0");
   const [newSalesPrice, setNewSalesPrice] = useState("0");
@@ -35,6 +62,7 @@ export default function InventoryPage() {
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editUnit, setEditUnit] = useState("Nos");
+  const [isEditCustomUnit, setIsEditCustomUnit] = useState(false);
   const [editReorderLevel, setEditReorderLevel] = useState("5");
   const [editAvgCost, setEditAvgCost] = useState("0");
   const [editSalesPrice, setEditSalesPrice] = useState("0");
@@ -176,6 +204,7 @@ export default function InventoryPage() {
       setNewName("");
       setNewCategory("");
       setNewUnit("Nos");
+      setIsCustomUnit(false);
       setNewReorderLevel("5");
       setNewAvgCost("0");
       setNewSalesPrice("0");
@@ -188,12 +217,30 @@ export default function InventoryPage() {
     }
   };
 
+  const availableUnitOptions = React.useMemo(() => {
+    const existingUnits = products
+      .map((p) => p.unit)
+      .filter((u): u is string => Boolean(u && typeof u === "string" && u.trim().length > 0));
+
+    const standardValSet = new Set(STANDARD_UNITS.map((u) => u.value.toLowerCase()));
+    const extraOptions = Array.from(new Set(existingUnits))
+      .filter((u) => !standardValSet.has(u.toLowerCase()))
+      .map((u) => ({ value: u, label: u }));
+
+    return [...STANDARD_UNITS, ...extraOptions];
+  }, [products]);
+
   const openEditModal = (p: any) => {
     setEditingId(p.id);
     setEditSku(p.sku || "");
     setEditName(p.name || "");
     setEditCategory(p.category || "");
-    setEditUnit(p.unit || "Nos");
+    const rawUnit = p.unit || "Nos";
+    setEditUnit(rawUnit);
+    const inPresets = availableUnitOptions.some(
+      (opt) => opt.value.toLowerCase() === rawUnit.toLowerCase()
+    );
+    setIsEditCustomUnit(!inPresets);
     setEditReorderLevel(String(p.reorderLevel ?? 5));
     setEditAvgCost(String(p.averageCost ?? 0));
     setEditSalesPrice(String(p.salesPrice ?? 0));
@@ -288,7 +335,11 @@ export default function InventoryPage() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setIsCustomUnit(false);
+                setNewUnit("Nos");
+                setIsCreateOpen(true);
+              }}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/20 active:scale-95"
             >
               <Plus className="w-4 h-4" />
@@ -490,21 +541,57 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Stocking Unit</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={newUnit}
-                    onChange={(e) => setNewUnit(e.target.value)}
-                  >
-                    <option value="Nos">Nos (Number / Item)</option>
-                    <option value="Mtr">Mtr (Meter)</option>
-                    <option value="Coil">Coil (Roll / Cable)</option>
-                    <option value="Kg">Kg (Kilogram)</option>
-                    <option value="Ltr">Ltr (Liter)</option>
-                    <option value="Box">Box (Pack)</option>
-                    <option value="Set">Set</option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-bold">
+                      Stocking Unit
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomUnit(!isCustomUnit);
+                        if (!isCustomUnit) {
+                          setNewUnit("");
+                        } else {
+                          setNewUnit("Nos");
+                        }
+                      }}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                    >
+                      {isCustomUnit ? "← Pick from List" : "+ Type Custom"}
+                    </button>
+                  </div>
+                  {isCustomUnit ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. RFT, NOS, JOB, Drum, Bag"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-blue-400 dark:border-blue-500 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                      value={newUnit}
+                      onChange={(e) => setNewUnit(e.target.value)}
+                      autoFocus
+                    />
+                  ) : (
+                    <select
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={newUnit}
+                      onChange={(e) => {
+                        if (e.target.value === "__CUSTOM__") {
+                          setIsCustomUnit(true);
+                          setNewUnit("");
+                        } else {
+                          setNewUnit(e.target.value);
+                        }
+                      }}
+                    >
+                      {availableUnitOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM__">➕ Type Custom Unit...</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Reorder Level</label>
@@ -613,21 +700,57 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Stocking Unit</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                    value={editUnit}
-                    onChange={(e) => setEditUnit(e.target.value)}
-                  >
-                    <option value="Nos">Nos (Number / Item)</option>
-                    <option value="Mtr">Mtr (Meter)</option>
-                    <option value="Coil">Coil (Roll / Cable)</option>
-                    <option value="Kg">Kg (Kilogram)</option>
-                    <option value="Ltr">Ltr (Liter)</option>
-                    <option value="Box">Box (Pack)</option>
-                    <option value="Set">Set</option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider font-bold">
+                      Stocking Unit
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditCustomUnit(!isEditCustomUnit);
+                        if (!isEditCustomUnit) {
+                          setEditUnit("");
+                        } else {
+                          setEditUnit("Nos");
+                        }
+                      }}
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                    >
+                      {isEditCustomUnit ? "← Pick from List" : "+ Type Custom"}
+                    </button>
+                  </div>
+                  {isEditCustomUnit ? (
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. RFT, NOS, JOB, Drum, Bag"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-blue-400 dark:border-blue-500 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                      value={editUnit}
+                      onChange={(e) => setEditUnit(e.target.value)}
+                      autoFocus
+                    />
+                  ) : (
+                    <select
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                      value={editUnit}
+                      onChange={(e) => {
+                        if (e.target.value === "__CUSTOM__") {
+                          setIsEditCustomUnit(true);
+                          setEditUnit("");
+                        } else {
+                          setEditUnit(e.target.value);
+                        }
+                      }}
+                    >
+                      {availableUnitOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                      <option value="__CUSTOM__">➕ Type Custom Unit...</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Reorder Level</label>
