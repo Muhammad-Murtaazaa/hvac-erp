@@ -36,6 +36,7 @@ import {
   ChevronRight,
   ListOrdered,
   Sparkles,
+  Info,
 } from "lucide-react";
 
 interface AuditLog {
@@ -189,12 +190,12 @@ const FIELD_LABELS: Record<string, string> = {
   clientAddress: "Billing / Head Office Address",
   deliveryAddress: "Delivery / Site Address",
   site: "Project / Site Location",
-  totalAmount: "Total Amount (PKR)",
-  amount: "Transaction Amount (PKR)",
-  amountPaid: "Amount Paid (PKR)",
-  salesPrice: "Sales Price (PKR)",
-  unitCost: "Unit Cost (PKR)",
-  averageCost: "Average Cost (PKR)",
+  totalAmount: "Total Amount",
+  amount: "Transaction Amount",
+  amountPaid: "Amount Paid",
+  salesPrice: "Sales Price",
+  unitCost: "Unit Cost",
+  averageCost: "Average Cost",
   onHandQty: "Physical Stock On Hand",
   quantity: "Quantity",
   status: "Status",
@@ -208,18 +209,48 @@ const FIELD_LABELS: Record<string, string> = {
   grnNumber: "GRN Number",
   doNumber: "Delivery Order Number",
   complaintNumber: "Ticket / Complaint Number",
-  description: "Description / Notes",
-  notes: "Remarks / Terms",
-  isGst: "Tax Type (GST / Non-GST)",
+  description: "Description / Reason",
+  notes: "Remarks & Scope Notes",
+  isGst: "Tax Type",
   taxRate: "Sales Tax Rate (%)",
-  discountAmount: "Discount Amount (PKR)",
+  discountAmount: "Discount Amount",
   discountPercent: "Discount (%)",
   date: "Document Date",
   entryDate: "Entry Date",
   validUntil: "Validity Expiration Date",
   through: "Transport / Carrier",
   vehicle: "Vehicle Info",
+  lineItems: "Line Items & Products",
 };
+
+// Currency-type fields that should be formatted with commas and PKR
+const CURRENCY_FIELDS = new Set([
+  "totalAmount",
+  "amount",
+  "amountPaid",
+  "salesPrice",
+  "unitCost",
+  "averageCost",
+  "subtotalAmount",
+  "discountAmount",
+  "taxAmount",
+  "netTotal",
+]);
+
+// Ignored technical internal IDs
+const IGNORED_DIFF_KEYS = new Set([
+  "updatedAt",
+  "createdAt",
+  "id",
+  "invoiceId",
+  "customerId",
+  "vendorId",
+  "complaintId",
+  "productId",
+  "userId",
+  "actorId",
+  "rollbackFromSnapshotId",
+]);
 
 export default function AuditTrailPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -333,7 +364,7 @@ export default function AuditTrailPage() {
       try {
         const diffObj = JSON.parse(selectedLog.diff);
         for (const [k, v] of Object.entries(diffObj)) {
-          if (["updatedAt", "createdAt", "id", "rollbackFromSnapshotId"].includes(k)) continue;
+          if (IGNORED_DIFF_KEYS.has(k)) continue;
           if (typeof v === "object" && v !== null && ("old" in v || "new" in v)) {
             fields.push({
               key: k,
@@ -357,7 +388,7 @@ export default function AuditTrailPage() {
 
       const allKeys = Array.from(new Set([...Object.keys(before || {}), ...Object.keys(after || {})]));
       for (const k of allKeys) {
-        if (["updatedAt", "createdAt", "id"].includes(k)) continue;
+        if (IGNORED_DIFF_KEYS.has(k)) continue;
         const o = before[k];
         const n = after[k];
         if (JSON.stringify(o) !== JSON.stringify(n)) {
@@ -374,41 +405,103 @@ export default function AuditTrailPage() {
     return fields;
   }, [selectedLog]);
 
-  // Format any raw value cleanly for human eyes
-  const formatDisplayValue = (val: any) => {
-    if (val === null || val === undefined) return <span className="text-slate-400 italic">None / Empty</span>;
-    if (typeof val === "boolean") {
+  // Helper to format any value cleanly without exposing raw JSON to layman users
+  const renderHumanValue = (key: string, val: any) => {
+    if (val === null || val === undefined || val === "") {
+      return <span className="text-slate-400 italic">None / Blank</span>;
+    }
+
+    // 1. Currency fields
+    if (CURRENCY_FIELDS.has(key) || (typeof val === "number" && !key.toLowerCase().includes("qty") && !key.toLowerCase().includes("rate") && !key.toLowerCase().includes("percent") && val > 100)) {
       return (
-        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${val ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800"}`}>
-          {val ? "Yes / Enabled" : "No / Disabled"}
+        <span className="font-mono font-black text-slate-900 dark:text-white">
+          PKR {Number(val).toLocaleString()}
         </span>
       );
     }
+
+    // 2. Numeric / Quantity fields
     if (typeof val === "number") {
-      return <span className="font-mono font-bold">{val.toLocaleString()}</span>;
+      return <span className="font-mono font-bold text-slate-900 dark:text-white">{val.toLocaleString()}</span>;
     }
-    if (typeof val === "object") {
-      if (Array.isArray(val)) {
-        return (
+
+    // 3. Booleans
+    if (typeof val === "boolean") {
+      return (
+        <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${val ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800"}`}>
+          {val ? "Yes" : "No"}
+        </span>
+      );
+    }
+
+    // 4. Line items array
+    if (Array.isArray(val) || key === "lineItems") {
+      const items = Array.isArray(val) ? val : [];
+      if (items.length === 0) return <span className="text-slate-400 italic">0 Items</span>;
+
+      return (
+        <div className="space-y-1.5 mt-1">
+          <div className="text-[11px] font-bold text-slate-500">{items.length} Item(s):</div>
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-slate-500">{val.length} item(s):</span>
-            <div className="bg-slate-100 dark:bg-slate-800/80 p-2 rounded-lg text-xs font-mono max-h-32 overflow-y-auto">
-              {val.map((item, idx) => (
-                <div key={idx} className="border-b border-slate-200 dark:border-slate-700 py-1 last:border-none">
-                  {typeof item === "object" ? JSON.stringify(item) : String(item)}
+            {items.map((item: any, idx: number) => {
+              const name = item.product?.name || item.description || item.name || `Item ${idx + 1}`;
+              const qty = item.quantity !== undefined ? item.quantity : item.qty;
+              const price = item.salesPrice !== undefined ? item.salesPrice : item.price || item.unitPrice;
+              const unit = item.product?.unit || item.unit || "Nos";
+
+              return (
+                <div key={idx} className="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 text-xs flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    {name}
+                  </div>
+                  <div className="shrink-0 text-right font-mono text-[11px]">
+                    {qty !== undefined && <span className="font-bold text-slate-700 dark:text-slate-300">{qty} {unit}</span>}
+                    {price !== undefined && (
+                      <span className="ml-2 font-bold text-emerald-600 dark:text-emerald-400">
+                        @ PKR {Number(price).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // 5. Check if it's a JSON metadata string (e.g. In Notes)
+    if (typeof val === "string" && val.startsWith("{") && val.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(val);
+        const entries = Object.entries(parsed).filter(([k, v]) => v !== "" && v !== null && v !== undefined && k !== "discountType");
+        if (entries.length > 0) {
+          return (
+            <div className="grid grid-cols-2 gap-1.5 text-xs bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 mt-1">
+              {entries.map(([k, v]) => (
+                <div key={k} className="text-[11px]">
+                  <span className="text-slate-400 font-medium capitalize">{k.replace(/([A-Z])/g, " $1")}: </span>
+                  <strong className="text-slate-800 dark:text-slate-200 font-bold">
+                    {typeof v === "number" && k.toLowerCase().includes("amount") ? `PKR ${Number(v).toLocaleString()}` : String(v)}
+                  </strong>
                 </div>
               ))}
             </div>
-          </div>
-        );
-      }
+          );
+        }
+      } catch (e) {}
+    }
+
+    // 6. Status badges
+    if (typeof val === "string" && ["ACTIVE", "PENDING", "PAID", "UNPAID", "PARTIAL", "DISPATCHED", "RESOLVED", "CANCELLED", "CONFIRMED"].includes(val.toUpperCase())) {
       return (
-        <pre className="text-[11px] font-mono bg-slate-100 dark:bg-slate-800 p-2 rounded-lg overflow-x-auto whitespace-pre-wrap max-h-32">
-          {JSON.stringify(val, null, 2)}
-        </pre>
+        <span className="px-2 py-0.5 rounded-md font-extrabold text-[11px] tracking-wider uppercase bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
+          {val}
+        </span>
       );
     }
-    return <span className="font-medium break-words">{String(val)}</span>;
+
+    return <span className="font-semibold text-slate-800 dark:text-slate-200 break-words">{String(val)}</span>;
   };
 
   return (
@@ -427,7 +520,7 @@ export default function AuditTrailPage() {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 max-w-xl">
-              Complete chronological ledger of all business actions, inventory receipts, invoices, and vouchers. Inspect granular field changes and safely revert unauthorized modifications.
+              Complete chronological record of all invoices, vouchers, and updates. Inspect any field change and safely revert unauthorized modifications.
             </p>
           </div>
         </div>
@@ -560,7 +653,7 @@ export default function AuditTrailPage() {
         </select>
       </div>
 
-      {/* Audit Log Table with Human-Friendly Details */}
+      {/* Audit Log Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
@@ -704,7 +797,7 @@ export default function AuditTrailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* BEAUTIFUL, LAYMAN-FRIENDLY DIFF INSPECTOR & ROLLBACK MODAL                */}
+      {/* PERFECTLY CENTERED, NON-OVERWHELMING INSPECT DIFF MODAL                   */}
       {/* ========================================================================= */}
       {selectedLog && (() => {
         const conf = ENTITY_CONFIG[selectedLog.entityName] || {
@@ -718,13 +811,15 @@ export default function AuditTrailPage() {
         const details = parseSnapshotDetails(selectedLog);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm overflow-y-auto animate-fadeIn">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full p-6 space-y-5 shadow-2xl overflow-y-auto max-h-[92vh]">
-              {/* Modal Top Header */}
-              <div className="flex items-start justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3.5">
-                  <div className={`p-3 rounded-2xl border ${conf.bg} ${conf.color} ${conf.border}`}>
-                    <Icon className="w-6 h-6" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-xs animate-fadeIn">
+            {/* Modal Container: Fixed Max Height, Flex Column, Strictly Centered */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+              
+              {/* 1. Modal Top Header (Fixed at top) */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between bg-slate-50/50 dark:bg-slate-850/50">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl border ${conf.bg} ${conf.color} ${conf.border}`}>
+                    <Icon className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -737,207 +832,189 @@ export default function AuditTrailPage() {
                       }`}>
                         {selectedLog.action}
                       </span>
-                      <h3 className="font-extrabold text-slate-900 dark:text-white text-base">
+                      <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
                         {conf.label}: {details.title}
                       </h3>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                      Snapshot ID: {selectedLog.id}
-                    </p>
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-0.5">
+                      <span><strong>By:</strong> {selectedLog.actorEmail}</span>
+                      <span>•</span>
+                      <span>{new Date(selectedLog.timestamp).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedLog(null)}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold p-1"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-base font-bold transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Layman Plain-English Event Explanation Banner */}
-              <div className="bg-gradient-to-r from-slate-50 to-emerald-50/30 dark:from-slate-850 dark:to-emerald-950/20 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                  <Sparkles className="w-4 h-4 text-emerald-500" />
-                  <span>Audit Summary</span>
-                </div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
-                  {details.humanSummary}
-                </p>
-                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-                  <span className="flex items-center gap-1">
-                    <User className="w-3.5 h-3.5 text-slate-400" />
-                    <strong>User:</strong> {selectedLog.actorEmail}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <strong>Time:</strong> {new Date(selectedLog.timestamp).toLocaleString()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Tag className="w-3.5 h-3.5 text-slate-400" />
-                    <strong>Status:</strong> {selectedLog.isRolledBack ? "Rolled Back" : "Active Record"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setDiffModalTab("visual")}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      diffModalTab === "visual"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-                    }`}
-                  >
-                    Visual Field Changes ({parsedDiffFields.length})
-                  </button>
-                  <button
-                    onClick={() => setDiffModalTab("sideBySide")}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      diffModalTab === "sideBySide"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-                    }`}
-                  >
-                    Before / After Comparison
-                  </button>
-                  <button
-                    onClick={() => setDiffModalTab("json")}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      diffModalTab === "json"
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-                    }`}
-                  >
-                    Raw Data (JSON)
-                  </button>
+              {/* 2. Modal Body (Single, Clean Scrollable Container) */}
+              <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+                
+                {/* Clean Plain-English Event Explanation */}
+                <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5">
+                  <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <div className="text-slate-800 dark:text-slate-200 font-semibold leading-relaxed">
+                    {details.humanSummary}
+                  </div>
                 </div>
 
-                {diffModalTab === "json" && (
-                  <button
-                    onClick={() =>
-                      copyToClipboard(
-                        JSON.stringify(
-                          {
-                            diff: selectedLog.diff ? JSON.parse(selectedLog.diff) : null,
-                            beforeState: selectedLog.beforeState ? JSON.parse(selectedLog.beforeState) : null,
-                            afterState: selectedLog.afterState ? JSON.parse(selectedLog.afterState) : null,
-                          },
-                          null,
-                          2
+                {/* Navigation View Switcher */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setDiffModalTab("visual")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        diffModalTab === "visual"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                      }`}
+                    >
+                      Changes Made ({parsedDiffFields.length})
+                    </button>
+                    <button
+                      onClick={() => setDiffModalTab("sideBySide")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        diffModalTab === "sideBySide"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                      }`}
+                    >
+                      Before / After
+                    </button>
+                    <button
+                      onClick={() => setDiffModalTab("json")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        diffModalTab === "json"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
+                      }`}
+                    >
+                      Raw Data
+                    </button>
+                  </div>
+
+                  {diffModalTab === "json" && (
+                    <button
+                      onClick={() =>
+                        copyToClipboard(
+                          JSON.stringify(
+                            {
+                              diff: selectedLog.diff ? JSON.parse(selectedLog.diff) : null,
+                              beforeState: selectedLog.beforeState ? JSON.parse(selectedLog.beforeState) : null,
+                              afterState: selectedLog.afterState ? JSON.parse(selectedLog.afterState) : null,
+                            },
+                            null,
+                            2
+                          )
                         )
-                      )
-                    }
-                    className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-bold"
-                  >
-                    {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedJson ? "Copied" : "Copy Payload"}
-                  </button>
-                )}
-              </div>
-
-              {/* Tab 1: Visual Field Cards (Layman Friendly) */}
-              {diffModalTab === "visual" && (
-                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
-                  {parsedDiffFields.length === 0 ? (
-                    <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                        {selectedLog.action === "CREATE"
-                          ? "New Record Created"
-                          : "No Specific Field Discrepancies"}
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                        {selectedLog.action === "CREATE"
-                          ? "All fields were initialized during record creation. Switch to the Before / After tab to view full object state."
-                          : "The action was executed without changing discrete scalar fields."}
-                      </p>
-                    </div>
-                  ) : (
-                    parsedDiffFields.map((field, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-2 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors"
-                      >
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
-                          <span className="flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5 text-emerald-500" />
-                            {field.label}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400">Field: {field.key}</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-                          {/* Old Value */}
-                          <div className="p-2.5 bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-xl space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
-                              Previous / Before:
-                            </span>
-                            <div className="text-slate-700 dark:text-slate-300">
-                              {formatDisplayValue(field.oldVal)}
-                            </div>
-                          </div>
-
-                          {/* New Value */}
-                          <div className="p-2.5 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
-                              New / After:
-                            </span>
-                            <div className="text-slate-800 dark:text-slate-100 font-bold">
-                              {formatDisplayValue(field.newVal)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                      }
+                      className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-bold"
+                    >
+                      {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedJson ? "Copied" : "Copy Payload"}
+                    </button>
                   )}
                 </div>
-              )}
 
-              {/* Tab 2: Side-by-Side Comparison */}
-              {diffModalTab === "sideBySide" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[50vh] overflow-y-auto pr-1 text-xs">
-                  {/* Before State */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-rose-100 dark:bg-rose-950/80 p-2.5 rounded-xl text-rose-800 dark:text-rose-200 font-bold border border-rose-200 dark:border-rose-800">
-                      <span>BEFORE STATE</span>
-                      <span className="text-[10px] font-mono">Original</span>
-                    </div>
-                    {selectedLog.beforeState ? (
-                      <pre className="p-3 bg-slate-950 text-rose-300 rounded-xl text-[11px] font-mono overflow-x-auto whitespace-pre-wrap max-h-72 leading-relaxed">
-                        {JSON.stringify(JSON.parse(selectedLog.beforeState), null, 2)}
-                      </pre>
-                    ) : (
-                      <div className="p-8 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed">
-                        No previous state (New record creation)
+                {/* TAB 1: Visual Human-Friendly Field Cards */}
+                {diffModalTab === "visual" && (
+                  <div className="space-y-3">
+                    {parsedDiffFields.length === 0 ? (
+                      <div className="p-6 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                        <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1.5" />
+                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {selectedLog.action === "CREATE"
+                            ? "New Record Successfully Created"
+                            : "No Modified Fields"}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {selectedLog.action === "CREATE"
+                            ? "All fields were cleanly recorded. Switch to Before/After tab to inspect full record snapshot."
+                            : "The operation completed without field changes."}
+                        </p>
                       </div>
+                    ) : (
+                      parsedDiffFields.map((field, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+                            <span className="flex items-center gap-1.5">
+                              <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                              {field.label}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {/* Old Value */}
+                            <div className="p-2.5 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200/80 dark:border-rose-900/60 rounded-lg space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
+                                Before / Previous:
+                              </span>
+                              <div>{renderHumanValue(field.key, field.oldVal)}</div>
+                            </div>
+
+                            {/* New Value */}
+                            <div className="p-2.5 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/60 rounded-lg space-y-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                                After / New:
+                              </span>
+                              <div>{renderHumanValue(field.key, field.newVal)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
+                )}
 
-                  {/* After State */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between bg-emerald-100 dark:bg-emerald-950/80 p-2.5 rounded-xl text-emerald-800 dark:text-emerald-200 font-bold border border-emerald-200 dark:border-emerald-800">
-                      <span>AFTER STATE</span>
-                      <span className="text-[10px] font-mono">Updated</span>
-                    </div>
-                    {selectedLog.afterState ? (
-                      <pre className="p-3 bg-slate-950 text-emerald-300 rounded-xl text-[11px] font-mono overflow-x-auto whitespace-pre-wrap max-h-72 leading-relaxed">
-                        {JSON.stringify(JSON.parse(selectedLog.afterState), null, 2)}
-                      </pre>
-                    ) : (
-                      <div className="p-8 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed">
-                        Record was deleted
+                {/* TAB 2: Clean Side-by-Side Snapshot View */}
+                {diffModalTab === "sideBySide" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* Before */}
+                    <div className="space-y-1.5">
+                      <div className="bg-rose-50 dark:bg-rose-950/60 p-2 rounded-lg text-rose-800 dark:text-rose-200 font-bold border border-rose-200 text-xs flex justify-between">
+                        <span>BEFORE STATE</span>
+                        <span className="text-[10px] font-mono">Original</span>
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                      {selectedLog.beforeState ? (
+                        <pre className="p-3 bg-slate-950 text-rose-300 rounded-xl text-[11px] font-mono overflow-x-auto whitespace-pre-wrap max-h-56 leading-relaxed">
+                          {JSON.stringify(JSON.parse(selectedLog.beforeState), null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed text-xs">
+                          No previous state (New Record)
+                        </div>
+                      )}
+                    </div>
 
-              {/* Tab 3: Raw JSON */}
-              {diffModalTab === "json" && (
-                <div className="space-y-3 max-h-[50vh] overflow-y-auto">
-                  <pre className="p-4 bg-slate-950 text-emerald-400 rounded-2xl text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-72 leading-relaxed border border-slate-800">
+                    {/* After */}
+                    <div className="space-y-1.5">
+                      <div className="bg-emerald-50 dark:bg-emerald-950/60 p-2 rounded-lg text-emerald-800 dark:text-emerald-200 font-bold border border-emerald-200 text-xs flex justify-between">
+                        <span>AFTER STATE</span>
+                        <span className="text-[10px] font-mono">Updated</span>
+                      </div>
+                      {selectedLog.afterState ? (
+                        <pre className="p-3 bg-slate-950 text-emerald-300 rounded-xl text-[11px] font-mono overflow-x-auto whitespace-pre-wrap max-h-56 leading-relaxed">
+                          {JSON.stringify(JSON.parse(selectedLog.afterState), null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed text-xs">
+                          Record was deleted
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: Raw JSON */}
+                {diffModalTab === "json" && (
+                  <pre className="p-3 bg-slate-950 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-56 leading-relaxed border border-slate-800">
                     {JSON.stringify(
                       {
                         entityName: selectedLog.entityName,
@@ -953,26 +1030,26 @@ export default function AuditTrailPage() {
                       2
                     )}
                   </pre>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* Rollback Safety Guidance & Action Button */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              {/* 3. Modal Bottom Footer (Fixed at bottom) */}
+              <div className="p-3.5 sm:p-4 border-t border-slate-100 dark:border-slate-800 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50 dark:bg-slate-850/50">
                 <div className="text-xs text-slate-500">
                   {!selectedLog.isRolledBack && selectedLog.action !== "ROLLBACK" ? (
-                    <span className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      Rolling back will accurately restore database records, stock levels, and ledger finances.
+                    <span className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1 text-[11px]">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Rolling back will accurately restore warehouse inventory and ledger finances.
                     </span>
                   ) : (
-                    <span className="text-slate-400 italic">This snapshot has already been rolled back.</span>
+                    <span className="text-slate-400 italic text-[11px]">This event has already been rolled back.</span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     onClick={() => setSelectedLog(null)}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 transition-colors"
+                    className="px-4 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors"
                   >
                     Close
                   </button>
@@ -980,14 +1057,15 @@ export default function AuditTrailPage() {
                     <button
                       onClick={() => handleRollback(selectedLog.id)}
                       disabled={rollbackLoading}
-                      className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center gap-2"
+                      className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-all shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                     >
                       {rollbackLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                      Confirm Multi-Table Rollback
+                      Confirm Rollback
                     </button>
                   )}
                 </div>
               </div>
+
             </div>
           </div>
         );
