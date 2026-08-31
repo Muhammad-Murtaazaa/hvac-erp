@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   const deliveryOrders = await prisma.deliveryOrder.findMany({
     where: whereClause,
     include: {
+      customer: true,
       lineItems: {
         include: {
           product: true,

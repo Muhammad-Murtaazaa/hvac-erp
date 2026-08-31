@@ -60,6 +60,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       discount: reqDiscount,
       discountAmount: reqDiscountAmount,
       taxRate: reqTaxRate,
+      site,
     } = body;
 
     const existingQuotation = await prisma.quotation.findUnique({
@@ -177,6 +178,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         discountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        site: site ? String(site).trim() : "",
       });
 
       // 4. Delete old line items and replace

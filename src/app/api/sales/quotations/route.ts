@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       discount: reqDiscount,
       discountAmount: reqDiscountAmount,
       taxRate: reqTaxRate,
+      site,
     } = body;
 
     const finalClientName = (clientName || "").trim();
@@ -185,6 +186,7 @@ export async function POST(req: Request) {
         discountAmount,
         subtotalAmount,
         totalAmount: finalTotalAmount,
+        site: site ? String(site).trim() : "",
       });
 
       // 5. Create Quotation Record (Zero Ledger, Zero Stock Deduction)

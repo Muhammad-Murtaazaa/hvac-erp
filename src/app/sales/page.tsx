@@ -193,6 +193,7 @@ function SalesPageContent() {
   const [quoDiscountValue, setQuoDiscountValue] = useState("0");
   const [quoSubjectHeading, setQuoSubjectHeading] = useState("");
   const [quoSubjectDescription, setQuoSubjectDescription] = useState("");
+  const [quoSite, setQuoSite] = useState("");
   const [submittingQuotation, setSubmittingQuotation] = useState(false);
   const [quotationError, setQuotationError] = useState("");
 
@@ -200,6 +201,7 @@ function SalesPageContent() {
   const [editQuoClientName, setEditQuoClientName] = useState("");
   const [editQuoClientPhone, setEditQuoClientPhone] = useState("");
   const [editQuoClientAddress, setEditQuoClientAddress] = useState("");
+  const [editQuoSite, setEditQuoSite] = useState("");
   const [editQuoCustomerId, setEditQuoCustomerId] = useState<string | null>(null);
   const [editQuoDate, setEditQuoDate] = useState("");
   const [editQuoValidUntil, setEditQuoValidUntil] = useState("");
@@ -851,6 +853,7 @@ function SalesPageContent() {
           discountType: quoDiscountType,
           discountPercent: quoDiscountType === "PERCENTAGE" ? discVal : 0,
           discountAmount: quoDiscountType === "FIXED" ? discVal : 0,
+          site: quoSite.trim() || undefined,
         }),
       });
 
@@ -862,6 +865,7 @@ function SalesPageContent() {
       setQuoClientName("");
       setQuoClientPhone("");
       setQuoClientAddress("");
+      setQuoSite("");
       setQuoCustomerId(null);
       setQuoDate("");
       setQuoValidUntil("");
@@ -894,6 +898,7 @@ function SalesPageContent() {
 
     const meta = parseInvoiceMetadata(quo.notes, quo);
     setEditQuoNotes(meta.userNotes || "");
+    setEditQuoSite(meta.site || (quo as any).site || "");
     setEditQuoIsGst(meta.isGst);
     setEditQuoSalesTaxRate(meta.taxRate || salesTaxRate || 18);
     setEditQuoDiscountType(meta.discountType || "FIXED");
@@ -992,6 +997,7 @@ function SalesPageContent() {
           discountType: editQuoDiscountType,
           discountPercent: editQuoDiscountType === "PERCENTAGE" ? discVal : 0,
           discountAmount: editQuoDiscountType === "FIXED" ? discVal : 0,
+          site: editQuoSite.trim() || undefined,
         }),
       });
 
@@ -3709,17 +3715,29 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                    Client Premises / Delivery Address
+                    Customer / Head Office Address
                   </label>
                   <input
                     type="text"
-                    placeholder="Factory, site, or project location"
+                    placeholder="e.g. Office #10, Commercial Zone"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={quoClientAddress}
                     onChange={(e) => setQuoClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Site / Delivery Location (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Factory, site, or project location"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={quoSite}
+                    onChange={(e) => setQuoSite(e.target.value)}
                   />
                 </div>
                 <div>
@@ -4121,16 +4139,28 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                    Premises / Site Address
+                    Customer / Head Office Address
                   </label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     value={editQuoClientAddress}
                     onChange={(e) => setEditQuoClientAddress(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                    Site / Delivery Location (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Factory or project site"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editQuoSite}
+                    onChange={(e) => setEditQuoSite(e.target.value)}
                   />
                 </div>
                 <div>
@@ -4520,12 +4550,10 @@ function SalesPageContent() {
                     label="Recipient Customer / Client"
                     value={doClientName}
                     phoneValue={doClientPhone}
-                    addressValue={doAddress}
                     includeVendors={true}
                     onChange={(c) => {
                       setDoClientName(c.name);
                       if (c.phone) setDoClientPhone(c.phone);
-                      if (c.address) setDoAddress(c.address);
                       setSelectedCustomerId(c.id || null);
                     }}
                   />
@@ -4547,11 +4575,13 @@ function SalesPageContent() {
               {/* Delivery Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start mt-4">
                 <div>
-                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">Delivery Address</label>
+                  <label className="flex items-end text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 min-h-[32px]">
+                    Delivery Destination Address <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Warehouse 14, Karachi"
+                    placeholder="e.g. Site #4, Warehouse 14, Lahore"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm"
                     value={doAddress}
                     onChange={(e) => setDoAddress(e.target.value)}
@@ -4593,7 +4623,10 @@ function SalesPageContent() {
                         if (inv) {
                           setDoClientName(inv.clientName);
                           setDoClientPhone(inv.clientPhone || "");
-                          setDoAddress(inv.clientAddress || "");
+                          const invMeta = parseInvoiceMetadata(inv.notes, inv);
+                          if (invMeta.site) {
+                            setDoAddress(invMeta.site);
+                          }
                           if (inv.customerId) setSelectedCustomerId(inv.customerId);
                           
                           if (inv.lineItems && inv.lineItems.length > 0) {
@@ -4827,12 +4860,10 @@ function SalesPageContent() {
                     label="Recipient Customer / Client"
                     value={editDoClientName}
                     phoneValue={editDoClientPhone}
-                    addressValue={editDoAddress}
                     includeVendors={true}
                     onChange={(c) => {
                       setEditDoClientName(c.name);
                       if (c.phone) setEditDoClientPhone(c.phone);
-                      if (c.address) setEditDoAddress(c.address);
                     }}
                   />
                 </div>

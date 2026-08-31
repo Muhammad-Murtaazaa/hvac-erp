@@ -34,6 +34,7 @@ export async function GET(req: Request) {
       const quotation = await prisma.quotation.findUnique({
         where: { id: id! },
         include: {
+          customer: true,
           lineItems: { include: { product: true } },
         },
       });
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
       const invoice = await prisma.invoice.findUnique({
         where: { id: id! },
         include: {
+          customer: true,
           lineItems: { include: { product: true } },
           deliveryOrder: true,
           complaint: true,
@@ -56,6 +58,7 @@ export async function GET(req: Request) {
       const doRecord = await prisma.deliveryOrder.findUnique({
         where: { id: id! },
         include: {
+          customer: true,
           lineItems: { include: { product: true } },
           invoices: {
             select: {

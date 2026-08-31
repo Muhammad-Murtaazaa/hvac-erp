@@ -14,6 +14,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     const doRecord = await prisma.deliveryOrder.findUnique({
       where: { id: params.id },
       include: {
+        customer: true,
         lineItems: {
           include: {
             product: true,
