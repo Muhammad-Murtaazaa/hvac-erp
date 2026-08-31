@@ -219,9 +219,9 @@ export default function DeliveryOrderPdfPage() {
             DELIVERY NOTE
           </h2>
 
-          {/* Client Metadata block + QR Code */}
-          <div className="grid grid-cols-3 gap-6 text-[13px] mb-5 font-bold items-start text-black">
-            <div className="space-y-1 col-span-1">
+          {/* Client Metadata block */}
+          <div className="grid grid-cols-2 gap-8 text-[13px] mb-5 font-bold items-start text-black">
+            <div className="space-y-1">
               <div>
                 <span className="text-black font-bold">To:</span>{" "}
                 <span className="text-black uppercase font-extrabold">{doRecord.clientName}</span>
@@ -249,22 +249,7 @@ export default function DeliveryOrderPdfPage() {
               </div>
             </div>
 
-            {/* QR Code Verification Box */}
-            <div className="col-span-1 flex flex-col items-center justify-center p-2 border-2 border-black rounded-xl bg-slate-50 text-center">
-              {qrDataUrl ? (
-                <>
-                  <img src={qrDataUrl} alt="Delivery QR Code" className="w-24 h-24 object-contain" />
-                  <span className="text-[9px] font-black uppercase text-black mt-1 tracking-tight">
-                    Scan on Delivery to Confirm
-                  </span>
-                  <span className="text-[8px] text-black font-semibold">Auto-updates ERP status</span>
-                </>
-              ) : (
-                <div className="w-24 h-24 flex items-center justify-center text-black text-[9px] font-bold">Generating QR...</div>
-              )}
-            </div>
-
-            <div className="flex flex-col items-end text-right space-y-1 col-span-1">
+            <div className="flex flex-col items-end text-right space-y-1.5">
               <div>
                 <span className="text-black font-bold">Date:</span>{" "}
                 <span className="text-black font-extrabold">{formatDateDisplay(doRecord.date, "en-GB")}</span>
@@ -329,35 +314,50 @@ export default function DeliveryOrderPdfPage() {
             </table>
           </div>
 
-          {/* Signatures and Receivers Section */}
-          <div className="grid grid-cols-3 gap-6 text-[13px] font-bold mt-8 mb-4 items-end text-black">
-            <div className="flex flex-col justify-end">
-              <div className="border-t-2 border-black pt-2 w-44 text-black font-bold">
+          {/* Signatures, Receivers, and Bottom-Right QR Section */}
+          <div className="grid grid-cols-12 gap-4 text-[13px] font-bold mt-8 mb-4 items-end text-black">
+            <div className="col-span-3 flex flex-col justify-end">
+              <div className="border-t-2 border-black pt-2 w-full text-black font-bold">
                 Prepared By
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-end text-center">
+            <div className="col-span-3 flex flex-col items-center justify-end text-center">
               {/* Stamp space */}
-              <div className="w-24 h-24 border-2 border-dashed border-black rounded-full flex items-center justify-center text-[10px] text-black font-bold uppercase tracking-widest leading-none mb-1 select-none">
+              <div className="w-20 h-20 border-2 border-dashed border-black rounded-full flex items-center justify-center text-[9px] text-black font-bold uppercase tracking-widest leading-none mb-1 select-none">
                 Stamp / Sign
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h5 className="font-black text-black mb-2 uppercase">Received By</h5>
-              <div className="flex justify-between border-b border-black pb-0.5">
+            <div className="col-span-4 space-y-1.5">
+              <h5 className="font-black text-black mb-1 uppercase text-xs">Received By</h5>
+              <div className="flex justify-between border-b border-black pb-0.5 text-xs">
                 <span className="text-black font-bold">Name:</span>
-                <span>_________________</span>
+                <span>_______________</span>
               </div>
-              <div className="flex justify-between border-b border-black pb-0.5">
+              <div className="flex justify-between border-b border-black pb-0.5 text-xs">
                 <span className="text-black font-bold">Mobile:</span>
-                <span>_________________</span>
+                <span>_______________</span>
               </div>
-              <div className="flex justify-between border-b border-black pb-0.5">
+              <div className="flex justify-between border-b border-black pb-0.5 text-xs">
                 <span className="text-black font-bold">CNIC:</span>
-                <span>_________________</span>
+                <span>_______________</span>
               </div>
+            </div>
+
+            {/* QR Code Verification Box in Bottom Right Corner */}
+            <div className="col-span-2 flex flex-col items-center justify-center p-2 border-2 border-black rounded-xl bg-slate-50 text-center">
+              {qrDataUrl ? (
+                <>
+                  <img src={qrDataUrl} alt="Delivery QR Code" className="w-16 h-16 object-contain" />
+                  <span className="text-[7.5px] font-black uppercase text-black mt-1 tracking-tight leading-tight">
+                    Scan on Delivery
+                  </span>
+                  <span className="text-[6.5px] text-black font-semibold leading-tight">Confirm Receipt</span>
+                </>
+              ) : (
+                <div className="w-16 h-16 flex items-center justify-center text-black text-[8px] font-bold">QR Code</div>
+              )}
             </div>
           </div>
 
