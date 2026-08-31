@@ -218,14 +218,6 @@ export default function InvoicePdfPage() {
                     {formatDateDisplay(invoice.date, "en-GB")}
                   </span>
                 </div>
-                {(meta.site || (invoice as any).site) ? (
-                  <div>
-                    <span className="font-bold text-black">Site:</span>{" "}
-                    <span className="font-bold text-black">
-                      {(meta.site || (invoice as any).site).trim()}
-                    </span>
-                  </div>
-                ) : null}
               </div>
             </div>
           </div>
