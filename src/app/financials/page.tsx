@@ -2436,8 +2436,9 @@ function FinancialsPageContent() {
                     required
                     min="1"
                     placeholder="e.g. 50,000"
-                    className="w-full pl-12 pr-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-lg font-mono font-black text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 transition-all shadow-xs"
+                    className="w-full pl-12 pr-3.5 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-lg font-mono font-black text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 transition-all shadow-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={txnAmount}
+                    onWheel={(e) => e.currentTarget.blur()}
                     onChange={(e) => setTxnAmount(e.target.value)}
                   />
                 </div>

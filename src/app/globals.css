@@ -98,6 +98,18 @@
   scrollbar-width: none;
 }
 
+/* Disable default spin buttons (up/down arrows) on all number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Glassmorphism panel styling */
 .glass-panel {
   @apply bg-white/70 dark:bg-slate-900/75 backdrop-blur-md border border-white/20 dark:border-slate-800/60 shadow-lg;
