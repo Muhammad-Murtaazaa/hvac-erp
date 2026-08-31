@@ -799,15 +799,22 @@ function SalesPageContent() {
   const handleCreateQuotationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const formattedLines = quoLines
-      .filter((l) => l.productId || (l.description && l.description.trim()))
+      .filter((l) => l.productId || (l.customName && l.customName.trim()) || (l.description && l.description.trim()))
       .map((l) => {
         const lineUnit = (l.unit || "Nos").trim();
         const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
         extraFieldsObj.unit = lineUnit;
         if (l.isCustom) {
+          const itemName = (l.customName || "").trim();
+          const scopeNotes = (l.description || "").trim();
+          const fullDesc = itemName && scopeNotes && itemName !== scopeNotes
+            ? `${itemName} - ${scopeNotes}`
+            : (itemName || scopeNotes || "Custom Service");
+          extraFieldsObj.customName = itemName;
+          extraFieldsObj.scope = scopeNotes;
           return {
             productId: null,
-            description: (l.description || "").trim(),
+            description: fullDesc,
             quantity: isNaN(parseInt(l.quantity)) ? 1 : Math.max(1, parseInt(l.quantity)),
             salesPrice: isNaN(Number(l.salesPrice)) || !l.salesPrice ? 0 : Number(l.salesPrice),
             unit: lineUnit,
@@ -918,11 +925,23 @@ function SalesPageContent() {
         }
         const unit = parsedExtra.unit || (l.product && l.product.unit) || "Nos";
         const isCustom = !l.productId;
+        let cName = parsedExtra.customName || "";
+        let sDesc = parsedExtra.scope !== undefined ? parsedExtra.scope : (l.description || "");
+        if (isCustom && !cName && l.description) {
+          if (l.description.includes(" - ")) {
+            const parts = l.description.split(" - ");
+            cName = parts[0];
+            sDesc = parts.slice(1).join(" - ");
+          } else {
+            cName = l.description;
+            sDesc = "";
+          }
+        }
         return {
           id: l.id,
           productId: l.productId || "",
-          customName: isCustom ? l.description || "" : "",
-          description: l.description || "",
+          customName: isCustom ? cName : "",
+          description: sDesc,
           quantity: String(l.quantity || 1),
           salesPrice: String(l.salesPrice || 0),
           unit: unit,
@@ -932,7 +951,7 @@ function SalesPageContent() {
       });
       setEditQuoLines(mapped);
     } else {
-      setEditQuoLines([{ productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
+      setEditQuoLines([{ productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }]);
     }
 
     setIsEditQuotationOpen(true);
@@ -942,29 +961,38 @@ function SalesPageContent() {
     e.preventDefault();
     if (!editingQuotation) return;
 
-    const formattedLines = editQuoLines.map((l) => {
-      const lineUnit = (l.unit || "Nos").trim();
-      const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
-      extraFieldsObj.unit = lineUnit;
-      if (l.isCustom) {
+    const formattedLines = editQuoLines
+      .filter((l) => l.productId || (l.customName && l.customName.trim()) || (l.description && l.description.trim()))
+      .map((l) => {
+        const lineUnit = (l.unit || "Nos").trim();
+        const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
+        extraFieldsObj.unit = lineUnit;
+        if (l.isCustom) {
+          const itemName = (l.customName || "").trim();
+          const scopeNotes = (l.description || "").trim();
+          const fullDesc = itemName && scopeNotes && itemName !== scopeNotes
+            ? `${itemName} - ${scopeNotes}`
+            : (itemName || scopeNotes || "Custom Service");
+          extraFieldsObj.customName = itemName;
+          extraFieldsObj.scope = scopeNotes;
+          return {
+            productId: null,
+            description: fullDesc,
+            quantity: l.quantity,
+            salesPrice: l.salesPrice,
+            unit: lineUnit,
+            extraFields: extraFieldsObj,
+          };
+        }
         return {
-          productId: null,
-          description: (l.customName || l.description || "").trim(),
+          productId: l.productId || null,
+          description: (l.description || "").trim(),
           quantity: l.quantity,
           salesPrice: l.salesPrice,
           unit: lineUnit,
           extraFields: extraFieldsObj,
         };
-      }
-      return {
-        productId: l.productId || null,
-        description: (l.description || "").trim(),
-        quantity: l.quantity,
-        salesPrice: l.salesPrice,
-        unit: lineUnit,
-        extraFields: extraFieldsObj,
-      };
-    });
+      });
 
     if (!editQuoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
       setEditQuotationError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
@@ -2557,7 +2585,6 @@ function SalesPageContent() {
                             onChange={(e) => {
                               const updated = [...invLines];
                               updated[index].customName = e.target.value;
-                              updated[index].description = e.target.value;
                               setInvLines(updated);
                             }}
                           />
@@ -2573,7 +2600,9 @@ function SalesPageContent() {
                                 updated[index].description = p.name;
                                 updated[index].unit = p.unit || "Nos";
                                 const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
-                                updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                                if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
+                                  updated[index].salesPrice = defPrice > 0 ? String(defPrice) : "";
+                                }
                               } else {
                                 updated[index].description = "";
                                 updated[index].unit = "Nos";
@@ -2589,10 +2618,9 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          placeholder="Description (Service name)"
-                          required={!line.isCustom}
+                          placeholder="Description (Service / Scope notes)"
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                          value={line.isCustom ? (line.description === line.customName ? "" : line.description) : line.description}
+                          value={line.description || ""}
                           onChange={(e) => {
                             const updated = [...invLines];
                             updated[index].description = e.target.value;
@@ -3156,7 +3184,6 @@ function SalesPageContent() {
                             onChange={(e) => {
                               const updated = [...editInvLines];
                               updated[index].customName = e.target.value;
-                              updated[index].description = e.target.value;
                               setEditInvLines(updated);
                             }}
                           />
@@ -3189,10 +3216,9 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          placeholder="Description (Service name)"
-                          required={!line.isCustom}
+                          placeholder="Description (Service / Scope notes)"
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs"
-                          value={line.isCustom ? (line.description === line.customName ? "" : line.description) : line.description}
+                          value={line.description || ""}
                           onChange={(e) => {
                             const updated = [...editInvLines];
                             updated[index].description = e.target.value;
@@ -3788,14 +3814,14 @@ function SalesPageContent() {
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setQuoLines([...quoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
+                      onClick={() => setQuoLines([...quoLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
                       className="text-xs text-blue-500 hover:underline font-bold"
                     >
                       + Add Catalog Row
                     </button>
                     <button
                       type="button"
-                      onClick={() => setQuoLines([...quoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      onClick={() => setQuoLines([...quoLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
                       className="text-xs text-emerald-500 hover:underline font-bold"
                     >
                       + Add Custom Row
@@ -3822,10 +3848,10 @@ function SalesPageContent() {
                             required
                             placeholder="Custom item name"
                             className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                            value={line.description || ""}
+                            value={line.customName || ""}
                             onChange={(e) => {
                               const updated = [...quoLines];
-                              updated[index].description = e.target.value;
+                              updated[index].customName = e.target.value;
                               setQuoLines(updated);
                             }}
                           />
@@ -3854,7 +3880,6 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          required
                           placeholder="Scope notes, specifications..."
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                           value={line.description || ""}
@@ -4220,14 +4245,14 @@ function SalesPageContent() {
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
+                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: false, extraFields: {} }])}
                       className="text-xs text-blue-500 hover:underline font-bold"
                     >
                       + Add Catalog Row
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      onClick={() => setEditQuoLines([...editQuoLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
                       className="text-xs text-emerald-500 hover:underline font-bold"
                     >
                       + Add Custom Row
@@ -4254,11 +4279,10 @@ function SalesPageContent() {
                             required
                             placeholder="Custom item name"
                             className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
-                            value={line.customName || line.description || ""}
+                            value={line.customName || ""}
                             onChange={(e) => {
                               const updated = [...editQuoLines];
                               updated[index].customName = e.target.value;
-                              updated[index].description = e.target.value;
                               setEditQuoLines(updated);
                             }}
                           />
@@ -4287,7 +4311,6 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          required
                           placeholder="Scope notes, specifications..."
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                           value={line.description || ""}

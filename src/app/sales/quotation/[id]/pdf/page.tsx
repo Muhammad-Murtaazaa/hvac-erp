@@ -262,22 +262,28 @@ export default function QuotationPdfPage() {
               <tbody className="divide-y-2 divide-black">
                 {quotation.lineItems.map((item: any, index: number) => {
                   const lineTotal = Math.round(Number(item.quantity) * Number(item.salesPrice));
-                  let unitName = item.product?.unit;
+                  let extra: any = {};
                   if (item.extraFields) {
                     try {
-                      const extra = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
-                      if (extra && extra.unit) {
-                        unitName = extra.unit;
-                      }
+                      extra = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
                     } catch (e) {}
                   }
-                  if (!unitName) unitName = item.unit || "Nos";
+                  const unitName = extra?.unit || item.product?.unit || item.unit || "Nos";
+                  const displayName = item.product?.name || extra?.customName || item.description || "Service Item";
+                  const subDescription = item.product
+                    ? (item.description && item.description !== item.product.name ? item.description : null)
+                    : (extra?.scope || (item.description && item.description !== displayName ? item.description : null));
 
                   return (
                     <tr key={item.id} className="text-black font-semibold">
                       <td className="p-2 border-r-2 border-black text-center">{index + 1}</td>
                       <td className="p-2 border-r-2 border-black font-mono font-bold">{item.product?.sku || "SERVICE"}</td>
-                      <td className="p-2 border-r-2 border-black font-bold">{item.product?.name || item.description || "Service Item"}</td>
+                      <td className="p-2 border-r-2 border-black">
+                        <div className="font-bold">{displayName}</div>
+                        {subDescription && (
+                          <div className="text-[11px] font-normal text-slate-700 leading-tight mt-0.5">{subDescription}</div>
+                        )}
+                      </td>
                       <td className="p-2 border-r-2 border-black text-center">{unitName}</td>
                       <td className="p-2 border-r-2 border-black text-right font-bold">{item.quantity}</td>
                       <td className="p-2 border-r-2 border-black text-right font-mono font-bold">{Math.round(Number(item.salesPrice)).toLocaleString("en-US")}</td>
