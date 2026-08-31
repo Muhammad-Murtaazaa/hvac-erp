@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
 import { parseDateForStorage } from "@/lib/dateUtils";
+import { ensureCustomer } from "@/lib/customerSync";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -68,45 +69,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const createdQuotation = await prisma.$transaction(async (tx: any) => {
-      // 1. Resolve or create Customer profile strictly by entity/company name
-      let resolvedCustomerId = inputCustomerId || null;
-      if (!resolvedCustomerId && finalClientName) {
-        const existingCust = await tx.customer.findFirst({
-          where: { name: { equals: finalClientName, mode: "insensitive" } },
-        });
-
-        if (existingCust) {
-          resolvedCustomerId = existingCust.id;
-        } else {
-          try {
-            const newCust = await tx.customer.create({
-              data: {
-                name: finalClientName,
-                phone: finalClientPhone || `0300-${Math.floor(1000000 + Math.random() * 9000000)}`,
-                address: finalClientAddress || null,
-              },
-            });
-            resolvedCustomerId = newCust.id;
-          } catch {
-            // Handle unique phone collision if shared with sister company
-            try {
-              const uniquePhone = `${finalClientPhone || "0300-0000000"}-${Math.floor(100 + Math.random() * 900)}`;
-              const newCust = await tx.customer.create({
-                data: {
-                  name: finalClientName,
-                  phone: uniquePhone,
-                  address: finalClientAddress || null,
-                },
-              });
-              resolvedCustomerId = newCust.id;
-            } catch {
-              resolvedCustomerId = null;
-            }
-          }
-        }
+    // 1. Resolve or create Customer profile safely BEFORE transaction
+    let resolvedCustomerId = inputCustomerId || null;
+    if (!resolvedCustomerId && finalClientName) {
+      const cust = await ensureCustomer({
+        name: finalClientName,
+        phone: finalClientPhone || null,
+        address: finalClientAddress || null,
+        notes: "Auto-synced Customer from Quotation",
+      });
+      if (cust) {
+        resolvedCustomerId = cust.id;
       }
+    }
 
+    const createdQuotation = await prisma.$transaction(async (tx: any) => {
       // 2. Generate unique Quotation Number (e.g. QTN-10001)
       const lastQuo = await tx.quotation.findFirst({
         orderBy: { createdAt: "desc" },
