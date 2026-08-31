@@ -656,16 +656,16 @@ export default function AuditTrailPage() {
       {/* Audit Log Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+          <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300 min-w-[920px]">
             <thead className="bg-slate-50 dark:bg-slate-950/80 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="p-3.5">Timestamp</th>
-                <th className="p-3.5">Document / Entity</th>
-                <th className="p-3.5">Details / Target Item</th>
-                <th className="p-3.5">Action</th>
-                <th className="p-3.5">Actor (User)</th>
-                <th className="p-3.5">State</th>
-                <th className="p-3.5 text-right">Actions</th>
+                <th className="py-3.5 pl-4 pr-3 w-36">Timestamp</th>
+                <th className="py-3.5 px-3 w-40">Document / Entity</th>
+                <th className="py-3.5 px-3">Details / Target Item</th>
+                <th className="py-3.5 px-3 w-24 text-center">Action</th>
+                <th className="py-3.5 px-3 w-44">Actor (User)</th>
+                <th className="py-3.5 px-3 w-28 text-center">State</th>
+                <th className="py-3.5 pl-3 pr-5 text-right w-44">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -701,7 +701,7 @@ export default function AuditTrailPage() {
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-850/60 transition-colors group cursor-pointer"
                       onClick={() => setSelectedLog(log)}
                     >
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className="py-3.5 pl-4 pr-3 whitespace-nowrap">
                         <div className="font-semibold text-slate-800 dark:text-slate-200">
                           {new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </div>
@@ -710,14 +710,14 @@ export default function AuditTrailPage() {
                         </div>
                       </td>
 
-                      <td className="p-3.5">
+                      <td className="py-3.5 px-3">
                         <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-xs border ${conf.bg} ${conf.color} ${conf.border}`}>
                           <Icon className="w-3.5 h-3.5" />
                           <span>{conf.label}</span>
                         </div>
                       </td>
 
-                      <td className="p-3.5">
+                      <td className="py-3.5 px-3">
                         <div className="font-bold text-slate-900 dark:text-white max-w-xs truncate flex items-center gap-2">
                           <span>{details.title}</span>
                           {details.amountStr && (
@@ -733,7 +733,7 @@ export default function AuditTrailPage() {
                         )}
                       </td>
 
-                      <td className="p-3.5">
+                      <td className="py-3.5 px-3 text-center">
                         <span
                           className={`px-2.5 py-1 rounded-lg font-black text-[10px] tracking-wider uppercase border ${
                             log.action === "CREATE"
@@ -749,14 +749,14 @@ export default function AuditTrailPage() {
                         </span>
                       </td>
 
-                      <td className="p-3.5 text-slate-700 dark:text-slate-300">
+                      <td className="py-3.5 px-3 text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-1.5 font-medium">
                           <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate max-w-[150px]">{log.actorEmail}</span>
                         </div>
                       </td>
 
-                      <td className="p-3.5">
+                      <td className="py-3.5 px-3 text-center">
                         {log.isRolledBack ? (
                           <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2.5 py-1 rounded-full font-bold border border-slate-200 dark:border-slate-700">
                             <RotateCcw className="w-3 h-3" />
@@ -770,22 +770,24 @@ export default function AuditTrailPage() {
                         )}
                       </td>
 
-                      <td className="p-3.5 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setSelectedLog(log)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs"
-                        >
-                          Inspect Diff
-                        </button>
-                        {!log.isRolledBack && log.action !== "ROLLBACK" && (
+                      <td className="py-3.5 pl-3 pr-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => handleRollback(log.id)}
-                            disabled={rollbackLoading}
-                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                            onClick={() => setSelectedLog(log)}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-2xs"
                           >
-                            Rollback
+                            Inspect Diff
                           </button>
-                        )}
+                          {!log.isRolledBack && log.action !== "ROLLBACK" && (
+                            <button
+                              onClick={() => handleRollback(log.id)}
+                              disabled={rollbackLoading}
+                              className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                            >
+                              Rollback
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
