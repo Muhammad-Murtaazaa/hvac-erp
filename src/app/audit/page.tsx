@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   ShieldCheck,
   RotateCcw,
@@ -253,6 +254,7 @@ const IGNORED_DIFF_KEYS = new Set([
 ]);
 
 export default function AuditTrailPage() {
+  const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [entityFilter, setEntityFilter] = useState("");
@@ -263,6 +265,10 @@ export default function AuditTrailPage() {
   const [copiedJson, setCopiedJson] = useState(false);
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     fetchLogs();
@@ -505,7 +511,7 @@ export default function AuditTrailPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 animate-fadeIn">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Top Header & Overview Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white p-6 rounded-2xl shadow-xl border border-slate-800">
         <div className="flex items-center gap-4">
@@ -799,9 +805,9 @@ export default function AuditTrailPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* PERFECTLY CENTERED, NON-OVERWHELMING INSPECT DIFF MODAL                   */}
+      {/* PERFECTLY CENTERED, NON-OVERWHELMING INSPECT DIFF MODAL (WHOLE WINDOW)    */}
       {/* ========================================================================= */}
-      {selectedLog && (() => {
+      {mounted && selectedLog && createPortal((() => {
         const conf = ENTITY_CONFIG[selectedLog.entityName] || {
           label: selectedLog.entityName,
           icon: Database,
@@ -813,7 +819,7 @@ export default function AuditTrailPage() {
         const details = parseSnapshotDetails(selectedLog);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-6 backdrop-blur-xs animate-fadeIn">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 sm:p-6 backdrop-blur-xs">
             {/* Modal Container: Fixed Max Height, Flex Column, Strictly Centered */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
               
@@ -1071,7 +1077,7 @@ export default function AuditTrailPage() {
             </div>
           </div>
         );
-      })()}
+      })(), document.body)}
     </div>
   );
 }
