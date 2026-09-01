@@ -831,8 +831,8 @@ function SalesPageContent() {
         };
       });
 
-    if (!quoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
-      setQuotationError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
+    if (!quoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => (!l.productId && !l.description) || !l.quantity || isNaN(Number(l.salesPrice)) || Number(l.salesPrice) < 0)) {
+      setQuotationError("Please enter client details and fill out all item lines with valid products/items, quantities and rates.");
       return;
     }
 
@@ -937,6 +937,9 @@ function SalesPageContent() {
             sDesc = "";
           }
         }
+        if (!isCustom && l.product && sDesc === l.product.name) {
+          sDesc = "";
+        }
         return {
           id: l.id,
           productId: l.productId || "",
@@ -994,8 +997,8 @@ function SalesPageContent() {
         };
       });
 
-    if (!editQuoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
-      setEditQuotationError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
+    if (!editQuoClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => (!l.productId && !l.description) || !l.quantity || isNaN(Number(l.salesPrice)) || Number(l.salesPrice) < 0)) {
+      setEditQuotationError("Please enter client details and fill out all item lines with valid products/items, quantities and rates.");
       return;
     }
 
@@ -3864,7 +3867,6 @@ function SalesPageContent() {
                               const updated = [...quoLines];
                               updated[index].productId = p ? p.id : "";
                               if (p) {
-                                updated[index].description = p.name;
                                 updated[index].unit = p.unit || "Nos";
                                 const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
                                 if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
@@ -3880,7 +3882,7 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          placeholder="Scope notes, specifications..."
+                          placeholder="Scope notes, specifications (optional)..."
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                           value={line.description || ""}
                           onChange={(e) => {
@@ -4295,7 +4297,6 @@ function SalesPageContent() {
                               const updated = [...editQuoLines];
                               updated[index].productId = p ? p.id : "";
                               if (p) {
-                                updated[index].description = p.name;
                                 updated[index].unit = p.unit || "Nos";
                                 const defPrice = Number(p.salesPrice) > 0 ? Number(p.salesPrice) : Number(p.averageCost || 0);
                                 if (!updated[index].salesPrice || Number(updated[index].salesPrice) === 0) {
@@ -4311,7 +4312,7 @@ function SalesPageContent() {
                       <div className="sm:col-span-3">
                         <input
                           type="text"
-                          placeholder="Scope notes, specifications..."
+                          placeholder="Scope notes, specifications (optional)..."
                           className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                           value={line.description || ""}
                           onChange={(e) => {

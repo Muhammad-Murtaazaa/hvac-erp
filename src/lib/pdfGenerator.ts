@@ -1555,6 +1555,12 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
         
         y += 20;
 
+        if (item.product && item.description && item.description.trim() && item.description.trim() !== item.product.name) {
+          doc.fontSize(8).fillColor("#6b7280").text(`  • Scope: ${item.description.trim()}`, 50, y, { width: 240 });
+          doc.fillColor("#1f2937");
+          y += 12;
+        }
+
         if (item.extraFields) {
           try {
             const fields = typeof item.extraFields === "string" ? JSON.parse(item.extraFields) : item.extraFields;
