@@ -6,6 +6,7 @@ import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 import { formatDateDisplay } from "@/lib/dateUtils";
+import { buildPdfFileName } from "@/lib/pdfFileName";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -48,6 +49,14 @@ export default function InvoicePdfPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load invoice details");
         setInvoice(data.invoice);
+        if (data.invoice) {
+          document.title = buildPdfFileName({
+            docType: "Invoice",
+            partyName: data.invoice.customer?.name || data.invoice.clientName || "Customer",
+            reference: data.invoice.invoiceNumber || data.invoice.id,
+            extension: false,
+          });
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {

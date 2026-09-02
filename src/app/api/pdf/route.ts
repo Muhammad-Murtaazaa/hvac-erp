@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { generateInvoicePDF, generateQuotationPDF, generateDeliveryOrderPDF, generatePayslipPDF, generateComplaintPDF, generateEmployeeFormPDF, generateSOAPDF, generateMonthlySalarySheetPDF, generateStockValuationPDF } from "@/lib/pdfGenerator";
+import {
+  generateInvoicePDF,
+  generateQuotationPDF,
+  generateDeliveryOrderPDF,
+  generatePurchaseOrderPDF,
+  generatePayslipPDF,
+  generateComplaintPDF,
+  generateEmployeeFormPDF,
+  generateSOAPDF,
+  generateMonthlySalarySheetPDF,
+  generateStockValuationPDF,
+} from "@/lib/pdfGenerator";
 import { getPartyLedgerReportData } from "@/lib/partyLedger";
+import { buildPdfFileName, buildContentDispositionHeader } from "@/lib/pdfFileName";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +23,7 @@ export async function GET(req: Request) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type"); // invoice, quotation, do, payslip, complaint, employee-form, soa, salary-sheet, stock-valuation
+    const type = searchParams.get("type"); // invoice, quotation, do, po, purchase-order, payslip, complaint, employee-form, soa, salary-sheet, stock-valuation
     const id = searchParams.get("id");
 
     if (!type) {
@@ -28,7 +40,7 @@ export async function GET(req: Request) {
     }
 
     let pdfBuffer: Buffer;
-    let fileName = `${type}-${id || "doc"}.pdf`;
+    let fileName = `Document_${id || "export"}.pdf`;
 
     if (type === "quotation") {
       const quotation = await prisma.quotation.findUnique({
@@ -40,7 +52,11 @@ export async function GET(req: Request) {
       });
       if (!quotation) return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
       pdfBuffer = await generateQuotationPDF(quotation);
-      fileName = `quotation-${quotation.quotationNumber}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Quotation",
+        partyName: quotation.customer?.name || quotation.clientName || "Customer",
+        reference: quotation.quotationNumber || quotation.id,
+      });
     } else if (type === "invoice") {
       const invoice = await prisma.invoice.findUnique({
         where: { id: id! },
@@ -53,7 +69,11 @@ export async function GET(req: Request) {
       });
       if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
       pdfBuffer = await generateInvoicePDF(invoice);
-      fileName = `invoice-${invoice.invoiceNumber}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Invoice",
+        partyName: invoice.customer?.name || invoice.clientName || "Customer",
+        reference: invoice.invoiceNumber || invoice.id,
+      });
     } else if (type === "do") {
       const doRecord = await prisma.deliveryOrder.findUnique({
         where: { id: id! },
@@ -68,13 +88,33 @@ export async function GET(req: Request) {
         },
       });
       if (!doRecord) return NextResponse.json({ error: "Delivery Order not found" }, { status: 404 });
-      
+
       const proto = req.headers.get("x-forwarded-proto") || (req.headers.get("host")?.includes("localhost") ? "http" : "https");
       const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
       const baseUrl = host ? `${proto}://${host}` : undefined;
 
       pdfBuffer = await generateDeliveryOrderPDF(doRecord, baseUrl);
-      fileName = `delivery-order-${doRecord.doNumber}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "DO",
+        partyName: doRecord.customer?.name || "Customer",
+        reference: doRecord.doNumber || doRecord.id,
+      });
+    } else if (type === "po" || type === "purchase-order") {
+      const poRecord = await prisma.purchaseOrder.findUnique({
+        where: { id: id! },
+        include: {
+          vendor: true,
+          lineItems: { include: { product: true } },
+        },
+      });
+      if (!poRecord) return NextResponse.json({ error: "Purchase Order not found" }, { status: 404 });
+
+      pdfBuffer = await generatePurchaseOrderPDF(poRecord);
+      fileName = buildPdfFileName({
+        docType: "PO",
+        partyName: poRecord.vendor?.name || "Vendor",
+        reference: poRecord.poNumber || poRecord.id,
+      });
     } else if (type === "payslip") {
       const payslip: any = await prisma.payrollRun.findUnique({
         where: { id: id! },
@@ -82,7 +122,13 @@ export async function GET(req: Request) {
       });
       if (!payslip) return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
       pdfBuffer = await generatePayslipPDF(payslip);
-      fileName = `payslip-${(payslip.employee?.name || "staff").replace(/\s+/g, "_")}-${payslip.month}-${payslip.year}.pdf`;
+      const empName = payslip.employee?.name || "Staff";
+      const empNo = payslip.employee?.employeeNo;
+      fileName = buildPdfFileName({
+        docType: "Payslip",
+        partyName: empName,
+        reference: empNo ? `${empNo}_${payslip.month}-${payslip.year}` : `${payslip.month}-${payslip.year}`,
+      });
     } else if (type === "complaint") {
       const complaint = await prisma.complaint.findUnique({
         where: { id: id! },
@@ -90,14 +136,22 @@ export async function GET(req: Request) {
       });
       if (!complaint) return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
       pdfBuffer = await generateComplaintPDF(complaint);
-      fileName = `complaint-sheet-${complaint.complaintNumber}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Complaint",
+        partyName: complaint.customerName || "Customer",
+        reference: complaint.complaintNumber || complaint.id,
+      });
     } else if (type === "employee-form") {
       const employee = await prisma.employee.findUnique({
         where: { id: id! },
       });
       if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
       pdfBuffer = await generateEmployeeFormPDF(employee);
-      fileName = `employment-form-${employee.name.replace(/\s+/g, "_")}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Employment_Form",
+        partyName: employee.name || "Employee",
+        reference: employee.employeeNo || employee.id,
+      });
     } else if (type === "salary-sheet") {
       const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
       const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
@@ -151,7 +205,11 @@ export async function GET(req: Request) {
       });
 
       pdfBuffer = await generateMonthlySalarySheetPDF({ month, year, monthName, items });
-      fileName = `salary-sheet-${monthName}-${year}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Salary_Sheet",
+        partyName: "Technicool",
+        reference: `${monthName}_${year}`,
+      });
     } else if (type === "soa") {
       const rawPartyType = searchParams.get("partyType")?.toUpperCase();
       const partyType =
@@ -176,7 +234,13 @@ export async function GET(req: Request) {
       });
 
       pdfBuffer = await generateSOAPDF(soaReport);
-      fileName = `statement-of-account-${(soaReport.partyInfo?.name || "party").replace(/\s+/g, "_")}.pdf`;
+      const targetPartyName = soaReport.partyInfo?.name || partyName || "Party";
+      const periodLabel = startDateStr && endDateStr ? `${startDateStr}_to_${endDateStr}` : (startDateStr || endDateStr || "Statement");
+      fileName = buildPdfFileName({
+        docType: `SOA_${partyType}`,
+        partyName: targetPartyName,
+        reference: periodLabel,
+      });
     } else if (type === "stock-valuation" || type === "stock") {
       const products = await prisma.product.findMany({
         where: {
@@ -213,7 +277,11 @@ export async function GET(req: Request) {
         totalItemsCount,
         items,
       });
-      fileName = `stock-asset-valuation-${new Date().toISOString().slice(0, 10)}.pdf`;
+      fileName = buildPdfFileName({
+        docType: "Stock_Valuation_Report",
+        partyName: "Technicool",
+        reference: new Date().toISOString().slice(0, 10),
+      });
     } else {
       return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
     }
@@ -223,7 +291,7 @@ export async function GET(req: Request) {
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": inline ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`,
+        "Content-Disposition": buildContentDispositionHeader(fileName, inline),
       },
     });
   } catch (error: any) {

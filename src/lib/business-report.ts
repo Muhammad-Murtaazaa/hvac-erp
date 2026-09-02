@@ -1,6 +1,7 @@
 import prisma from "./db";
 import { generateBusinessSummaryPDF, BusinessSummaryData } from "./pdfGenerator";
 import { sendMail } from "./mail";
+import { buildPdfFileName } from "./pdfFileName";
 
 export async function compileBusinessData(scopeTitle = "Executive Business Performance Dossier"): Promise<BusinessSummaryData> {
   // 1. Financials & Invoices
@@ -100,7 +101,11 @@ export async function sendBusinessReportPDF(recipientEmail: string, reportTitle 
   const pdfBuffer = await generateBusinessSummaryPDF(businessData);
 
   const dateStr = new Date().toISOString().split("T")[0];
-  const filename = `TCE_Business_Report_${dateStr}.pdf`;
+  const filename = buildPdfFileName({
+    docType: "Business_Report",
+    partyName: "Technicool",
+    reference: dateStr,
+  });
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">

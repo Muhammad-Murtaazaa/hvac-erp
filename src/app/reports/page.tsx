@@ -1051,7 +1051,7 @@ function ReportsContent() {
                     </button>
                     <a
                       href="/api/pdf?type=stock-valuation"
-                      download={`stock-valuation-${new Date().toISOString().slice(0, 10)}.pdf`}
+                      download={`Stock_Valuation_Report_Technicool_${new Date().toISOString().slice(0, 10)}.pdf`}
                       className="p-2.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-2xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-1.5"
                       title="Direct File Download"
                     >

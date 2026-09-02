@@ -3,6 +3,7 @@ import fs from "fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { parseInvoiceMetadata } from "./invoiceHelper";
+import { parsePoMetadata } from "./poHelper";
 import { formatDateDisplay } from "./dateUtils";
 
 // Setup font paths dynamically using absolute path resolution
@@ -1825,5 +1826,153 @@ export function generateStockValuationPDF(data: {
   });
 }
 
+export function generatePurchaseOrderPDF(poData: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
+      const chunks: Buffer[] = [];
 
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", (err) => reject(err));
 
+      registerAppFonts(doc);
+
+      // TCE Logo
+      let logoLoaded = false;
+      try {
+        let logoPath = path.resolve("LOGO.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve("public/logo.png");
+        }
+        if (fs.existsSync(logoPath)) {
+          doc.image(logoPath, 50, 40, { width: 70 });
+          logoLoaded = true;
+        }
+      } catch (e) {
+        console.error("Error loading logo image:", e);
+      }
+
+      if (!logoLoaded) {
+        doc.save();
+        doc.fillColor("#F28C28");
+        doc.moveTo(60, 45)
+           .bezierCurveTo(45, 55, 45, 75, 60, 85)
+           .bezierCurveTo(63, 81, 63, 79, 60, 75)
+           .bezierCurveTo(52, 69, 52, 61, 60, 55)
+           .bezierCurveTo(63, 51, 63, 49, 60, 45)
+           .closePath()
+           .fill();
+         
+        doc.moveTo(100, 45)
+           .bezierCurveTo(115, 55, 115, 75, 100, 85)
+           .bezierCurveTo(97, 81, 97, 79, 100, 75)
+           .bezierCurveTo(108, 69, 108, 61, 100, 55)
+           .bezierCurveTo(97, 51, 97, 49, 100, 45)
+           .closePath()
+           .fill();
+
+        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
+        doc.text("TCE", 60, 57, { width: 40, align: "center" });
+        doc.restore();
+      }
+
+      // Right Side Header (Official TCE Letterhead)
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
+      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 0300-4384978", 130, 87, { width: 420 });
+
+      // Title Banner
+      doc.rect(50, 102, 500, 20).fill("#1e293b");
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("PURCHASE ORDER", 50, 107, { align: "center", width: 500 });
+
+      const meta = poData.meta || parsePoMetadata(poData.notes, poData);
+      const vendor = poData.vendor || {};
+
+      // PO Details Box
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`PO NUMBER: ${poData.poNumber || "-"}`, 50, 130);
+      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
+      doc.text(`PO Date: ${formatDateDisplay(poData.createdAt || poData.date || new Date(), "en-GB")}`, 50, 148);
+      doc.text(`Supplier / Vendor: ${vendor.name || "Unknown Vendor"}`, 50, 162);
+      if (vendor.phone) doc.text(`Phone: ${vendor.phone}`, 50, 176);
+      if (vendor.address) doc.text(`Address: ${vendor.address}`, 50, 190, { width: 280 });
+
+      doc.text(`Status: ${poData.status || "APPROVED"}`, 340, 148);
+      if (vendor.ntn) doc.text(`Vendor NTN: ${vendor.ntn}`, 340, 162);
+      doc.text(`Delivery Location: Technicool Multan`, 340, 176);
+
+      let y = 220;
+
+        // Table columns header
+        doc.font("Roboto-Bold").fontSize(10).fillColor("#1e3a8a");
+        doc.text("Item / Description", 50, y);
+        doc.text("Qty", 310, y, { width: 50, align: "right" });
+        doc.text("Unit Cost (PKR)", 370, y, { width: 90, align: "right" });
+        doc.text("Total (PKR)", 470, y, { width: 80, align: "right" });
+
+        doc.moveTo(50, y + 15).lineTo(550, y + 15).strokeColor("#1e3a8a").stroke();
+        y += 25;
+
+        const lineItems = poData.lineItems || [];
+        doc.font("Roboto-Regular").fillColor("#1f2937");
+        lineItems.forEach((item: any) => {
+          const desc = item.product ? `[${item.product.sku}] ${item.product.name}` : (item.description || item.name || "Ordered Item");
+          const qty = Number(item.quantityOrdered || item.quantity || 0);
+          const cost = Number(item.unitCost || 0);
+          const total = Number(item.totalCost || qty * cost);
+
+          doc.fontSize(9.5).text(desc, 50, y, { width: 250 });
+          doc.text(qty.toString(), 310, y, { width: 50, align: "right" });
+          doc.text(cost.toLocaleString("en-US", { minimumFractionDigits: 0 }), 370, y, { width: 90, align: "right" });
+          doc.text(total.toLocaleString("en-US", { minimumFractionDigits: 0 }), 470, y, { width: 80, align: "right" });
+          
+          y += 20;
+        });
+
+        // Bottom Totals
+        y += 10;
+        doc.moveTo(340, y).lineTo(550, y).strokeColor("#cbd5e1").stroke();
+        y += 10;
+
+        const subtotal = meta.subtotalAmount || lineItems.reduce((acc: number, item: any) => acc + (Number(item.quantityOrdered || item.quantity || 0) * Number(item.unitCost || 0)), 0);
+        const discount = meta.discountAmount ?? Number(poData.discount || 0);
+        const tax = meta.taxAmount || 0;
+        const totalAmount = meta.totalAmount || Number(poData.totalAmount || subtotal - discount + tax);
+
+        doc.font("Roboto-Regular").fontSize(9.5).text("Subtotal:", 340, y);
+        doc.text(`PKR ${Math.round(subtotal).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+        y += 16;
+
+        if (discount > 0) {
+          doc.text("Discount:", 340, y);
+          doc.text(`- PKR ${Math.round(discount).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+          y += 16;
+        }
+
+        if (tax > 0) {
+          doc.text(`Sales Tax (${meta.taxRate || 18}%):`, 340, y);
+          doc.text(`+ PKR ${Math.round(tax).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+          y += 16;
+        }
+
+        doc.font("Roboto-Bold").fontSize(11).fillColor("#1e3a8a");
+        doc.text("Net Total:", 340, y);
+        doc.text(`PKR ${Math.round(totalAmount).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+
+        // Signatures
+        y = 700;
+        doc.moveTo(60, y).lineTo(200, y).strokeColor("#94a3b8").stroke();
+        doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Procurement Officer", 60, y + 5, { width: 140, align: "center" });
+
+        doc.moveTo(360, y).lineTo(500, y).strokeColor("#94a3b8").stroke();
+        doc.text("Authorized Signature & Stamp", 360, y + 5, { width: 140, align: "center" });
+
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }

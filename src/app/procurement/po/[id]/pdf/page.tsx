@@ -6,6 +6,7 @@ import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 
 import { parsePoMetadata } from "@/lib/poHelper";
+import { buildPdfFileName } from "@/lib/pdfFileName";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -57,6 +58,14 @@ export default function POPdfPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load PO details");
         setPo(data.purchaseOrder);
+        if (data.purchaseOrder) {
+          document.title = buildPdfFileName({
+            docType: "PO",
+            partyName: data.purchaseOrder.vendor?.name || "Vendor",
+            reference: data.purchaseOrder.poNumber || data.purchaseOrder.id,
+            extension: false,
+          });
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {

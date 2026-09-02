@@ -6,6 +6,7 @@ import { Printer, ArrowLeft, QrCode, Tag } from "lucide-react";
 import QRCode from "qrcode";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { formatDateDisplay } from "@/lib/dateUtils";
+import { buildPdfFileName } from "@/lib/pdfFileName";
 
 export default function DeliveryOrderPdfPage() {
   const params = useParams();
@@ -28,6 +29,14 @@ export default function DeliveryOrderPdfPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load DO details");
         setDoRecord(data.deliveryOrder);
+        if (data.deliveryOrder) {
+          document.title = buildPdfFileName({
+            docType: "DO",
+            partyName: data.deliveryOrder.customer?.name || "Customer",
+            reference: data.deliveryOrder.doNumber || data.deliveryOrder.id,
+            extension: false,
+          });
+        }
 
         // Generate QR code for delivery confirmation
         const origin = window.location.origin;

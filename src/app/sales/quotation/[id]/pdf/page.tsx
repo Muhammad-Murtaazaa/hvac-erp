@@ -6,6 +6,7 @@ import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 import { formatDateDisplay } from "@/lib/dateUtils";
+import { buildPdfFileName } from "@/lib/pdfFileName";
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -48,6 +49,14 @@ export default function QuotationPdfPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load quotation details");
         setQuotation(data.quotation);
+        if (data.quotation) {
+          document.title = buildPdfFileName({
+            docType: "Quotation",
+            partyName: data.quotation.customer?.name || data.quotation.clientName || "Customer",
+            reference: data.quotation.quotationNumber || data.quotation.id,
+            extension: false,
+          });
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
