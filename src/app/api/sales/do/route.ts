@@ -38,6 +38,7 @@ export async function GET(req: Request) {
           product: true,
         },
       },
+      attachments: true,
     },
     orderBy: { createdAt: "desc" },
   });
