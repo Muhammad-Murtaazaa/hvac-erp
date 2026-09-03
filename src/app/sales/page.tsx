@@ -13,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 import { getLocalDateString, formatDateForInput, formatDateDisplay } from "@/lib/dateUtils";
+import { getFileViewUrl } from "@/lib/file-utils";
 
 function SalesPageContent() {
   const searchParams = useSearchParams();
@@ -5294,14 +5295,14 @@ function SalesPageContent() {
                         >
                           {isImage ? (
                             <a
-                              href={file.fileUrl}
+                              href={getFileViewUrl(file.fileUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 block bg-slate-100 dark:bg-slate-800"
                               title="Click to view image"
                             >
                               <img
-                                src={file.fileUrl}
+                                src={getFileViewUrl(file.fileUrl)}
                                 alt={file.fileName}
                                 className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300"
                               />
@@ -5321,7 +5322,7 @@ function SalesPageContent() {
                           </div>
                           <div className="flex items-center gap-1">
                             <a
-                              href={file.fileUrl}
+                              href={getFileViewUrl(file.fileUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all"

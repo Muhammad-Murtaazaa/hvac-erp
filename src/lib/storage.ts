@@ -10,6 +10,8 @@ const s3Client = new S3Client({
   },
 });
 
+export { getFileViewUrl } from "./file-utils";
+
 export async function uploadFile(
   fileBuffer: Buffer,
   fileName: string,
@@ -18,7 +20,12 @@ export async function uploadFile(
   const bucketName = process.env.AWS_S3_BUCKET;
   const accessKey = process.env.AWS_ACCESS_KEY_ID;
 
-  const uniqueName = `${Date.now()}-${fileName.replace(/\s+/g, "_")}`;
+  // Sanitize file name: remove path separators, spaces, and unsafe URL characters (#, ?, %, &, etc.)
+  const baseName = path.basename(fileName);
+  const ext = path.extname(baseName);
+  const rawName = path.basename(baseName, ext);
+  const sanitizedName = rawName.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") || "file";
+  const uniqueName = `${Date.now()}-${sanitizedName}${ext}`;
 
   if (bucketName && accessKey) {
     try {
@@ -37,7 +44,10 @@ export async function uploadFile(
 
   // Fallback local directory storage
   try {
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
+    const uploadDir = process.env.UPLOADS_DIR
+      ? path.resolve(process.env.UPLOADS_DIR)
+      : path.join(process.cwd(), "public", "uploads");
+
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
@@ -49,3 +59,4 @@ export async function uploadFile(
     throw new Error("Failed to write file to local disk");
   }
 }
+

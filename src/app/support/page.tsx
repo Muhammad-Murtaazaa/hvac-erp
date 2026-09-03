@@ -9,6 +9,7 @@ import CustomerSelect from "@/components/shared/CustomerSelect";
 import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
+import { getFileViewUrl } from "@/lib/file-utils";
 
 function SupportPageContent() {
   const searchParams = useSearchParams();
@@ -1448,13 +1449,13 @@ function SupportPageContent() {
                         >
                           {isImage ? (
                             <a
-                              href={file.fileUrl}
+                              href={getFileViewUrl(file.fileUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 block bg-slate-100 dark:bg-slate-800"
                             >
                               <img
-                                src={file.fileUrl}
+                                src={getFileViewUrl(file.fileUrl)}
                                 alt={file.fileName}
                                 className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300"
                               />
@@ -1474,7 +1475,7 @@ function SupportPageContent() {
                           </div>
                           <div className="flex items-center gap-1">
                             <a
-                              href={file.fileUrl}
+                              href={getFileViewUrl(file.fileUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-all"
