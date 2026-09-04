@@ -9,6 +9,7 @@ export interface InvoiceMetadata {
   subtotalAmount: number;
   totalAmount: number;
   site?: string;
+  company?: "TCE" | "TECAIR";
 }
 
 export function parseInvoiceMetadata(notes: string | null | undefined, invoice?: any): InvoiceMetadata {
@@ -22,6 +23,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
   let subtotalAmount = 0;
   let totalAmount = invoice ? Number(invoice.totalAmount || 0) : 0;
   let site = invoice?.site ? String(invoice.site) : "";
+  let company: "TCE" | "TECAIR" = invoice?.company === "TECAIR" ? "TECAIR" : "TCE";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -38,6 +40,9 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
         if (parsed.site !== undefined && parsed.site !== null) site = String(parsed.site);
+        if (parsed.company === "TECAIR" || parsed.company === "TCE") {
+          company = parsed.company;
+        }
       } catch {
         userNotes = notes;
       }
@@ -79,6 +84,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
     subtotalAmount,
     totalAmount,
     site,
+    company,
   };
 }
 
@@ -93,6 +99,7 @@ export function formatInvoiceNotesPayload(data: {
   subtotalAmount: number;
   totalAmount: number;
   site?: string;
+  company?: "TCE" | "TECAIR";
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -105,5 +112,6 @@ export function formatInvoiceNotesPayload(data: {
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
     site: data.site ? data.site.trim() : "",
+    company: data.company === "TECAIR" ? "TECAIR" : "TCE",
   });
 }

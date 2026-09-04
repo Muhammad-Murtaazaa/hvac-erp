@@ -88,6 +88,7 @@ export async function POST(req: Request) {
       deliveryDate,
       deliveryAddress,
       notes,
+      company,
     } = await req.json();
 
     if (!vendorId || !lineItems || lineItems.length === 0) {
@@ -149,6 +150,7 @@ export async function POST(req: Request) {
         totalAmount: finalTotalAmount,
         createdByName: session.name || "Saleem",
         deliveryAddress: deliveryAddress || "",
+        company: company === "TECAIR" ? "TECAIR" : "TCE",
       });
 
       const po = await tx.purchaseOrder.create({

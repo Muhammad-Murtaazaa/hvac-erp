@@ -41,6 +41,8 @@ export async function GET(req: Request) {
 
     let pdfBuffer: Buffer;
     let fileName = `Document_${id || "export"}.pdf`;
+    const companyParam = searchParams.get("company");
+    const companyOverride = (companyParam === "TECAIR" || companyParam === "TCE") ? companyParam : undefined;
 
     if (type === "quotation") {
       const quotation = await prisma.quotation.findUnique({
@@ -51,7 +53,7 @@ export async function GET(req: Request) {
         },
       });
       if (!quotation) return NextResponse.json({ error: "Quotation not found" }, { status: 404 });
-      pdfBuffer = await generateQuotationPDF(quotation);
+      pdfBuffer = await generateQuotationPDF(quotation, companyOverride);
       fileName = buildPdfFileName({
         docType: "Quotation",
         partyName: quotation.customer?.name || quotation.clientName || "Customer",
@@ -68,7 +70,7 @@ export async function GET(req: Request) {
         },
       });
       if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-      pdfBuffer = await generateInvoicePDF(invoice);
+      pdfBuffer = await generateInvoicePDF(invoice, companyOverride);
       fileName = buildPdfFileName({
         docType: "Invoice",
         partyName: invoice.customer?.name || invoice.clientName || "Customer",
@@ -93,7 +95,7 @@ export async function GET(req: Request) {
       const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
       const baseUrl = host ? `${proto}://${host}` : undefined;
 
-      pdfBuffer = await generateDeliveryOrderPDF(doRecord, baseUrl);
+      pdfBuffer = await generateDeliveryOrderPDF(doRecord, baseUrl, companyOverride);
       fileName = buildPdfFileName({
         docType: "DO",
         partyName: doRecord.customer?.name || "Customer",
@@ -109,7 +111,7 @@ export async function GET(req: Request) {
       });
       if (!poRecord) return NextResponse.json({ error: "Purchase Order not found" }, { status: 404 });
 
-      pdfBuffer = await generatePurchaseOrderPDF(poRecord);
+      pdfBuffer = await generatePurchaseOrderPDF(poRecord, companyOverride);
       fileName = buildPdfFileName({
         docType: "PO",
         partyName: poRecord.vendor?.name || "Vendor",

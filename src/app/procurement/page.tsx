@@ -96,6 +96,7 @@ function ProcurementPageContent() {
   const [updatingVendor, setUpdatingVendor] = useState(false);
 
   // New PO state
+  const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
@@ -114,6 +115,7 @@ function ProcurementPageContent() {
   // Edit PO state
   const [isEditPoOpen, setIsEditPoOpen] = useState(false);
   const [editingPoId, setEditingPoId] = useState("");
+  const [editPoCompany, setEditPoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [editPoNumber, setEditPoNumber] = useState("");
   const [editPoVendor, setEditPoVendor] = useState("");
   const [editPoDate, setEditPoDate] = useState("");
@@ -192,6 +194,7 @@ function ProcurementPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: newPoCompany,
           poNumber: newPoNumber || undefined,
           vendorId: newPoVendor,
           lineItems: newPoLines,
@@ -214,6 +217,7 @@ function ProcurementPageContent() {
       }
       toast({ title: "PO Created", message: "Purchase Order created and approved successfully.", type: "success" });
       setIsCreateOpen(false);
+      setNewPoCompany("TCE");
       setNewPoNumber("");
       setNewPoVendor("");
       setNewPoDate(new Date().toISOString().split("T")[0]);
@@ -236,6 +240,7 @@ function ProcurementPageContent() {
   const openEditPo = (po: any) => {
     const meta = po.meta || parsePoMetadata(po.notes, po);
     setEditingPoId(po.id);
+    setEditPoCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
     setEditPoNumber(po.poNumber || "");
     setEditPoVendor(po.vendorId || "");
     setEditPoDate(po.createdAt ? new Date(po.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -276,6 +281,7 @@ function ProcurementPageContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: editPoCompany,
           vendorId: editPoVendor,
           lineItems: editPoLines,
           status: editPoStatus,
@@ -677,7 +683,23 @@ function ProcurementPageContent() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                   {filteredPOs.map((po) => (
                     <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                      <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
+                      <td className="p-3 font-bold whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span>{po.poNumber || "-"}</span>
+                          {(() => {
+                            const c = (po.meta || parsePoMetadata(po.notes, po)).company;
+                            return c === "TECAIR" ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                                TECAIR
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                                TCE
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -996,6 +1018,41 @@ function ProcurementPageContent() {
             <p className="text-xs text-slate-500 mb-6">Select a vendor and compile items to order from supplier. Submitted POs flag incoming quantities.</p>
 
             <form onSubmit={handleSubmitPO} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for Purchase Order print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setNewPoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      newPoCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      newPoCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Supplier Vendor</label>
                 <div className="relative">
@@ -1353,6 +1410,41 @@ function ProcurementPageContent() {
             <p className="text-xs text-slate-500 mb-6">Update vendor, order items, unit rates, discount settings, GST tax, and delivery dates.</p>
 
             <form onSubmit={handleUpdatePo} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for Purchase Order print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setEditPoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editPoCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editPoCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 font-bold">Select Vendor</label>

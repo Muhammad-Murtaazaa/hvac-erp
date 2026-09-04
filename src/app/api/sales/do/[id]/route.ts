@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordStockMovement } from "@/lib/ledger";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { formatDoNotesPayload, parseDoMetadata } from "@/lib/doHelper";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
@@ -138,7 +139,12 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           clientPhone: finalClientPhone || existingDO.clientPhone,
           deliveryAddress: finalAddress,
           status: newStatus,
-          notes: notes !== undefined ? notes : existingDO.notes,
+          notes: (notes !== undefined || body.company !== undefined)
+            ? formatDoNotesPayload({
+                userNotes: notes !== undefined ? notes : parseDoMetadata(existingDO.notes, existingDO).userNotes,
+                company: body.company !== undefined ? body.company : parseDoMetadata(existingDO.notes, existingDO).company,
+              })
+            : existingDO.notes,
           through: through !== undefined ? through : existingDO.through,
           vehicle: vehicle !== undefined ? vehicle : existingDO.vehicle,
           poNumber: poNumber !== undefined ? poNumber : existingDO.poNumber,

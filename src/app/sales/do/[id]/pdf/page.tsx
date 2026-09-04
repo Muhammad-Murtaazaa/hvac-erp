@@ -7,6 +7,7 @@ import QRCode from "qrcode";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { formatDateDisplay } from "@/lib/dateUtils";
 import { buildPdfFileName } from "@/lib/pdfFileName";
+import { parseDoMetadata } from "@/lib/doHelper";
 
 export default function DeliveryOrderPdfPage() {
   const params = useParams();
@@ -14,6 +15,7 @@ export default function DeliveryOrderPdfPage() {
   const doId = params.id as string;
 
   const [doRecord, setDoRecord] = useState<any>(null);
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -30,6 +32,10 @@ export default function DeliveryOrderPdfPage() {
         if (!res.ok) throw new Error(data.error || "Failed to load DO details");
         setDoRecord(data.deliveryOrder);
         if (data.deliveryOrder) {
+          const doMeta = parseDoMetadata(data.deliveryOrder.notes, data.deliveryOrder);
+          const initialCompany = (data.deliveryOrder.company === "TECAIR" || doMeta.company === "TECAIR") ? "TECAIR" : "TCE";
+          setSelectedCompany(initialCompany);
+
           document.title = buildPdfFileName({
             docType: "DO",
             partyName: data.deliveryOrder.customer?.name || "Customer",
@@ -128,6 +134,33 @@ export default function DeliveryOrderPdfPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Sales
         </button>
 
+        {/* Company Letterhead Switcher */}
+        <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TCE")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TCE"
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🏢 TCE
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TECAIR")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TECAIR"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            ❄️ TECAIR
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => setStickerMode(!stickerMode)}
@@ -154,7 +187,9 @@ export default function DeliveryOrderPdfPage() {
         <div className="max-w-md mx-auto bg-white border-2 border-black rounded-2xl p-6 shadow-xl print:shadow-none print:border-2 print:border-black print:m-0 print:p-4 print:bg-white text-black font-sans">
           <div className="flex justify-between items-start border-b-2 border-black pb-3">
             <div>
-              <div className="text-[11px] font-black uppercase tracking-widest text-black">TECHNICOOL ENGINEERING</div>
+              <div className="text-[11px] font-black uppercase tracking-widest text-black">
+                {selectedCompany === "TECAIR" ? "TECAIR" : "TECHNICOOL ENGINEERING"}
+              </div>
               <h2 className="text-xl font-extrabold text-black">{formattedDN}</h2>
             </div>
             <div className="text-right text-[11px] font-bold text-black">
@@ -194,34 +229,41 @@ export default function DeliveryOrderPdfPage() {
           <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
-            <img src="/logo.png" alt="Watermark" className="w-[400px] h-[400px] object-contain" />
+            <img src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : "/logo.png"} alt="Watermark" className="w-[400px] h-[400px] object-contain" />
           </div>
 
           {/* Brand Header */}
-          <div className="flex items-start gap-4 mb-4 relative z-10">
-            {/* Static Branding Logo */}
-            <div className="w-24 h-24 flex-shrink-0">
-              <img src="/logo.png" alt="TCE Logo" className="w-24 h-24 object-contain" />
+          {selectedCompany === "TECAIR" ? (
+            /* Official TECAIR Letterhead Header */
+            <div className="border-b-2 border-black pb-2 mb-4 relative z-10">
+              <img src="/TECAIR logo.png" alt="TECAIR Logo" className="h-14 w-auto object-contain" />
             </div>
-
-            <div className="flex-grow pt-1">
-              <div className="flex justify-between items-end border-b-2 border-black pb-1">
-                <h1 className="text-2xl font-black tracking-wider text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
-                  TECHNICOOL ENGINEERING
-                </h1>
-                <span className="text-[11px] font-bold italic text-black tracking-wider">
-                  MAKE YOUR DESIRE CLIMATE
-                </span>
+          ) : (
+            /* Official TCE Header */
+            <div className="flex items-start gap-4 mb-4 relative z-10">
+              <div className="w-24 h-24 flex-shrink-0">
+                <img src="/logo.png" alt="TCE Logo" className="w-24 h-24 object-contain" />
               </div>
 
-              <div className="flex justify-between text-[11px] text-black font-semibold mt-1.5 leading-relaxed">
-                <div>
-                  Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
-                  0300-4384978, services@technicool.com.pk
+              <div className="flex-grow pt-1">
+                <div className="flex justify-between items-end border-b-2 border-black pb-1">
+                  <h1 className="text-2xl font-black tracking-wider text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
+                    TECHNICOOL ENGINEERING
+                  </h1>
+                  <span className="text-[11px] font-bold italic text-black tracking-wider">
+                    MAKE YOUR DESIRE CLIMATE
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-[11px] text-black font-semibold mt-1.5 leading-relaxed">
+                  <div>
+                    Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
+                    0300-4384978, services@technicool.com.pk
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Document Title */}
           <h2 className="text-center text-lg font-black tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
@@ -374,23 +416,47 @@ export default function DeliveryOrderPdfPage() {
           <div className="border-b border-dotted border-black w-full mt-4 mb-2"></div>
         </div>
 
-        {/* Universal TCE Footer */}
-        <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
-          <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
-            <span>📍</span>
-            <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+        {/* Letterhead Footer */}
+        {selectedCompany === "TECAIR" ? (
+          /* Official TECAIR Letterhead Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
+            <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">
+              <span>
+                <strong className="text-black font-black">Web:</strong>{" "}
+                <span className="text-[#0066cc]">www.tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Mail:</strong>{" "}
+                <span className="text-[#0066cc]">services@tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Cell:</strong>{" "}
+                <span className="text-black">0300-8304978</span>
+              </span>
+            </div>
+            <div className="text-[11px] font-semibold text-black mt-1">
+              <strong className="text-black font-black">Office:</strong> 3<sup>rd</sup> Floor Home Sphere Plaza R-Sector, C-18 DHA Multan.
+            </div>
           </div>
-          <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
-            <span className="flex items-center gap-1">
-              <span>🌐</span>
-              <span>Web: www.technicool.com.pk</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>✉️</span>
-              <span>services@technicool.com.pk</span>
-            </span>
+        ) : (
+          /* Universal TCE Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
+            <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
+              <span>📍</span>
+              <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+            </div>
+            <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
+              <span className="flex items-center gap-1">
+                <span>🌐</span>
+                <span>Web: www.technicool.com.pk</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span>✉️</span>
+                <span>services@technicool.com.pk</span>
+              </span>
+            </div>
           </div>
-        </div>
+        )}
         </div>
       )}
     </div>

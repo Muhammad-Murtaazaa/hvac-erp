@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordStockMovement } from "@/lib/ledger";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
+import { formatDoNotesPayload } from "@/lib/doHelper";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -148,7 +149,7 @@ export async function POST(req: Request) {
           clientPhone: finalClientPhone || "-",
           deliveryAddress: finalAddress,
           status: doStatus,
-          notes: notes || "",
+          notes: formatDoNotesPayload({ userNotes: notes || "", company: body.company }),
           through: through || "",
           vehicle: vehicle || "",
           poNumber: poNumber || null,

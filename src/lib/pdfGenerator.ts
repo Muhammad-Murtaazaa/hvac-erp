@@ -4,6 +4,7 @@ import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { parseInvoiceMetadata } from "./invoiceHelper";
 import { parsePoMetadata } from "./poHelper";
+import { parseDoMetadata } from "./doHelper";
 import { formatDateDisplay } from "./dateUtils";
 
 // Setup font paths dynamically using absolute path resolution
@@ -16,7 +17,98 @@ function registerAppFonts(doc: any) {
   doc.font("Roboto-Regular"); // Set default
 }
 
-export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
+export function drawLetterheadHeader(doc: any, company: "TCE" | "TECAIR") {
+  if (company === "TECAIR") {
+    let tecairLogoLoaded = false;
+    try {
+      let tecairPath = path.resolve("public/TECAIR logo.png");
+      if (!fs.existsSync(tecairPath)) {
+        tecairPath = path.resolve("public/tecair-logo.png");
+      }
+      if (fs.existsSync(tecairPath)) {
+        // Logo dimensions: 1013x278 -> aspect ratio ~3.64
+        doc.image(tecairPath, 50, 36, { width: 160 });
+        tecairLogoLoaded = true;
+      }
+    } catch (e) {
+      console.error("Error loading TECAIR logo image:", e);
+    }
+
+    if (!tecairLogoLoaded) {
+      doc.save();
+      doc.font("Roboto-Bold").fontSize(26).fillColor("#0047AB").text("TECAIR", 50, 38);
+      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#0284c7").text("CLIMATE, PRECISELY ENGINEERING", 50, 68);
+      doc.restore();
+    }
+
+    // Horizontal line across page below header
+    doc.moveTo(50, 88).lineTo(550, 88).strokeColor("#000000").lineWidth(1).stroke();
+  } else {
+    // TCE Logo Left
+    let logoLoaded = false;
+    try {
+      let logoPath = path.resolve("LOGO.png");
+      if (!fs.existsSync(logoPath)) {
+        logoPath = path.resolve("public/logo.png");
+      }
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 50, 40, { width: 70 });
+        logoLoaded = true;
+      }
+    } catch (e) {
+      console.error("Error loading logo image:", e);
+    }
+
+    if (!logoLoaded) {
+      doc.save();
+      doc.fillColor("#F28C28");
+      doc.moveTo(60, 45)
+         .bezierCurveTo(45, 55, 45, 75, 60, 85)
+         .bezierCurveTo(63, 81, 63, 79, 60, 75)
+         .bezierCurveTo(52, 69, 52, 61, 60, 55)
+         .bezierCurveTo(63, 51, 63, 49, 60, 45)
+         .closePath()
+         .fill();
+        
+      doc.moveTo(100, 45)
+         .bezierCurveTo(115, 55, 115, 75, 100, 85)
+         .bezierCurveTo(97, 81, 97, 79, 100, 75)
+         .bezierCurveTo(108, 69, 108, 61, 100, 55)
+         .bezierCurveTo(97, 51, 97, 49, 100, 45)
+         .closePath()
+         .fill();
+
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
+      doc.text("TCE", 60, 57, { width: 40, align: "center" });
+      doc.restore();
+    }
+
+    // Right Side Header (Official TCE Letterhead)
+    doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
+    doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+
+    doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
+    doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
+    doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+  }
+}
+
+export function drawLetterheadFooter(doc: any, company: "TCE" | "TECAIR", footerY: number = 742) {
+  if (company === "TECAIR") {
+    doc.moveTo(50, footerY).lineTo(550, footerY).strokeColor("#000000").lineWidth(1).stroke();
+    doc.font("Roboto-Bold").fontSize(8).fillColor("#000000");
+    doc.text("Web: www.tecair.com.pk   Mail: services@tecair.com.pk   Cell: 0300-8304978", 50, footerY + 6, { align: "center", width: 500 });
+    doc.font("Roboto-Bold").fontSize(7.5).fillColor("#000000");
+    doc.text("Office: 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan.", 50, footerY + 17, { align: "center", width: 500 });
+  } else {
+    doc.moveTo(50, footerY).lineTo(550, footerY).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+    doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b");
+    doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 50, footerY + 6, { align: "center", width: 500 });
+    doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk", 50, footerY + 16, { align: "center", width: 500 });
+  }
+}
+
+export function generateInvoicePDF(invoiceData: any, companyOverride?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
@@ -28,52 +120,13 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      // TCE Logo Left
-      let logoLoaded = false;
-      try {
-        let logoPath = path.resolve("LOGO.png");
-        if (!fs.existsSync(logoPath)) {
-          logoPath = path.resolve("public/logo.png");
-        }
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, 40, { width: 70 });
-          logoLoaded = true;
-        }
-      } catch (e) {
-        console.error("Error loading logo image:", e);
-      }
+      const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
+      const company: "TCE" | "TECAIR" = (companyOverride === "TECAIR" || companyOverride === "TCE")
+        ? companyOverride
+        : (invoiceData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : "TCE");
 
-      if (!logoLoaded) {
-        doc.save();
-        doc.fillColor("#F28C28");
-        doc.moveTo(60, 45)
-           .bezierCurveTo(45, 55, 45, 75, 60, 85)
-           .bezierCurveTo(63, 81, 63, 79, 60, 75)
-           .bezierCurveTo(52, 69, 52, 61, 60, 55)
-           .bezierCurveTo(63, 51, 63, 49, 60, 45)
-           .closePath()
-           .fill();
-         
-        doc.moveTo(100, 45)
-           .bezierCurveTo(115, 55, 115, 75, 100, 85)
-           .bezierCurveTo(97, 81, 97, 79, 100, 75)
-           .bezierCurveTo(108, 69, 108, 61, 100, 55)
-           .bezierCurveTo(97, 51, 97, 49, 100, 45)
-           .closePath()
-           .fill();
-
-        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
-        doc.text("TCE", 60, 57, { width: 40, align: "center" });
-        doc.restore();
-      }
-
-      // Right Side Header (Official TCE Letterhead)
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
-
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+      // Draw Company Letterhead Header
+      drawLetterheadHeader(doc, company);
 
       // Title Banner
       doc.rect(50, 102, 500, 20).fill("#1e293b"); // dark slate header
@@ -82,7 +135,6 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       // Info metadata block
       doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`INVOICE: ${invoiceData.invoiceNumber}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
       const siteVal = (meta.site || invoiceData.site || invoiceData.deliveryOrder?.deliveryAddress || "").trim();
       let leftY = 148;
       doc.text(`Date: ${formatDateDisplay(invoiceData.date, "en-GB")}`, 50, leftY);
@@ -109,7 +161,9 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
       if (invoiceData.complaint) {
         doc.text(`Ref Support Ticket: ${invoiceData.complaint.complaintNumber}`, 340, 162);
       }
-      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+      if (company === "TCE") {
+        doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+      }
 
       // Subject Block
       let y = Math.max(220, leftY + 12);
@@ -218,8 +272,8 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
         doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(meta.userNotes, 50, y, { width: 500 });
       }
 
-      // Footer notice
-      doc.font("Roboto-Regular").fontSize(8).fillColor("#9ca3af").text("Generated automatically from the HVAC ERP general ledger. System source of truth.", 50, 720, { align: "center" });
+      // Draw Letterhead Footer
+      drawLetterheadFooter(doc, company, 742);
 
       doc.end();
     } catch (err) {
@@ -228,7 +282,7 @@ export function generateInvoicePDF(invoiceData: any): Promise<Buffer> {
   });
 }
 
-export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string): Promise<Buffer> {
+export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string, companyOverride?: string): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
@@ -240,52 +294,13 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
 
       registerAppFonts(doc);
 
-      // TCE Logo Left
-      let logoLoaded = false;
-      try {
-        let logoPath = path.resolve("LOGO.png");
-        if (!fs.existsSync(logoPath)) {
-          logoPath = path.resolve("public/logo.png");
-        }
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, 40, { width: 70 });
-          logoLoaded = true;
-        }
-      } catch (e) {
-        console.error("Error loading logo image:", e);
-      }
+      const doMeta = parseDoMetadata(doData.notes, doData);
+      const company: "TCE" | "TECAIR" = (companyOverride === "TECAIR" || companyOverride === "TCE")
+        ? companyOverride
+        : (doData.company === "TECAIR" || doMeta.company === "TECAIR" ? "TECAIR" : "TCE");
 
-      if (!logoLoaded) {
-        doc.save();
-        doc.fillColor("#F28C28");
-        doc.moveTo(60, 45)
-           .bezierCurveTo(45, 55, 45, 75, 60, 85)
-           .bezierCurveTo(63, 81, 63, 79, 60, 75)
-           .bezierCurveTo(52, 69, 52, 61, 60, 55)
-           .bezierCurveTo(63, 51, 63, 49, 60, 45)
-           .closePath()
-           .fill();
-         
-        doc.moveTo(100, 45)
-           .bezierCurveTo(115, 55, 115, 75, 100, 85)
-           .bezierCurveTo(97, 81, 97, 79, 100, 75)
-           .bezierCurveTo(108, 69, 108, 61, 100, 55)
-           .bezierCurveTo(97, 51, 97, 49, 100, 45)
-           .closePath()
-           .fill();
-
-        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
-        doc.text("TCE", 60, 57, { width: 40, align: "center" });
-        doc.restore();
-      }
-
-      // Right Side Header (Official TCE Letterhead)
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
-
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+      // Draw Company Letterhead Header
+      drawLetterheadHeader(doc, company);
 
       // Title Banner
       doc.rect(50, 102, 500, 20).fill("#065f46"); // emerald header
@@ -393,7 +408,7 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string):
       doc.fontSize(9).text("Dispatched By: ___________________", 50, y + 40);
       doc.text("Customer Signature: ___________________", 350, y + 40);
 
-      doc.fontSize(8).fillColor("#9ca3af").text("All catalog items stock levels are decremented upon Dispatch.", 50, 720, { align: "center" });
+      drawLetterheadFooter(doc, company, 742);
 
       doc.end();
     } catch (err) {
@@ -1442,7 +1457,7 @@ export function generateMonthlySalarySheetPDF(data: { month: number; year: numbe
   });
 }
 
-export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
+export function generateQuotationPDF(quotationData: any, companyOverride?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
@@ -1454,52 +1469,13 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      // TCE Logo Left
-      let logoLoaded = false;
-      try {
-        let logoPath = path.resolve("LOGO.png");
-        if (!fs.existsSync(logoPath)) {
-          logoPath = path.resolve("public/logo.png");
-        }
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, 40, { width: 70 });
-          logoLoaded = true;
-        }
-      } catch (e) {
-        console.error("Error loading logo image:", e);
-      }
+      const meta = parseInvoiceMetadata(quotationData.notes, quotationData);
+      const company: "TCE" | "TECAIR" = (companyOverride === "TECAIR" || companyOverride === "TCE")
+        ? companyOverride
+        : (quotationData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : "TCE");
 
-      if (!logoLoaded) {
-        doc.save();
-        doc.fillColor("#F28C28");
-        doc.moveTo(60, 45)
-           .bezierCurveTo(45, 55, 45, 75, 60, 85)
-           .bezierCurveTo(63, 81, 63, 79, 60, 75)
-           .bezierCurveTo(52, 69, 52, 61, 60, 55)
-           .bezierCurveTo(63, 51, 63, 49, 60, 45)
-           .closePath()
-           .fill();
-         
-        doc.moveTo(100, 45)
-           .bezierCurveTo(115, 55, 115, 75, 100, 85)
-           .bezierCurveTo(97, 81, 97, 79, 100, 75)
-           .bezierCurveTo(108, 69, 108, 61, 100, 55)
-           .bezierCurveTo(97, 51, 97, 49, 100, 45)
-           .closePath()
-           .fill();
-
-        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
-        doc.text("TCE", 60, 57, { width: 40, align: "center" });
-        doc.restore();
-      }
-
-      // Right Side Header (Official TCE Letterhead)
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
-
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+      // Draw Company Letterhead Header
+      drawLetterheadHeader(doc, company);
 
       // Title Banner
       doc.rect(50, 102, 500, 20).fill("#1e293b"); // dark slate header
@@ -1517,7 +1493,9 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
         doc.text(`Valid Until: ${formatDateDisplay(quotationData.validUntil, "en-GB")}`, 340, 148);
       }
       doc.text(`Status: ${quotationData.status || "DRAFT"}`, 340, 162);
-      doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+      if (company === "TCE") {
+        doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+      }
 
       // Subject Block
       let y = 220;
@@ -1581,7 +1559,6 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
       doc.moveTo(50, y + 5).lineTo(550, y + 5).strokeColor("#e5e7eb").stroke();
       y += 20;
 
-      const meta = parseInvoiceMetadata(quotationData.notes, quotationData);
       const subtotal = meta.subtotalAmount;
       const discountAmount = meta.discountAmount;
       const taxableAmount = Math.max(0, subtotal - discountAmount);
@@ -1618,6 +1595,9 @@ export function generateQuotationPDF(quotationData: any): Promise<Buffer> {
         y += 15;
         doc.font("Roboto-Regular").fontSize(9).fillColor("#4b5563").text(meta.userNotes, 50, y, { width: 500 });
       }
+
+      // Draw Letterhead Footer
+      drawLetterheadFooter(doc, company, 742);
 
       doc.end();
     } catch (err) {
@@ -1826,7 +1806,7 @@ export function generateStockValuationPDF(data: {
   });
 }
 
-export function generatePurchaseOrderPDF(poData: any): Promise<Buffer> {
+export function generatePurchaseOrderPDF(poData: any, companyOverride?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
@@ -1838,58 +1818,18 @@ export function generatePurchaseOrderPDF(poData: any): Promise<Buffer> {
 
       registerAppFonts(doc);
 
-      // TCE Logo
-      let logoLoaded = false;
-      try {
-        let logoPath = path.resolve("LOGO.png");
-        if (!fs.existsSync(logoPath)) {
-          logoPath = path.resolve("public/logo.png");
-        }
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, 40, { width: 70 });
-          logoLoaded = true;
-        }
-      } catch (e) {
-        console.error("Error loading logo image:", e);
-      }
+      const meta = poData.meta || parsePoMetadata(poData.notes, poData);
+      const company: "TCE" | "TECAIR" = (companyOverride === "TECAIR" || companyOverride === "TCE")
+        ? companyOverride
+        : (poData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : "TCE");
 
-      if (!logoLoaded) {
-        doc.save();
-        doc.fillColor("#F28C28");
-        doc.moveTo(60, 45)
-           .bezierCurveTo(45, 55, 45, 75, 60, 85)
-           .bezierCurveTo(63, 81, 63, 79, 60, 75)
-           .bezierCurveTo(52, 69, 52, 61, 60, 55)
-           .bezierCurveTo(63, 51, 63, 49, 60, 45)
-           .closePath()
-           .fill();
-         
-        doc.moveTo(100, 45)
-           .bezierCurveTo(115, 55, 115, 75, 100, 85)
-           .bezierCurveTo(97, 81, 97, 79, 100, 75)
-           .bezierCurveTo(108, 69, 108, 61, 100, 55)
-           .bezierCurveTo(97, 51, 97, 49, 100, 45)
-           .closePath()
-           .fill();
-
-        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
-        doc.text("TCE", 60, 57, { width: 40, align: "center" });
-        doc.restore();
-      }
-
-      // Right Side Header (Official TCE Letterhead)
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
-
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 0300-4384978", 130, 87, { width: 420 });
+      // Draw Company Letterhead Header
+      drawLetterheadHeader(doc, company);
 
       // Title Banner
       doc.rect(50, 102, 500, 20).fill("#1e293b");
       doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("PURCHASE ORDER", 50, 107, { align: "center", width: 500 });
 
-      const meta = poData.meta || parsePoMetadata(poData.notes, poData);
       const vendor = poData.vendor || {};
 
       // PO Details Box
@@ -1902,7 +1842,7 @@ export function generatePurchaseOrderPDF(poData: any): Promise<Buffer> {
 
       doc.text(`Status: ${poData.status || "APPROVED"}`, 340, 148);
       if (vendor.ntn) doc.text(`Vendor NTN: ${vendor.ntn}`, 340, 162);
-      doc.text(`Delivery Location: Technicool Multan`, 340, 176);
+      doc.text(`Delivery Location: ${company === "TECAIR" ? "TECAIR Multan" : "Technicool Multan"}`, 340, 176);
 
       let y = 220;
 
@@ -1963,12 +1903,15 @@ export function generatePurchaseOrderPDF(poData: any): Promise<Buffer> {
         doc.text(`PKR ${Math.round(totalAmount).toLocaleString()}`, 470, y, { width: 80, align: "right" });
 
         // Signatures
-        y = 700;
+        y = 675;
         doc.moveTo(60, y).lineTo(200, y).strokeColor("#94a3b8").stroke();
         doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Procurement Officer", 60, y + 5, { width: 140, align: "center" });
 
         doc.moveTo(360, y).lineTo(500, y).strokeColor("#94a3b8").stroke();
         doc.text("Authorized Signature & Stamp", 360, y + 5, { width: 140, align: "center" });
+
+        // Draw Letterhead Footer
+        drawLetterheadFooter(doc, company, 742);
 
         doc.end();
       } catch (err) {

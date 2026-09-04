@@ -186,6 +186,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTotalAmount = Math.round(taxableAmount + taxAmount);
 
       // 4. Format notes payload with updated metadata
+      const existingMeta = parseInvoiceMetadata(existingInvoice.notes, existingInvoice);
+      const invoiceCompany = body.company ? (body.company === "TECAIR" ? "TECAIR" : "TCE") : (existingMeta.company || "TCE");
       const formattedNotes = formatInvoiceNotesPayload({
         userNotes: notes || "",
         isGst: isGstEnabled,
@@ -197,6 +199,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
+        company: invoiceCompany,
       });
 
       // 5. Calculate Status & Synchronize Payments

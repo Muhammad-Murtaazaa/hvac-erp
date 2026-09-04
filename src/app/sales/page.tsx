@@ -12,6 +12,7 @@ import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
+import { parseDoMetadata } from "@/lib/doHelper";
 import { getLocalDateString, formatDateForInput, formatDateDisplay } from "@/lib/dateUtils";
 import { getFileViewUrl } from "@/lib/file-utils";
 
@@ -122,6 +123,7 @@ function SalesPageContent() {
   const [salesTaxRate, setSalesTaxRate] = useState(18);
 
   // Standalone Invoice State
+  const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [clientName, setClientName] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(getLocalDateString());
   const [isGst, setIsGst] = useState(true);
@@ -151,6 +153,7 @@ function SalesPageContent() {
   // Edit Commercial Invoice State
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
+  const [editInvoiceCompany, setEditInvoiceCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [editClientName, setEditClientName] = useState("");
   const [editClientPhone, setEditClientPhone] = useState("");
   const [editClientAddress, setEditClientAddress] = useState("");
@@ -179,6 +182,7 @@ function SalesPageContent() {
   const [selectedQuotationIds, setSelectedQuotationIds] = useState<string[]>([]);
 
   // Create Quotation State
+  const [quoCompany, setQuoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [quoClientName, setQuoClientName] = useState("");
   const [quoClientPhone, setQuoClientPhone] = useState("");
   const [quoClientAddress, setQuoClientAddress] = useState("");
@@ -199,6 +203,7 @@ function SalesPageContent() {
   const [quotationError, setQuotationError] = useState("");
 
   // Edit Quotation State
+  const [editQuoCompany, setEditQuoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [editQuoClientName, setEditQuoClientName] = useState("");
   const [editQuoClientPhone, setEditQuoClientPhone] = useState("");
   const [editQuoClientAddress, setEditQuoClientAddress] = useState("");
@@ -219,6 +224,7 @@ function SalesPageContent() {
   const [editQuotationError, setEditQuotationError] = useState("");
 
   // Delivery Order Creation State
+  const [doCompany, setDoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [doClientName, setDoClientName] = useState("");
   const [doClientPhone, setDoClientPhone] = useState("");
   const [doAddress, setDoAddress] = useState("");
@@ -235,6 +241,7 @@ function SalesPageContent() {
   // Edit Delivery Order State
   const [isEditDoOpen, setIsEditDoOpen] = useState(false);
   const [editingDo, setEditingDo] = useState<any>(null);
+  const [editDoCompany, setEditDoCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [editDoClientName, setEditDoClientName] = useState("");
   const [editDoClientPhone, setEditDoClientPhone] = useState("");
   const [editDoAddress, setEditDoAddress] = useState("");
@@ -595,6 +602,7 @@ function SalesPageContent() {
     }
 
     const payload = {
+      company: invoiceCompany,
       customerId: selectedCustomerId || null,
       complaintId: selectedComplaintId || undefined,
       clientName,
@@ -625,6 +633,7 @@ function SalesPageContent() {
       if (!res.ok) throw new Error("Failed to create Invoice");
       toast({ title: "Invoice Created", message: "Invoice created and ledger balances written successfully.", type: "success" });
       setIsInvoiceOpen(false);
+      setInvoiceCompany("TCE");
       setSelectedCustomerId(null);
       setSelectedComplaintId("");
       setClientName("");
@@ -661,6 +670,7 @@ function SalesPageContent() {
     setEditDate(formatDateForInput(inv.date));
 
     const meta = parseInvoiceMetadata(inv.notes, inv);
+    setEditInvoiceCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
     setEditSite(meta.site || (inv as any).site || "");
     setEditNotes(meta.userNotes || "");
     setEditIsGst(meta.isGst);
@@ -758,6 +768,7 @@ function SalesPageContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: editInvoiceCompany,
           customerId: editCustomerId,
           clientName: editClientName.trim(),
           clientPhone: editClientPhone.trim(),
@@ -852,6 +863,7 @@ function SalesPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: quoCompany,
           customerId: quoCustomerId,
           clientName: quoClientName.trim(),
           clientPhone: quoClientPhone.trim(),
@@ -875,6 +887,7 @@ function SalesPageContent() {
 
       toast({ title: "Quotation Created", message: `Quotation ${data.quotation?.quotationNumber || ""} created successfully without ledger impact.`, type: "success" });
       setIsQuotationOpen(false);
+      setQuoCompany("TCE");
       setQuoClientName("");
       setQuoClientPhone("");
       setQuoClientAddress("");
@@ -910,6 +923,7 @@ function SalesPageContent() {
     setEditQuoStatus(quo.status || "DRAFT");
 
     const meta = parseInvoiceMetadata(quo.notes, quo);
+    setEditQuoCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
     setEditQuoNotes(meta.userNotes || "");
     setEditQuoSite(meta.site || (quo as any).site || "");
     setEditQuoIsGst(meta.isGst);
@@ -1018,6 +1032,7 @@ function SalesPageContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: editQuoCompany,
           customerId: editQuoCustomerId,
           clientName: editQuoClientName.trim(),
           clientPhone: editQuoClientPhone.trim(),
@@ -1139,6 +1154,7 @@ function SalesPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: doCompany,
           customerId: selectedCustomerId || null,
           clientName: doClientName.trim(),
           clientPhone: doClientPhone.trim(),
@@ -1161,6 +1177,7 @@ function SalesPageContent() {
       }
       toast({ title: "Delivery Order Created", message: "Delivery Order created and stock dispatched.", type: "success" });
       setIsDoOpen(false);
+      setDoCompany("TCE");
       setSelectedCustomerId(null);
       setDoError("");
       setDoClientName("");
@@ -1183,10 +1200,12 @@ function SalesPageContent() {
 
   const handleOpenEditDo = (doRec: any) => {
     setEditingDo(doRec);
+    const doMeta = parseDoMetadata(doRec.notes, doRec);
+    setEditDoCompany(doMeta.company === "TECAIR" ? "TECAIR" : "TCE");
     setEditDoClientName(doRec.clientName || "");
     setEditDoClientPhone(doRec.clientPhone || "");
     setEditDoAddress(doRec.deliveryAddress || "");
-    setEditDoNotes(doRec.notes || "");
+    setEditDoNotes(doMeta.userNotes || doRec.notes || "");
     setEditDoThrough(doRec.through || "");
     setEditDoVehicle(doRec.vehicle || "");
     setEditDoPoNumber(doRec.poNumber || "");
@@ -1234,6 +1253,7 @@ function SalesPageContent() {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
+          company: editDoCompany,
           clientName: editDoClientName.trim(),
           clientPhone: editDoClientPhone.trim(),
           deliveryAddress: editDoAddress.trim(),
@@ -1951,7 +1971,23 @@ function SalesPageContent() {
                                 }}
                               />
                             </td>
-                            <td className="p-3 font-bold whitespace-nowrap">{inv.invoiceNumber}</td>
+                            <td className="p-3 font-bold whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span>{inv.invoiceNumber}</span>
+                                {(() => {
+                                  const c = parseInvoiceMetadata(inv.notes, inv).company;
+                                  return c === "TECAIR" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                                      TECAIR
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                                      TCE
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </td>
                             <td className="p-3 font-semibold">{inv.clientName}</td>
                             <td className="p-3">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -2112,7 +2148,21 @@ function SalesPageContent() {
                         return (
                           <tr key={quo.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
                             <td className="p-3 font-bold whitespace-nowrap text-blue-600 dark:text-blue-400">
-                              {quo.quotationNumber}
+                              <div className="flex items-center gap-1.5">
+                                <span>{quo.quotationNumber}</span>
+                                {(() => {
+                                  const c = parseInvoiceMetadata(quo.notes, quo).company;
+                                  return c === "TECAIR" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                                      TECAIR
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                                      TCE
+                                    </span>
+                                  );
+                                })()}
+                              </div>
                             </td>
                             <td className="p-3">
                               <div className="font-semibold text-slate-900 dark:text-white">{quo.clientName}</div>
@@ -2211,7 +2261,23 @@ function SalesPageContent() {
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                     {filteredDOs.map((doRec) => (
                       <tr key={doRec.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                        <td className="p-3 font-bold whitespace-nowrap">{doRec.doNumber}</td>
+                        <td className="p-3 font-bold whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span>{doRec.doNumber}</span>
+                            {(() => {
+                              const c = parseDoMetadata(doRec.notes, doRec).company;
+                              return c === "TECAIR" ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                                  TECAIR
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                                  TCE
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </td>
                         <td className="p-3 font-semibold text-slate-500 whitespace-nowrap">{doRec.poNumber || "-"}</td>
                         <td className="p-3 font-semibold">{doRec.clientName}</td>
                         <td className="p-3">
@@ -2473,6 +2539,41 @@ function SalesPageContent() {
             <p className="text-xs text-slate-500 mb-6">Create standalone billing records for walk-in trading clients or custom service scopes.</p>
 
             <form onSubmit={handleInvoiceSubmit} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for print, preview & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      invoiceCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      invoiceCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               {/* Optional Complaint / Repair Ticket Link */}
               <div className="bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 p-3.5 rounded-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
@@ -3136,6 +3237,41 @@ function SalesPageContent() {
             )}
 
             <form onSubmit={handleEditInvoiceSubmit} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for print, preview & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setEditInvoiceCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editInvoiceCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditInvoiceCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editInvoiceCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div className="sm:col-span-2">
                   <CustomerSelect
@@ -3809,6 +3945,41 @@ function SalesPageContent() {
             </div>
 
             <form onSubmit={handleCreateQuotationSubmit} className="space-y-4 mt-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for quotation print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setQuoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      quoCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      quoCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div className="sm:col-span-2">
                   <CustomerSelect
@@ -4230,6 +4401,41 @@ function SalesPageContent() {
             </div>
 
             <form onSubmit={handleEditQuotationSubmit} className="space-y-4 mt-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for quotation print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setEditQuoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editQuoCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditQuoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editQuoCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
@@ -4674,6 +4880,41 @@ function SalesPageContent() {
             )}
 
             <form onSubmit={handleDoSubmit} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for Delivery Challan print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setDoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      doCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      doCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               {/* Customer Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div className="sm:col-span-2">
@@ -4984,6 +5225,41 @@ function SalesPageContent() {
             )}
 
             <form onSubmit={handleEditDoSubmit} className="space-y-4">
+              {/* Company Letterhead Selector */}
+              <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span>Company Letterhead Brand</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 block">Choose official branding for Delivery Challan print & PDF export</span>
+                </div>
+                <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setEditDoCompany("TCE")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editDoCompany === "TCE"
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🏢 TCE (Technicool)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditDoCompany("TECAIR")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editDoCompany === "TECAIR"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ❄️ TECAIR
+                  </button>
+                </div>
+              </div>
+
               {/* Customer Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                 <div className="sm:col-span-2">

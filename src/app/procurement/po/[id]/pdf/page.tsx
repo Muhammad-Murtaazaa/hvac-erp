@@ -37,6 +37,7 @@ export default function POPdfPage() {
 
   const [po, setPo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -59,6 +60,10 @@ export default function POPdfPage() {
         if (!res.ok) throw new Error(data.error || "Failed to load PO details");
         setPo(data.purchaseOrder);
         if (data.purchaseOrder) {
+          const m = data.purchaseOrder.meta || parsePoMetadata(data.purchaseOrder.notes, data.purchaseOrder);
+          if (m.company === "TECAIR" || m.company === "TCE") {
+            setSelectedCompany(m.company);
+          }
           document.title = buildPdfFileName({
             docType: "PO",
             partyName: data.purchaseOrder.vendor?.name || "Vendor",
@@ -151,6 +156,33 @@ export default function POPdfPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Procurement
         </button>
 
+        {/* Company Letterhead Switcher */}
+        <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TCE")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TCE"
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🏢 TCE
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TECAIR")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TECAIR"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            ❄️ TECAIR
+          </button>
+        </div>
+
         <button
           onClick={() => window.print()}
           className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10"
@@ -164,34 +196,45 @@ export default function POPdfPage() {
         <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
-            <img src="/logo.png" alt="Watermark" className="w-[400px] h-[400px] object-contain" />
+            <img
+              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : "/logo.png"}
+              alt="Watermark"
+              className={selectedCompany === "TECAIR" ? "w-[480px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
+            />
           </div>
 
           {/* Brand Header */}
-          <div className="flex items-start gap-4 mb-4 relative z-10">
-            {/* Static Branding Logo */}
-            <div className="w-24 h-24 flex-shrink-0">
-              <img src="/logo.png" alt="TCE Logo" className="w-24 h-24 object-contain" />
+          {selectedCompany === "TECAIR" ? (
+            /* Official TECAIR Letterhead Header */
+            <div className="border-b-2 border-black pb-2 mb-4 relative z-10">
+              <img src="/TECAIR logo.png" alt="TECAIR Logo" className="h-14 w-auto object-contain" />
             </div>
-
-            <div className="flex-grow pt-1">
-              <div className="flex justify-between items-end border-b-2 border-black pb-1">
-                <h1 className="text-3xl font-black tracking-wide text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
-                  Technicool Engineering
-                </h1>
-                <span className="text-[11px] font-normal italic text-black tracking-wider">
-                  MAKE YOUR DESIRE CLIMATE
-                </span>
+          ) : (
+            /* Universal TCE Header */
+            <div className="flex items-start gap-4 mb-4 relative z-10">
+              <div className="w-24 h-24 flex-shrink-0">
+                <img src="/logo.png" alt="TCE Logo" className="w-24 h-24 object-contain" />
               </div>
 
-              <div className="flex justify-between text-[11px] text-black font-normal mt-1.5 leading-relaxed">
-                <div>
-                  Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
-                  0300-4384978, services@technicool.com.pk
+              <div className="flex-grow pt-1">
+                <div className="flex justify-between items-end border-b-2 border-black pb-1">
+                  <h1 className="text-3xl font-black tracking-wide text-black uppercase" style={{ fontFamily: "Arial, sans-serif" }}>
+                    Technicool Engineering
+                  </h1>
+                  <span className="text-[11px] font-normal italic text-black tracking-wider">
+                    MAKE YOUR DESIRE CLIMATE
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-[11px] text-black font-normal mt-1.5 leading-relaxed">
+                  <div>
+                    Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
+                    0300-4384978, services@technicool.com.pk
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Document Title */}
           <h2 className="text-center text-xl font-bold tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
@@ -218,7 +261,7 @@ export default function POPdfPage() {
               <div className="mt-2 pt-1.5 border-t border-dashed border-black/40">
                 <span className="text-black block font-bold text-xs">Delivery Address:</span>
                 <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
-                  {meta.deliveryAddress || "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan"}
+                  {meta.deliveryAddress || (selectedCompany === "TECAIR" ? "TECAIR Warehouse, 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan" : "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan")}
                 </div>
               </div>
             </div>
@@ -348,23 +391,47 @@ export default function POPdfPage() {
           ) : null}
         </div>
 
-        {/* Universal TCE Footer */}
-        <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans font-normal">
-          <div className="flex justify-center items-center gap-1.5 text-xs text-black font-normal">
-            <span>📍</span>
-            <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+        {/* Letterhead Footer */}
+        {selectedCompany === "TECAIR" ? (
+          /* Official TECAIR Letterhead Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans font-normal">
+            <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">
+              <span>
+                <strong className="text-black font-black">Web:</strong>{" "}
+                <span className="text-[#0066cc]">www.tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Mail:</strong>{" "}
+                <span className="text-[#0066cc]">services@tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Cell:</strong>{" "}
+                <span className="text-black">0300-8304978</span>
+              </span>
+            </div>
+            <div className="text-[11px] font-semibold text-black mt-1">
+              <strong className="text-black font-black">Office:</strong> 3<sup>rd</sup> Floor Home Sphere Plaza R-Sector, C-18 DHA Multan.
+            </div>
           </div>
-          <div className="flex justify-center items-center gap-6 text-[11px] text-black font-normal mt-1">
-            <span className="flex items-center gap-1">
-              <span>🌐</span>
-              <span>Web: www.technicool.com.pk</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>✉️</span>
-              <span>services@technicool.com.pk</span>
-            </span>
+        ) : (
+          /* Universal TCE Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans font-normal">
+            <div className="flex justify-center items-center gap-1.5 text-xs text-black font-normal">
+              <span>📍</span>
+              <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+            </div>
+            <div className="flex justify-center items-center gap-6 text-[11px] text-black font-normal mt-1">
+              <span className="flex items-center gap-1">
+                <span>🌐</span>
+                <span>Web: www.technicool.com.pk</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span>✉️</span>
+                <span>services@technicool.com.pk</span>
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>

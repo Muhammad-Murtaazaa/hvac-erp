@@ -209,6 +209,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTotalAmount = Math.max(0, taxableAmount + finalTaxAmount);
 
       const existingMeta = parsePoMetadata(po.notes, po);
+      const poCompany = body.company ? (body.company === "TECAIR" ? "TECAIR" : "TCE") : (existingMeta.company || "TCE");
       const notesPayload = formatPoNotesPayload({
         userNotes: notes || "",
         isGst: Boolean(isGst),
@@ -221,6 +222,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         totalAmount: finalTotalAmount,
         createdByName: existingMeta.createdByName || session.name || "Saleem",
         deliveryAddress: deliveryAddress !== undefined ? deliveryAddress : existingMeta.deliveryAddress,
+        company: poCompany,
       });
 
       const nextStatus = requestedStatus || po.status;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser, hasPermission } from "@/lib/auth";
-import { formatInvoiceNotesPayload } from "@/lib/invoiceHelper";
+import { formatInvoiceNotesPayload, parseInvoiceMetadata } from "@/lib/invoiceHelper";
 import { parseDateForStorage } from "@/lib/dateUtils";
 import { ensureCustomer } from "@/lib/customerSync";
 
@@ -168,6 +168,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const taxAmount = isGstEnabled ? Math.round(taxableAmount * (salesTaxRate / 100)) : 0;
       const finalTotalAmount = Math.round(taxableAmount + taxAmount);
 
+      const existingMeta = parseInvoiceMetadata(existingQuotation.notes, existingQuotation);
+      const quoCompany = body.company ? (body.company === "TECAIR" ? "TECAIR" : "TCE") : (existingMeta.company || "TCE");
+
       const formattedNotes = formatInvoiceNotesPayload({
         userNotes: notes || "",
         isGst: isGstEnabled,
@@ -179,6 +182,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site ? String(site).trim() : "",
+        company: quoCompany,
       });
 
       // 4. Delete old line items and replace

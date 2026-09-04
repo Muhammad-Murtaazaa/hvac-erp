@@ -36,6 +36,7 @@ export default function QuotationPdfPage() {
   const quotationId = params.id as string;
 
   const [quotation, setQuotation] = useState<any>(null);
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -50,6 +51,10 @@ export default function QuotationPdfPage() {
         if (!res.ok) throw new Error(data.error || "Failed to load quotation details");
         setQuotation(data.quotation);
         if (data.quotation) {
+          const meta = parseInvoiceMetadata(data.quotation.notes, data.quotation);
+          const initialCompany = (data.quotation.company === "TECAIR" || meta.company === "TECAIR") ? "TECAIR" : "TCE";
+          setSelectedCompany(initialCompany);
+
           document.title = buildPdfFileName({
             docType: "Quotation",
             partyName: data.quotation.customer?.name || data.quotation.clientName || "Customer",
@@ -137,13 +142,40 @@ export default function QuotationPdfPage() {
         }
       `}} />
       {/* Top control bar */}
-      <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden">
+      <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden flex-wrap gap-3">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition-all"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Sales
         </button>
+
+        {/* Company Letterhead Switcher */}
+        <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TCE")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TCE"
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🏢 TCE
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("TECAIR")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "TECAIR"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            ❄️ TECAIR
+          </button>
+        </div>
 
         <div className="flex gap-2">
           <button
@@ -158,31 +190,38 @@ export default function QuotationPdfPage() {
       {/* Main A4 Document Paper Container */}
       <div className="page-container max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 sm:p-12 rounded-2xl shadow-xl print:border-none print:shadow-none print:m-0 print:max-w-none print:w-full print:bg-white text-black">
         <div className="page-content">
-          {/* Universal TCE Header */}
-          <div className="flex items-center gap-4 border-b-2 border-black pb-3">
-            <div className="shrink-0">
-              <img src="/logo.png" alt="TCE Logo" className="h-16 w-auto object-contain" />
+          {selectedCompany === "TECAIR" ? (
+            /* Official TECAIR Letterhead Header */
+            <div className="border-b-2 border-black pb-2 mb-3">
+              <img src="/TECAIR logo.png" alt="TECAIR Logo" className="h-14 w-auto object-contain" />
             </div>
-            <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-black uppercase font-sans">
-                Technicool Engineering
-              </h1>
-              <div className="text-[11px] text-black tracking-wider uppercase font-bold">
-                MAKE YOUR DESIRE CLIMATE
+          ) : (
+            /* Universal TCE Header */
+            <div className="flex items-center gap-4 border-b-2 border-black pb-3">
+              <div className="shrink-0">
+                <img src="/logo.png" alt="TCE Logo" className="h-16 w-auto object-contain" />
               </div>
-              <div className="flex justify-between text-[11px] text-black font-semibold mt-1.5 leading-relaxed">
-                <div>
-                  Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
-                  NTN: G535752<br />
-                  STRN: 3277876376780
+              <div className="flex-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-black uppercase font-sans">
+                  Technicool Engineering
+                </h1>
+                <div className="text-[11px] text-black tracking-wider uppercase font-bold">
+                  MAKE YOUR DESIRE CLIMATE
                 </div>
-                <div className="text-right">
-                  Web: www.technicool.com.pk<br />
-                  Mobile: 03218304978
+                <div className="flex justify-between text-[11px] text-black font-semibold mt-1.5 leading-relaxed">
+                  <div>
+                    Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.<br />
+                    NTN: G535752<br />
+                    STRN: 3277876376780
+                  </div>
+                  <div className="text-right">
+                    Web: www.technicool.com.pk<br />
+                    Mobile: 03218304978
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Document Title */}
           <h2 className="text-base font-black tracking-wider text-black uppercase mb-3 mt-4 border-b border-black pb-1">
@@ -364,23 +403,47 @@ export default function QuotationPdfPage() {
           ) : null}
         </div>
 
-        {/* Universal TCE Footer */}
-        <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
-          <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
-            <span>📍</span>
-            <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+        {/* Letterhead Footer */}
+        {selectedCompany === "TECAIR" ? (
+          /* Official TECAIR Letterhead Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
+            <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">
+              <span>
+                <strong className="text-black font-black">Web:</strong>{" "}
+                <span className="text-[#0066cc]">www.tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Mail:</strong>{" "}
+                <span className="text-[#0066cc]">services@tecair.com.pk</span>
+              </span>
+              <span>
+                <strong className="text-black font-black">Cell:</strong>{" "}
+                <span className="text-black">0300-8304978</span>
+              </span>
+            </div>
+            <div className="text-[11px] font-semibold text-black mt-1">
+              <strong className="text-black font-black">Office:</strong> 3<sup>rd</sup> Floor Home Sphere Plaza R-Sector, C-18 DHA Multan.
+            </div>
           </div>
-          <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
-            <span className="flex items-center gap-1">
-              <span>🌐</span>
-              <span>Web: www.technicool.com.pk</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span>✉️</span>
-              <span>services@technicool.com.pk</span>
-            </span>
+        ) : (
+          /* Universal TCE Footer */
+          <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
+            <div className="flex justify-center items-center gap-1.5 text-xs text-black font-bold">
+              <span>📍</span>
+              <span>Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.</span>
+            </div>
+            <div className="flex justify-center items-center gap-6 text-[11px] text-black font-bold mt-1">
+              <span className="flex items-center gap-1">
+                <span>🌐</span>
+                <span>Web: www.technicool.com.pk</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span>✉️</span>
+                <span>services@technicool.com.pk</span>
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>
