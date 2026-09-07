@@ -237,7 +237,7 @@ export default function POPdfPage() {
           )}
 
           {/* Document Title */}
-          <h2 className="text-center text-xl font-bold tracking-widest text-black uppercase my-5 border-b-2 border-black pb-1 font-mono">
+          <h2 className="text-center text-xl font-bold tracking-widest text-black uppercase my-5 font-mono">
             PURCHASE ORDER
           </h2>
 
