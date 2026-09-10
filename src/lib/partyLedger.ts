@@ -235,8 +235,11 @@ export async function getPartyLedgerReportData({
       return;
     }
 
-    // Skip raw INV ledger entries when we pull master invoice records (to prevent stale/duplicated amounts)
+    // Skip raw INV and GRN ledger entries when we pull master invoice/PO records (to prevent stale or undiscounted amounts)
     if ((partyType === "CUSTOMER" || partyType === "CONSOLIDATED") && (le.voucherType === "INV" || le.referenceType === "INVOICE")) {
+      return;
+    }
+    if ((partyType === "VENDOR" || partyType === "CONSOLIDATED") && (le.voucherType === "GRN" || le.referenceType === "PO_RECEIPT")) {
       return;
     }
 
@@ -515,10 +518,34 @@ export async function getPartyLedgerReportData({
     });
 
     pos.forEach((po) => {
+      // Calculate PO discount ratio if PO has a discount
+      let discountFactor = 1;
+      if (po.notes && po.notes.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(po.notes);
+          if (parsed.discountAmount && parsed.subtotalAmount && Number(parsed.subtotalAmount) > 0) {
+            discountFactor = 1 - Number(parsed.discountAmount) / Number(parsed.subtotalAmount);
+          } else if (parsed.discountPercent && Number(parsed.discountPercent) > 0) {
+            discountFactor = 1 - Number(parsed.discountPercent) / 100;
+          }
+        } catch {}
+      }
+      if (discountFactor === 1 && Number(po.discount) > 0 && Number(po.totalAmount) > 0) {
+        const sub = Number(po.totalAmount) + Number(po.discount);
+        discountFactor = 1 - Number(po.discount) / sub;
+      }
+
       po.grns.forEach((grn) => {
         const isGrnCaptured = loggedRefKeys.has(grn.grnNumber.toLowerCase()) || loggedRefKeys.has(grn.id.toLowerCase());
         if (!isGrnCaptured) {
-          const grnTotal = grn.lineItems.reduce((acc, item) => acc + item.quantityReceived * Number(item.unitCost), 0);
+          const grnTotal = grn.lineItems.reduce((acc, item) => {
+            const poLine = po.lineItems.find((l) => l.productId === item.productId);
+            const rawCost = poLine ? Number(poLine.unitCost) : Number(item.unitCost);
+            const expectedDiscountedCost = Math.round(rawCost * discountFactor);
+            const effectiveUnitCost = Math.min(Number(item.unitCost), expectedDiscountedCost);
+            return acc + item.quantityReceived * effectiveUnitCost;
+          }, 0);
+
           rawItems.push({
             date: grn.receivedAt,
             docType: "GRN_BILL",

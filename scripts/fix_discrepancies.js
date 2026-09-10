@@ -10,8 +10,20 @@ async function runFixes() {
   // 1. DEDUPLICATE VOUCHER BPV-10001 IN JOURNAL ENTRIES
   // -------------------------------------------------------------
   console.log('--- 1. Deduplicating JournalEntry for BPV-10001 ---');
-  const duplicateBpvBackfill = await prisma.journalEntry.findUnique({
-    where: { idempotencyKey: 'LEGACY_BACKFILL:a198b58a-4d4b-46eb-b88e-e431f9b8d076' },
+  const duplicateBpvBackfill = await prisma.journalEntry.findFirst({
+    where: {
+      OR: [
+        { idempotencyKey: 'LEGACY_BACKFILL:a198b58a-4d4b-46eb-b88e-e431f9b8d076' },
+        {
+          idempotencyKey: { startsWith: 'LEGACY_BACKFILL:' },
+          narration: { contains: 'BPV-10001' }
+        },
+        {
+          idempotencyKey: { startsWith: 'LEGACY_BACKFILL:' },
+          narration: { contains: 'MIA TECHNICAL SERVICE' }
+        }
+      ]
+    },
     include: { lines: true }
   });
 
