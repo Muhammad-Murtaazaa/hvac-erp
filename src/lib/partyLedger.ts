@@ -223,12 +223,15 @@ export async function getPartyLedgerReportData({
   // Process Vouchers & Manual Ledger entries
   partyLedgerEntries.forEach((le) => {
     // Strictly exclude internal COGS and inventory movements from party statements
-    if (
+    const isCogsOrInventoryInternal =
       le.voucherType === "COGS" ||
-      le.debitAccount?.toLowerCase().includes("cost of goods sold") ||
-      le.creditAccount?.toLowerCase().includes("inventory asset") ||
-      le.partyType === "GENERAL"
-    ) {
+      le.partyType === "GENERAL" ||
+      ((le.debitAccount?.toLowerCase().includes("cost of goods sold") || le.debitAccount?.toLowerCase().includes("cogs")) &&
+        le.creditAccount?.toLowerCase().includes("inventory asset")) ||
+      (le.debitAccount?.toLowerCase().includes("inventory asset") &&
+        (le.creditAccount?.toLowerCase().includes("cost of goods sold") || le.creditAccount?.toLowerCase().includes("cogs")));
+
+    if (isCogsOrInventoryInternal) {
       return;
     }
 
@@ -245,8 +248,7 @@ export async function getPartyLedgerReportData({
       // Exclude pure vendor disbursements & vendor bills from Customer statements
       if (
         le.partyType === "VENDOR" ||
-        le.voucherType === "CPV" ||
-        le.voucherType === "BPV" ||
+        (le.partyType !== "CUSTOMER" && (le.voucherType === "CPV" || le.voucherType === "BPV")) ||
         le.voucherType === "GRN" ||
         le.referenceType === "PO_RECEIPT" ||
         le.referenceType === "VENDOR_RETURN"
@@ -261,7 +263,8 @@ export async function getPartyLedgerReportData({
         credit = Number(le.amount);
       } else if (
         le.debitAccount.toLowerCase().includes("customer") ||
-        le.debitAccount.toLowerCase().includes("receivable")
+        le.debitAccount.toLowerCase().includes("receivable") ||
+        ((le.voucherType === "CPV" || le.voucherType === "BPV") && le.partyType === "CUSTOMER")
       ) {
         debit = Number(le.amount);
       } else {
@@ -442,7 +445,8 @@ export async function getPartyLedgerReportData({
         const isPayCaptured =
           loggedRefKeys.has(p.id.toLowerCase()) ||
           loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) ||
-          loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
+          loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`) ||
+          loggedRefKeys.has(inv.invoiceNumber.toLowerCase());
         if (!isPayCaptured) {
           rawItems.push({
             date: p.paymentDate,
@@ -456,6 +460,7 @@ export async function getPartyLedgerReportData({
           loggedRefKeys.add(p.id.toLowerCase());
           loggedRefKeys.add(`payment:${p.id.toLowerCase()}`);
           loggedRefKeys.add(`rec-${inv.invoiceNumber.toLowerCase()}`);
+          loggedRefKeys.add(inv.invoiceNumber.toLowerCase());
         }
       });
     });
@@ -546,15 +551,42 @@ export async function getPartyLedgerReportData({
       const ref = `PAY-${pr.month}/${pr.year}`;
       const isPayCaptured = loggedRefKeys.has(ref.toLowerCase()) || loggedRefKeys.has(pr.id.toLowerCase());
       if (!isPayCaptured) {
+        // Salary earned (Credit to employee liability)
         rawItems.push({
           date: pr.paymentDate || pr.createdAt,
           docType: "PAYROLL",
-          referenceNumber: ref,
-          description: `Monthly Salary Payment for ${pr.month}/${pr.year} (Net Pay)`,
-          debit: Math.round(Number(pr.netPay) * 100) / 100,
+          referenceNumber: `${ref}-EARN`,
+          description: `Salary Accrual for ${pr.month}/${pr.year} (Base: PKR ${Number(pr.baseSalary).toLocaleString()})`,
+          debit: 0,
           credit: Math.round(Number(pr.baseSalary) * 100) / 100,
           dueDate: pr.paymentDate || pr.createdAt,
         });
+
+        // Deductions if any (Debit to employee)
+        const totalDeductions = Number(pr.deductions || 0) + Number(pr.messDeductions || 0) + Number(pr.advanceDeductions || 0) + Number(pr.otherDeductions || 0);
+        if (totalDeductions > 0) {
+          rawItems.push({
+            date: pr.paymentDate || pr.createdAt,
+            docType: "PAYROLL_DEDUCTION",
+            referenceNumber: `${ref}-DED`,
+            description: `Salary Deductions for ${pr.month}/${pr.year}`,
+            debit: Math.round(totalDeductions * 100) / 100,
+            credit: 0,
+            dueDate: pr.paymentDate || pr.createdAt,
+          });
+        }
+
+        // Net payout (Debit to employee)
+        rawItems.push({
+          date: pr.paymentDate || pr.createdAt,
+          docType: "PAYROLL_PAYMENT",
+          referenceNumber: ref,
+          description: `Monthly Salary Payout for ${pr.month}/${pr.year} via ${pr.paymentMethod || "Cash/Bank"}`,
+          debit: Math.round(Number(pr.netPay) * 100) / 100,
+          credit: 0,
+          dueDate: pr.paymentDate || pr.createdAt,
+        });
+
         loggedRefKeys.add(ref.toLowerCase());
         loggedRefKeys.add(pr.id.toLowerCase());
       }

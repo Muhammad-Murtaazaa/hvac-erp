@@ -428,10 +428,19 @@ function ProcurementPageContent() {
   const openGrnForm = (po: any) => {
     setSelectedPO(po);
     setGrnNotes("");
+    const poSubtotal = (po.lineItems || []).reduce(
+      (acc: number, line: any) => acc + (Number(line.quantityOrdered) || 0) * (Number(line.unitCost) || 0),
+      0
+    );
+    const poDiscount = Number(po.discount || 0);
+    const discountFactor = poSubtotal > 0 && poDiscount > 0 ? (1 - poDiscount / poSubtotal) : 1;
+
     setGrnLines(
       (po.lineItems || []).map((line: any) => {
         const qOrdered = Number(line.quantityOrdered) || 0;
         const qReceived = Number(line.quantityReceived) || 0;
+        const baseCost = Number(line.unitCost) || 0;
+        const effectiveCost = Math.round(baseCost * discountFactor);
         return {
           productId: line.productId,
           sku: line.product?.sku || "-",
@@ -439,7 +448,7 @@ function ProcurementPageContent() {
           quantityOrdered: qOrdered,
           quantityReceived: "", // Start blank so user must manually enter verified count
           remaining: Math.max(0, qOrdered - qReceived),
-          unitCost: line.unitCost || "0",
+          unitCost: String(effectiveCost),
         };
       })
     );

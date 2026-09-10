@@ -66,11 +66,19 @@ export async function POST(req: Request) {
         },
       });
 
+      // Calculate PO discount factor if PO has discount applied
+      const poSubtotal = (po.lineItems || []).reduce(
+        (acc: number, l: any) => acc + (Number(l.quantityOrdered) || 0) * (Number(l.unitCost) || 0),
+        0
+      );
+      const poDiscount = Number(po.discount || 0);
+      const discountFactor = poSubtotal > 0 && poDiscount > 0 ? (1 - poDiscount / poSubtotal) : 1;
+
       let totalGrnValue = 0;
       // Process each received item
       for (const item of lineItems) {
         const qtyReceived = parseInt(item.quantityReceived);
-        const costPerUnit = Math.round(Number(item.unitCost));
+        let costPerUnit = Math.round(Number(item.unitCost));
         const productId = item.productId;
 
         if (isNaN(qtyReceived) || qtyReceived <= 0) {
@@ -87,6 +95,14 @@ export async function POST(req: Request) {
             po.lineItems.find((l) => l.productId === productId);
         if (!poLine) {
           throw new Error(`Product ${product.sku} is not part of this Purchase Order`);
+        }
+
+        // Ensure cost reflects the effective discounted PO price if PO has discount
+        if (discountFactor < 1) {
+          const expectedDiscounted = Math.round(Number(poLine.unitCost) * discountFactor);
+          if (costPerUnit > expectedDiscounted || costPerUnit === Math.round(Number(poLine.unitCost))) {
+            costPerUnit = expectedDiscounted;
+          }
         }
 
         const remaining = poLine.quantityOrdered - poLine.quantityReceived;

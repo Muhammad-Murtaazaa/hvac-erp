@@ -111,7 +111,7 @@ export async function POST(req: Request) {
     const voucher = await prisma.$transaction(async (tx) => {
       const voucherNumber = await getNextVoucherNumber(tx, voucherType as any);
 
-      // Auto resolve partyName if missing but partyId provided
+      // Auto resolve partyName if missing but partyId provided (and vice versa)
       let resolvedPartyId = partyId || debitPartyId || creditPartyId || null;
       let resolvedPartyName = partyName || null;
       if (resolvedPartyId && !resolvedPartyName) {
@@ -124,6 +124,17 @@ export async function POST(req: Request) {
         } else if (partyType === "CUSTOMER") {
           const c = await tx.customer.findUnique({ where: { id: resolvedPartyId } });
           if (c) resolvedPartyName = c.name;
+        }
+      } else if (!resolvedPartyId && resolvedPartyName) {
+        if (partyType === "VENDOR") {
+          const v = await tx.vendor.findFirst({ where: { name: { equals: resolvedPartyName.trim(), mode: "insensitive" } } });
+          if (v) resolvedPartyId = v.id;
+        } else if (partyType === "EMPLOYEE") {
+          const e = await tx.employee.findFirst({ where: { name: { equals: resolvedPartyName.trim(), mode: "insensitive" } } });
+          if (e) resolvedPartyId = e.id;
+        } else if (partyType === "CUSTOMER") {
+          const c = await tx.customer.findFirst({ where: { name: { equals: resolvedPartyName.trim(), mode: "insensitive" } } });
+          if (c) resolvedPartyId = c.id;
         }
       }
 

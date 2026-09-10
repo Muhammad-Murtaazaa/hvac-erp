@@ -92,7 +92,21 @@ async function runCommit() {
         where: { idempotencyKey },
       });
       if (existing) {
-        console.log(`Skipping already backfilled entry: ${idempotencyKey}`);
+        continue;
+      }
+
+      // Skip if a live native JournalEntry already exists for this document to prevent duplicate vouchers
+      const liveJournal = await tx.journalEntry.findFirst({
+        where: {
+          OR: [
+            { sourceId: entry.referenceId },
+            ...(entry.voucherNumber ? [{ sourceId: entry.voucherNumber }] : []),
+            ...(entry.voucherNumber ? [{ narration: { contains: entry.voucherNumber } }] : [])
+          ],
+          idempotencyKey: { not: { startsWith: 'LEGACY_BACKFILL:' } }
+        }
+      });
+      if (liveJournal) {
         continue;
       }
       const canonicalDebit = mapLegacyAccount(entry.debitAccount, entry);

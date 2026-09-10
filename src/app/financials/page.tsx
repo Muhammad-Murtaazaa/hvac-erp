@@ -302,11 +302,15 @@ function UniversalPartyCombobox({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`w-7 h-7 rounded-xl flex items-center justify-center font-mono font-bold text-[10px] uppercase shrink-0 ${
-                          party.type === "CUSTOMER"
+                          party.types && party.types.length > 1
+                            ? "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                            : party.type === "CUSTOMER"
                             ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                             : party.type === "VENDOR"
                             ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                            : party.type === "EMPLOYEE"
+                            ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                            : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200"
                         }`}
                       >
                         {initials}
@@ -322,7 +326,9 @@ function UniversalPartyCombobox({
                                 ? "bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
                                 : party.type === "VENDOR"
                                 ? "bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                                : "bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                                : party.type === "EMPLOYEE"
+                                ? "bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                             }`}
                           >
                             {isMultiRole
@@ -331,7 +337,9 @@ function UniversalPartyCombobox({
                               ? "Customer"
                               : party.type === "VENDOR"
                               ? "Vendor"
-                              : "Staff"}
+                              : party.type === "EMPLOYEE"
+                              ? "Staff"
+                              : "Customer & Vendor"}
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
@@ -370,14 +378,28 @@ function UniversalPartyCombobox({
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                currentSelectedParty.type === "CUSTOMER"
+                currentSelectedParty.type === "CONSOLIDATED" || (currentSelectedParty.types && currentSelectedParty.types.length > 1)
+                  ? "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600"
+                  : currentSelectedParty.type === "CUSTOMER"
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
                   : currentSelectedParty.type === "VENDOR"
                   ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                  : "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                  : currentSelectedParty.type === "EMPLOYEE"
+                  ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                  : "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600"
               }`}
             >
-              {currentSelectedParty.type === "CUSTOMER" ? "Customer" : currentSelectedParty.type === "VENDOR" ? "Vendor" : "Staff"}
+              {currentSelectedParty.types && currentSelectedParty.types.length > 1
+                ? currentSelectedParty.types.map((t: string) => t === "CUSTOMER" ? "Customer" : t === "VENDOR" ? "Vendor" : "Staff").join(" & ")
+                : currentSelectedParty.type === "CONSOLIDATED"
+                ? "Customer & Vendor"
+                : currentSelectedParty.type === "CUSTOMER"
+                ? "Customer"
+                : currentSelectedParty.type === "VENDOR"
+                ? "Vendor"
+                : currentSelectedParty.type === "EMPLOYEE"
+                ? "Staff"
+                : "Customer & Vendor"}
             </span>
             <span className="font-bold text-slate-800 dark:text-white truncate">{currentSelectedParty.name}</span>
             {currentSelectedParty.phone && (
@@ -865,13 +887,11 @@ function FinancialsPageContent() {
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [selectedPartyName, setSelectedPartyName] = useState("");
   const [partySearchQuery, setPartySearchQuery] = useState("");
-  const [soaStartDate, setSoaStartDate] = useState(
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
-  );
+  const [soaStartDate, setSoaStartDate] = useState("2024-01-01");
   const [soaEndDate, setSoaEndDate] = useState(new Date().toISOString().split("T")[0]);
   const [soaData, setSoaData] = useState<any>(null);
   const [soaLoading, setSoaLoading] = useState(false);
-  const [soaPreset, setSoaPreset] = useState<"this_month" | "last_30" | "ytd" | "all">("this_month");
+  const [soaPreset, setSoaPreset] = useState<"this_month" | "last_30" | "ytd" | "all">("all");
 
   // ================= ENTRIES & GENERAL LEDGER STATE =================
   const [vouchers, setVouchers] = useState<any[]>([]);
@@ -1159,18 +1179,23 @@ function FinancialsPageContent() {
     setSoaPreset(preset);
     const now = new Date();
     const end = now.toISOString().split("T")[0];
+    let start = "2024-01-01";
     setSoaEndDate(end);
     if (preset === "this_month") {
       const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      setSoaStartDate(first.toISOString().split("T")[0]);
+      start = first.toISOString().split("T")[0];
     } else if (preset === "last_30") {
       const prev30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      setSoaStartDate(prev30.toISOString().split("T")[0]);
+      start = prev30.toISOString().split("T")[0];
     } else if (preset === "ytd") {
       const ytd = new Date(now.getFullYear(), 0, 1);
-      setSoaStartDate(ytd.toISOString().split("T")[0]);
+      start = ytd.toISOString().split("T")[0];
     } else if (preset === "all") {
-      setSoaStartDate("2024-01-01");
+      start = "2024-01-01";
+    }
+    setSoaStartDate(start);
+    if (selectedPartyName || selectedPartyId) {
+      fetchPartyLedger(selectedPartyName, selectedPartyId, partyType, start, end);
     }
   };
 
@@ -1449,11 +1474,15 @@ function FinancialsPageContent() {
   const fetchPartyLedger = async (
     explicitPartyName?: string,
     explicitPartyId?: string,
-    explicitPartyType?: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "CONSOLIDATED"
+    explicitPartyType?: "CUSTOMER" | "VENDOR" | "EMPLOYEE" | "CONSOLIDATED",
+    customStartDate?: string,
+    customEndDate?: string
   ) => {
     const pName = explicitPartyName !== undefined ? explicitPartyName : selectedPartyName;
     const pId = explicitPartyId !== undefined ? explicitPartyId : selectedPartyId;
     const pType = explicitPartyType !== undefined ? explicitPartyType : partyType;
+    const sStart = customStartDate !== undefined ? customStartDate : soaStartDate;
+    const sEnd = customEndDate !== undefined ? customEndDate : soaEndDate;
 
     if (!pName && !pId) {
       toast({ title: "Select a Party", message: "Please choose a customer, vendor or staff member.", type: "warning" });
@@ -1462,7 +1491,7 @@ function FinancialsPageContent() {
     setSoaLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const url = `/api/finance/party-ledger?partyType=${pType}&partyId=${pId || ""}&partyName=${encodeURIComponent(pName)}&startDate=${soaStartDate}&endDate=${soaEndDate}`;
+      const url = `/api/finance/party-ledger?partyType=${pType}&partyId=${pId || ""}&partyName=${encodeURIComponent(pName)}&startDate=${sStart}&endDate=${sEnd}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const json = await res.json();
