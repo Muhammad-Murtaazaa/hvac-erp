@@ -11,7 +11,7 @@ jobs:
       - name: Decode SSH Key
         run: |
           echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > ./deploy_key
-          chmod 600 ./deploy_key
+          chmod 644 ./deploy_key
 
       - name: Execute Deployment Script via SSH
         uses: appleboy/ssh-action@v1.0.3
