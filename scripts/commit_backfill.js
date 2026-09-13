@@ -6,6 +6,7 @@ const CANONICAL_ACCOUNTS = [
   { name: 'Accounts Receivable (Trade Debtors)', type: 'ASSET', isPartyControl: true, legacyAliases: ['Accounts Receivable', 'Accounts Receivable (Trade Debtors)', 'AR'] },
   { name: 'Accounts Payable (Trade Creditors)', type: 'LIABILITY', isPartyControl: true, legacyAliases: ['Accounts Payable', 'Accounts Payable (Trade Creditors)', 'AP'] },
   { name: 'Customer Advance Deposits', type: 'LIABILITY', isPartyControl: true, legacyAliases: ['Customer Advance Deposits', 'Advance Deposit'] },
+  { name: 'Vendor Advance Payments', type: 'ASSET', isPartyControl: true, legacyAliases: ['Vendor Advance Payments', 'Vendor Advance'] },
   { name: 'Employee Advance', type: 'ASSET', isPartyControl: true, legacyAliases: ['Employee Advance', 'Staff Advance'] },
   { name: 'Sales Revenue', type: 'INCOME', isPartyControl: false, legacyAliases: ['Sales Revenue'] },
   { name: 'Service & Maintenance Income', type: 'INCOME', isPartyControl: false, legacyAliases: ['Service & Maintenance Income'] },
@@ -39,6 +40,7 @@ function mapLegacyAccount(rawName, entry) {
   }
 
   if (name.toLowerCase().includes('receivable')) return 'Accounts Receivable (Trade Debtors)';
+  if (name.toLowerCase().includes('vendor advance')) return 'Vendor Advance Payments';
   if (name.toLowerCase().includes('payable')) return 'Accounts Payable (Trade Creditors)';
   if (name.toLowerCase().includes('advance deposit')) return 'Customer Advance Deposits';
   if (name.toLowerCase().includes('meezan') || name.toLowerCase().includes('bank')) return 'Bank Account (Meezan Bank)';
@@ -191,6 +193,9 @@ async function runCommit() {
         }
       });
     }
+  }, {
+    maxWait: 30000,
+    timeout: 120000,
   });
 
   console.log('\n--- 3. VERIFYING COMMITTED DATA ---');

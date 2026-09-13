@@ -18,13 +18,6 @@ npx prisma generate
 echo "🗄️ Applying safe database schema updates (Zero data loss)..."
 npx prisma db push --skip-generate
 
-echo "📊 Seeding canonical accounts and running idempotent historical ledger v2 backfill..."
-node scripts/commit_backfill.js
-
-echo "🔧 Reconciling PO discounts, ledger entries, and party linking..."
-node scripts/fix_discrepancies.js
-node scripts/fix_additional_discrepancies.js
-
 echo "🏗️ Building production Next.js application..."
 npm run build
 
