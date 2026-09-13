@@ -21,3 +21,4 @@ jobs:
             git reset --hard origin/main
             chmod +x /var/www/hvac-erp/deploy.sh
             /var/www/hvac-erp/deploy.sh
+            
