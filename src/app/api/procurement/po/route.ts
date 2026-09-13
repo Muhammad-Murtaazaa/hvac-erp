@@ -153,6 +153,47 @@ export async function POST(req: Request) {
         company: company === "TECAIR" ? "TECAIR" : "TCE",
       });
 
+      // Resolve product rows: if unitCost is different from the product's existing stock price,
+      // create/find a new product row in stock with that price so the old price in stock remains unchanged.
+      const resolvedLineItems: any[] = [];
+      for (const item of lineItems) {
+        const cost = Number(item.unitCost);
+        const origProduct = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!origProduct) throw new Error(`Product not found: ${item.productId}`);
+
+        let targetProductId = origProduct.id;
+        const currentStockPrice = Number(origProduct.averageCost);
+
+        // If the PO has a different price than the stock price (differing by more than 0.01)
+        if (Math.abs(cost - currentStockPrice) > 0.01) {
+          const variantSku = `${origProduct.sku}-P${Math.round(cost)}`;
+          let priceVariant = await tx.product.findUnique({ where: { sku: variantSku } });
+          if (!priceVariant) {
+            priceVariant = await tx.product.create({
+              data: {
+                sku: variantSku,
+                name: `${origProduct.name} (PKR ${cost.toLocaleString()})`,
+                category: origProduct.category,
+                unit: origProduct.unit,
+                reorderLevel: origProduct.reorderLevel,
+                onHandQty: 0,
+                incomingQty: 0,
+                averageCost: cost,
+                salesPrice: origProduct.salesPrice,
+              },
+            });
+          }
+          targetProductId = priceVariant.id;
+        }
+
+        resolvedLineItems.push({
+          productId: targetProductId,
+          quantityOrdered: parseInt(item.quantityOrdered),
+          unitCost: cost,
+          expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
+        });
+      }
+
       const po = await tx.purchaseOrder.create({
         data: {
           poNumber,
@@ -163,12 +204,7 @@ export async function POST(req: Request) {
           notes: notesPayload,
           createdAt: poDate ? new Date(poDate) : new Date(),
           lineItems: {
-            create: lineItems.map((item: any) => ({
-              productId: item.productId,
-              quantityOrdered: parseInt(item.quantityOrdered),
-              unitCost: Number(item.unitCost),
-              expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
-            })),
+            create: resolvedLineItems,
           },
         },
         include: {
@@ -177,18 +213,8 @@ export async function POST(req: Request) {
         },
       });
 
-      // Update product's averageCost to entered unitCost
-      for (const item of lineItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            averageCost: Number(item.unitCost),
-          },
-        });
-      }
-
       if (poStatus === "APPROVED" || poStatus === "SUBMITTED") {
-        for (const item of lineItems) {
+        for (const item of resolvedLineItems) {
           await tx.product.update({
             where: { id: item.productId },
             data: {

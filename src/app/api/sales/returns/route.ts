@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
 import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
         },
       });
 
-      let totalReturnAmount = 0;
+      let totalReturnTaxable = 0;
       let totalCogsToReverse = 0;
 
       for (const item of lineItems) {
@@ -114,7 +115,7 @@ export async function POST(req: Request) {
         }
 
         const lineRefund = qtyToReturn * refundRate;
-        totalReturnAmount += lineRefund;
+        totalReturnTaxable += lineRefund;
 
         // 3. Process stock adjustment if it is a catalog item
         if (invLine.productId) {
@@ -145,13 +146,20 @@ export async function POST(req: Request) {
         });
       }
 
+      // Calculate GST tax reversal if invoice was GST
+      const invMeta = parseInvoiceMetadata(targetInvoice.notes, targetInvoice);
+      const isGst = targetInvoice.isGst !== false && invMeta.isGst;
+      const taxRate = invMeta.taxRate || 18;
+      const totalReturnTax = isGst ? Math.round(totalReturnTaxable * (taxRate / 100)) : 0;
+      const totalReturnAmount = totalReturnTaxable + totalReturnTax;
+
       // 5. General Ledger Reversing Journal entries
       // Debit Sales Revenue / Credit Accounts Receivable (Trade Debtors)
       await recordLedgerEntry(tx, {
         description: `Sales revenue reversal for return ${returnNumber} against Invoice ${targetInvoice.invoiceNumber}`,
         debitAccount: "Sales Revenue",
         creditAccount: "Accounts Receivable (Trade Debtors)",
-        amount: totalReturnAmount,
+        amount: totalReturnTaxable,
         referenceType: "RETURN",
         referenceId: createdReturn.id,
         partyType: "CUSTOMER",
@@ -161,10 +169,27 @@ export async function POST(req: Request) {
         voucherNumber: returnNumber,
       });
 
-      // Native Double-Entry Journal: Revenue Reversal
+      if (totalReturnTax > 0) {
+        // Debit Sales Tax Payable / Credit Accounts Receivable (Trade Debtors)
+        await recordLedgerEntry(tx, {
+          description: `Sales tax reversal for return ${returnNumber} against Invoice ${targetInvoice.invoiceNumber}`,
+          debitAccount: "Sales Tax Payable",
+          creditAccount: "Accounts Receivable (Trade Debtors)",
+          amount: totalReturnTax,
+          referenceType: "RETURN",
+          referenceId: createdReturn.id,
+          partyType: "CUSTOMER",
+          partyId: targetInvoice.customerId,
+          partyName: targetInvoice.clientName,
+          voucherType: "CN",
+          voucherNumber: returnNumber,
+        });
+      }
+
+      // Native Double-Entry Journal: Revenue & Tax Reversal
       await postJournalEntry(tx, {
         entryDate: new Date(),
-        narration: `Sales revenue reversal for return ${returnNumber} against Invoice ${targetInvoice.invoiceNumber}`,
+        narration: `Sales return ${returnNumber} reversal against Invoice ${targetInvoice.invoiceNumber}`,
         sourceType: "RETURN",
         sourceId: createdReturn.id,
         idempotencyKey: `RETURN:${createdReturn.id}:revenue-reversal`,
@@ -172,9 +197,19 @@ export async function POST(req: Request) {
           {
             accountName: "Sales Revenue",
             partyId: null,
-            debit: totalReturnAmount,
+            debit: totalReturnTaxable,
             credit: 0,
           },
+          ...(totalReturnTax > 0
+            ? [
+                {
+                  accountName: "Sales Tax Payable",
+                  partyId: null,
+                  debit: totalReturnTax,
+                  credit: 0,
+                },
+              ]
+            : []),
           {
             accountName: "Accounts Receivable (Trade Debtors)",
             partyId: targetInvoice.customerId,
@@ -193,9 +228,9 @@ export async function POST(req: Request) {
           amount: totalCogsToReverse,
           referenceType: "RETURN",
           referenceId: createdReturn.id,
-          partyType: "CUSTOMER",
-          partyId: targetInvoice.customerId,
-          partyName: targetInvoice.clientName,
+          partyType: "GENERAL",
+          partyId: null,
+          partyName: null,
           voucherType: "CN",
           voucherNumber: returnNumber,
         });

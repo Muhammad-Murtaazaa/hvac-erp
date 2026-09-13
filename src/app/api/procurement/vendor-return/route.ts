@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement } from "@/lib/ledger";
 import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { parsePoMetadata } from "@/lib/poHelper";
 
 export async function GET(req: Request) {
   const session = await getCurrentUser(req);
@@ -59,6 +60,8 @@ export async function POST(req: Request) {
       }
 
       let totalAmount = 0;
+      let totalTaxableAmount = 0;
+      let totalTaxAmount = 0;
 
       // Create the Vendor Return header
       const createdReturn = await tx.vendorReturn.create({
@@ -88,7 +91,11 @@ export async function POST(req: Request) {
         const grnLine = await tx.gRNLineItem.findUnique({
           where: { id: grnLineItemId },
           include: {
-            goodsReceivedNote: true,
+            goodsReceivedNote: {
+              include: {
+                purchaseOrder: true,
+              },
+            },
           },
         });
 
@@ -139,7 +146,8 @@ export async function POST(req: Request) {
         }
 
         const originalUnitCost = Number(grnLine.unitCost);
-        const currentAverageCost = Number(product.averageCost);
+        const po = grnLine.goodsReceivedNote.purchaseOrder;
+        const poMeta = po ? parsePoMetadata(po.notes, po) : { isGst: false, taxRate: 18 };
 
         // 3. Decrement inventory and log in StockLedger
         await recordStockMovement(tx, {
@@ -149,49 +157,19 @@ export async function POST(req: Request) {
           referenceDoc: vendorReturnNumber,
         });
 
-        // 4. Ledger entries (Debit AP / Credit Inventory Asset + Variance adjustment)
-        const debitAP = qtyToReturn * originalUnitCost;
-        const creditInventory = qtyToReturn * currentAverageCost;
-        const variance = debitAP - creditInventory;
-
-        if (Math.abs(variance) > 0.001) {
-          if (variance > 0) {
-            // Debit AP (debitAP), Credit Inventory (creditInventory), Credit Variance (variance)
-            await tx.ledgerEntry.create({
-              data: {
-                entryDate: new Date(),
-                description: `Vendor return variance adjustment (VRET-Price-Variance Credit)`,
-                debitAccount: "Accounts Payable",
-                creditAccount: "Purchase Price Variance",
-                amount: variance,
-                referenceType: "VENDOR_RETURN",
-                referenceId: createdReturn.id,
-              },
-            });
-          } else {
-            // Debit AP (debitAP), Debit Variance (abs(variance)), Credit Inventory (creditInventory)
-            await tx.ledgerEntry.create({
-              data: {
-                entryDate: new Date(),
-                description: `Vendor return variance adjustment (VRET-Price-Variance Debit)`,
-                debitAccount: "Purchase Price Variance",
-                creditAccount: "Inventory Asset",
-                amount: Math.abs(variance),
-                referenceType: "VENDOR_RETURN",
-                referenceId: createdReturn.id,
-              },
-            });
-          }
-        }
+        // 4. Balanced Ledger entries (Debit AP / Credit Inventory Asset & Sales Tax Payable)
+        const lineTaxable = Math.round(qtyToReturn * originalUnitCost);
+        const lineTax = poMeta.isGst ? Math.round(lineTaxable * ((poMeta.taxRate || 18) / 100)) : 0;
+        const lineTotalAP = lineTaxable + lineTax;
 
         const targetVendor = await tx.vendor.findUnique({ where: { id: vendorId } });
 
-        // Standard ledger journal line (Debit Accounts Payable (Trade Creditors) / Credit Inventory Asset)
+        // Debit Accounts Payable (Trade Creditors) / Credit Inventory Asset
         await recordLedgerEntry(tx, {
           description: `Return ${qtyToReturn} units of ${product.sku} to vendor (${vendorReturnNumber})`,
           debitAccount: "Accounts Payable (Trade Creditors)",
           creditAccount: "Inventory Asset",
-          amount: Math.min(debitAP, creditInventory),
+          amount: lineTaxable,
           referenceType: "VENDOR_RETURN",
           referenceId: createdReturn.id,
           partyType: "VENDOR",
@@ -200,6 +178,23 @@ export async function POST(req: Request) {
           voucherType: "DN",
           voucherNumber: vendorReturnNumber,
         });
+
+        // Debit Accounts Payable (Trade Creditors) / Credit Sales Tax Payable (GST reversal)
+        if (lineTax > 0) {
+          await recordLedgerEntry(tx, {
+            description: `Sales Tax (GST) reversal on vendor return ${vendorReturnNumber}`,
+            debitAccount: "Accounts Payable (Trade Creditors)",
+            creditAccount: "Sales Tax Payable",
+            amount: lineTax,
+            referenceType: "VENDOR_RETURN",
+            referenceId: createdReturn.id,
+            partyType: "VENDOR",
+            partyId: vendorId,
+            partyName: targetVendor?.name || "Vendor",
+            voucherType: "DN",
+            voucherNumber: vendorReturnNumber,
+          });
+        }
 
         // 5. Create Return Line Item
         await tx.vendorReturnLineItem.create({
@@ -212,7 +207,9 @@ export async function POST(req: Request) {
           },
         });
 
-        totalAmount += debitAP;
+        totalTaxableAmount += lineTaxable;
+        totalTaxAmount += lineTax;
+        totalAmount += lineTotalAP;
       }
 
       // Native Double-Entry Journal: Vendor Return
@@ -234,8 +231,18 @@ export async function POST(req: Request) {
               accountName: "Inventory Asset",
               partyId: null,
               debit: 0,
-              credit: totalAmount,
+              credit: totalTaxableAmount,
             },
+            ...(totalTaxAmount > 0
+              ? [
+                  {
+                    accountName: "Sales Tax Payable",
+                    partyId: null,
+                    debit: 0,
+                    credit: totalTaxAmount,
+                  },
+                ]
+              : []),
           ],
         });
       }

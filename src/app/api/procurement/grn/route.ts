@@ -4,6 +4,7 @@ import { getCurrentUser, hasPermission } from "@/lib/auth";
 import { recordLedgerEntry, recordStockMovement, updateProductAverageCost } from "@/lib/ledger";
 import { postJournalEntry } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
+import { parsePoMetadata } from "@/lib/poHelper";
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
@@ -66,19 +67,21 @@ export async function POST(req: Request) {
         },
       });
 
-      // Calculate PO discount factor if PO has discount applied
-      const poSubtotal = (po.lineItems || []).reduce(
+      // Calculate PO discount and tax parameters using PO metadata
+      const poMeta = parsePoMetadata(po.notes, po);
+      const poSubtotal = poMeta.subtotalAmount || (po.lineItems || []).reduce(
         (acc: number, l: any) => acc + (Number(l.quantityOrdered) || 0) * (Number(l.unitCost) || 0),
         0
       );
-      const poDiscount = Number(po.discount || 0);
-      const discountFactor = poSubtotal > 0 && poDiscount > 0 ? (1 - poDiscount / poSubtotal) : 1;
+      const poDiscount = poMeta.discountAmount || Number(po.discount || 0);
+      const discountRatio = poSubtotal > 0 && poDiscount > 0 ? (poDiscount / poSubtotal) : 0;
 
-      let totalGrnValue = 0;
+      let totalGrnNetValue = 0;
+      let totalGrnDiscount = 0;
+
       // Process each received item
       for (const item of lineItems) {
         const qtyReceived = parseInt(item.quantityReceived);
-        let costPerUnit = Math.round(Number(item.unitCost));
         const productId = item.productId;
 
         if (isNaN(qtyReceived) || qtyReceived <= 0) {
@@ -88,7 +91,7 @@ export async function POST(req: Request) {
         const product = await tx.product.findUnique({ where: { id: productId } });
         if (!product) throw new Error(`Product not found: ${productId}`);
 
-        // Find the original PO line item (by explicit poLineItemId first, then by pending productId)
+        // Find the original PO line item
         const poLine = item.poLineItemId
           ? po.lineItems.find((l) => l.id === item.poLineItemId)
           : po.lineItems.find((l) => l.productId === productId && l.quantityReceived < l.quantityOrdered) ||
@@ -97,13 +100,17 @@ export async function POST(req: Request) {
           throw new Error(`Product ${product.sku} is not part of this Purchase Order`);
         }
 
-        // Ensure cost reflects the effective discounted PO price if PO has discount
-        if (discountFactor < 1) {
-          const expectedDiscounted = Math.round(Number(poLine.unitCost) * discountFactor);
-          if (costPerUnit > expectedDiscounted || costPerUnit === Math.round(Number(poLine.unitCost))) {
-            costPerUnit = expectedDiscounted;
-          }
-        }
+        // Canonical undiscounted base unit cost from the PO
+        const rawUnitCost = poLine ? Math.round(Number(poLine.unitCost)) : Math.round(Number(item.unitCost));
+
+        // Calculate line discount and net inventory asset debit
+        const lineRawTotal = Math.round(qtyReceived * rawUnitCost);
+        const lineDiscount = Math.round(lineRawTotal * discountRatio);
+        const lineNetTotal = Math.max(0, lineRawTotal - lineDiscount);
+        const effectiveUnitCost = qtyReceived > 0 ? Math.round((lineNetTotal / qtyReceived) * 100) / 100 : rawUnitCost;
+
+        totalGrnNetValue += lineNetTotal;
+        totalGrnDiscount += lineDiscount;
 
         const remaining = poLine.quantityOrdered - poLine.quantityReceived;
         if (qtyReceived > remaining) {
@@ -120,25 +127,16 @@ export async function POST(req: Request) {
           },
         });
 
-        // b. Calculate new stock, incoming, and weighted average cost together
+        // b. Update stock quantity (stock price / averageCost remains unchanged as requested)
         const currentOnHand = product.onHandQty;
-        const currentCost = Number(product.averageCost);
         const runningBalance = currentOnHand + qtyReceived;
         const newIncoming = Math.max(0, product.incomingQty - qtyReceived);
-        let newCost = currentCost;
-        if (runningBalance > 0) {
-          newCost = Math.round((currentOnHand * currentCost + qtyReceived * costPerUnit) / runningBalance);
-        } else {
-          newCost = costPerUnit;
-        }
 
-        // Single atomic Product update for stock, incoming, and cost
         await tx.product.update({
           where: { id: productId },
           data: {
             onHandQty: runningBalance,
             incomingQty: newIncoming,
-            averageCost: newCost,
           },
         });
 
@@ -157,7 +155,6 @@ export async function POST(req: Request) {
         let linkedPendingId: string | null = null;
 
         if (item.poPendingItemId) {
-          // Case 1: Subsequent receipt resolving an active shortage from Pending Stock view
           const pendingItem = await tx.pOPendingItem.findUnique({
             where: { id: item.poPendingItemId },
           });
@@ -182,12 +179,10 @@ export async function POST(req: Request) {
           });
           linkedPendingId = pendingItem.id;
         } else {
-          // Case 2: Initial receipt from PO screen
           const totalReceivedSoFar = poLine.quantityReceived + qtyReceived;
           const ordered = poLine.quantityOrdered;
 
           if (totalReceivedSoFar < ordered) {
-            // Log shortfall shortage
             const shortfall = ordered - totalReceivedSoFar;
             const newPending = await tx.pOPendingItem.create({
               data: {
@@ -202,15 +197,32 @@ export async function POST(req: Request) {
           }
         }
 
-        // e. Double-Entry General Ledger write (Debit Inventory Asset / Credit Accounts Payable)
-        const lineTotalAmount = Math.round(qtyReceived * costPerUnit);
-        totalGrnValue += lineTotalAmount;
+        // e. Write GRN Line Item with effective unit cost
+        await tx.gRNLineItem.create({
+          data: {
+            grnId: createdGRN.id,
+            productId,
+            quantityReceived: qtyReceived,
+            unitCost: effectiveUnitCost,
+            poPendingItemId: linkedPendingId,
+          },
+        });
+      }
 
+      // Calculate GST on received taxable amount if GST enabled
+      const taxRate = poMeta.taxRate || 18;
+      const totalGrnTax = poMeta.isGst ? Math.round(totalGrnNetValue * (taxRate / 100)) : 0;
+      const totalGrnPayable = totalGrnNetValue + totalGrnTax;
+
+      // Post balanced General Ledger & Journal entries for the GRN
+      if (totalGrnPayable > 0) {
+        // Flat Ledger Entry: Inventory Asset
         await recordLedgerEntry(tx, {
-          description: `Received ${qtyReceived} units of ${product.sku} against ${po.poNumber} (${grnNumber})`,
+          entryDate: createdGRN.receivedAt || new Date(),
+          description: `Stock intake against ${po.poNumber} (${grnNumber}) from ${po.vendor?.name || "Vendor"}${totalGrnDiscount > 0 ? ` (Net of PKR ${totalGrnDiscount.toLocaleString()} discount)` : ""}`,
           debitAccount: "Inventory Asset",
           creditAccount: "Accounts Payable (Trade Creditors)",
-          amount: lineTotalAmount,
+          amount: totalGrnNetValue,
           referenceType: "PO_RECEIPT",
           referenceId: createdGRN.id,
           partyType: "VENDOR",
@@ -220,40 +232,62 @@ export async function POST(req: Request) {
           voucherNumber: grnNumber,
         });
 
-        // f. Write GRN Line Item
-        await tx.gRNLineItem.create({
-          data: {
-            grnId: createdGRN.id,
-            productId,
-            quantityReceived: qtyReceived,
-            unitCost: costPerUnit,
-            poPendingItemId: linkedPendingId,
-          },
-        });
-      }
+        // Flat Ledger Entry: Input GST if applicable
+        if (totalGrnTax > 0) {
+          await recordLedgerEntry(tx, {
+            entryDate: createdGRN.receivedAt || new Date(),
+            description: `Input Sales Tax (GST) on ${po.poNumber} (${grnNumber})`,
+            debitAccount: "Sales Tax Payable",
+            creditAccount: "Accounts Payable (Trade Creditors)",
+            amount: totalGrnTax,
+            referenceType: "PO_RECEIPT",
+            referenceId: createdGRN.id,
+            partyType: "VENDOR",
+            partyId: po.vendorId,
+            partyName: po.vendor?.name || "Vendor",
+            voucherType: "GRN",
+            voucherNumber: grnNumber,
+          });
+        }
 
-      // Native Double-Entry Journal: One JournalEntry per GRN receipt
-      if (totalGrnValue > 0) {
+        // Native Double-Entry Journal
+        const journalLines: Array<{
+          accountName: string;
+          partyId: string | null;
+          debit: number;
+          credit: number;
+        }> = [
+          {
+            accountName: "Inventory Asset",
+            partyId: null,
+            debit: totalGrnNetValue,
+            credit: 0,
+          },
+        ];
+
+        if (totalGrnTax > 0) {
+          journalLines.push({
+            accountName: "Sales Tax Payable",
+            partyId: null,
+            debit: totalGrnTax,
+            credit: 0,
+          });
+        }
+
+        journalLines.push({
+          accountName: "Accounts Payable (Trade Creditors)",
+          partyId: po.vendorId,
+          debit: 0,
+          credit: totalGrnPayable,
+        });
+
         await postJournalEntry(tx, {
-          entryDate: new Date(),
+          entryDate: createdGRN.receivedAt || new Date(),
           narration: `Stock Intake for ${po.poNumber} (${grnNumber}) from ${po.vendor?.name || "Vendor"}`,
           sourceType: "PO_RECEIPT",
           sourceId: createdGRN.id,
           idempotencyKey: `GRN:${createdGRN.id}:intake`,
-          lines: [
-            {
-              accountName: "Inventory Asset",
-              partyId: null,
-              debit: totalGrnValue,
-              credit: 0,
-            },
-            {
-              accountName: "Accounts Payable (Trade Creditors)",
-              partyId: po.vendorId,
-              debit: 0,
-              credit: totalGrnValue,
-            },
-          ],
+          lines: journalLines,
         });
       }
 

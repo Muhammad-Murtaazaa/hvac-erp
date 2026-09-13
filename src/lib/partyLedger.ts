@@ -447,9 +447,7 @@ export async function getPartyLedgerReportData({
       (inv.payments || []).forEach((p: any) => {
         const isPayCaptured =
           loggedRefKeys.has(p.id.toLowerCase()) ||
-          loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) ||
-          loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`) ||
-          loggedRefKeys.has(inv.invoiceNumber.toLowerCase());
+          loggedRefKeys.has(`payment:${p.id.toLowerCase()}`);
         if (!isPayCaptured) {
           rawItems.push({
             date: p.paymentDate,
@@ -462,8 +460,6 @@ export async function getPartyLedgerReportData({
           });
           loggedRefKeys.add(p.id.toLowerCase());
           loggedRefKeys.add(`payment:${p.id.toLowerCase()}`);
-          loggedRefKeys.add(`rec-${inv.invoiceNumber.toLowerCase()}`);
-          loggedRefKeys.add(inv.invoiceNumber.toLowerCase());
         }
       });
     });
@@ -520,6 +516,8 @@ export async function getPartyLedgerReportData({
     pos.forEach((po) => {
       // Calculate PO discount ratio if PO has a discount
       let discountFactor = 1;
+      let isGst = false;
+      let taxRate = 18;
       if (po.notes && po.notes.startsWith("{")) {
         try {
           const parsed = JSON.parse(po.notes);
@@ -528,6 +526,8 @@ export async function getPartyLedgerReportData({
           } else if (parsed.discountPercent && Number(parsed.discountPercent) > 0) {
             discountFactor = 1 - Number(parsed.discountPercent) / 100;
           }
+          isGst = Boolean(parsed.isGst);
+          taxRate = Number(parsed.taxRate ?? 18);
         } catch {}
       }
       if (discountFactor === 1 && Number(po.discount) > 0 && Number(po.totalAmount) > 0) {
@@ -538,13 +538,16 @@ export async function getPartyLedgerReportData({
       po.grns.forEach((grn) => {
         const isGrnCaptured = loggedRefKeys.has(grn.grnNumber.toLowerCase()) || loggedRefKeys.has(grn.id.toLowerCase());
         if (!isGrnCaptured) {
-          const grnTotal = grn.lineItems.reduce((acc, item) => {
+          const grnTaxable = grn.lineItems.reduce((acc, item) => {
             const poLine = po.lineItems.find((l) => l.productId === item.productId);
             const rawCost = poLine ? Number(poLine.unitCost) : Number(item.unitCost);
             const expectedDiscountedCost = Math.round(rawCost * discountFactor);
-            const effectiveUnitCost = Math.min(Number(item.unitCost), expectedDiscountedCost);
+            const effectiveUnitCost = expectedDiscountedCost > 0 ? expectedDiscountedCost : Number(item.unitCost);
             return acc + item.quantityReceived * effectiveUnitCost;
           }, 0);
+
+          const grnTax = isGst ? Math.round(grnTaxable * (taxRate / 100)) : 0;
+          const grnTotalPayable = grnTaxable + grnTax;
 
           rawItems.push({
             date: grn.receivedAt,
@@ -552,7 +555,7 @@ export async function getPartyLedgerReportData({
             referenceNumber: grn.grnNumber,
             description: `Goods Received Note (PO ${po.poNumber}): ${grn.notes || "Stock Intake"}`,
             debit: 0,
-            credit: Math.round(grnTotal * 100) / 100,
+            credit: Math.round(grnTotalPayable * 100) / 100,
             dueDate: grn.receivedAt,
           });
           loggedRefKeys.add(grn.grnNumber.toLowerCase());

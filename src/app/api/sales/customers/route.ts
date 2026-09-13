@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     ];
   }
 
-  let [customers, ledgerEntries] = await Promise.all([
+  const [customers, ledgerEntries] = await Promise.all([
     prisma.customer.findMany({
       where: whereClause,
       include: {
@@ -76,126 +76,6 @@ export async function GET(req: Request) {
       },
     }),
   ]);
-
-  // Check if any Ledger / Financial customer account is missing from Customer records
-  const existingNames = new Set(customers.map((c) => c.name.trim().toLowerCase()));
-  const missingParties = new Map<string, { phone?: string; address?: string }>();
-
-  ledgerEntries.forEach((le) => {
-    const name = (le.partyName || "").trim();
-    if (name && !existingNames.has(name.toLowerCase())) {
-      if (!missingParties.has(name.toLowerCase())) {
-        missingParties.set(name.toLowerCase(), {});
-      }
-    }
-  });
-
-  if (missingParties.size > 0) {
-    const [sampleInvs, sampleComps, sampleDos] = await Promise.all([
-      prisma.invoice.findMany({
-        where: {
-          clientName: { in: Array.from(missingParties.keys()), mode: "insensitive" },
-        },
-        select: { clientName: true, clientPhone: true, clientAddress: true },
-      }),
-      prisma.complaint.findMany({
-        where: {
-          customerName: { in: Array.from(missingParties.keys()), mode: "insensitive" },
-        },
-        select: { customerName: true, customerPhone: true, customerAddress: true },
-      }),
-      prisma.deliveryOrder.findMany({
-        where: {
-          clientName: { in: Array.from(missingParties.keys()), mode: "insensitive" },
-        },
-        select: { clientName: true, clientPhone: true, deliveryAddress: true },
-      }),
-    ]);
-
-    sampleInvs.forEach((inv) => {
-      const k = (inv.clientName || "").trim().toLowerCase();
-      if (missingParties.has(k)) {
-        missingParties.set(k, {
-          phone: inv.clientPhone || undefined,
-          address: inv.clientAddress || undefined,
-        });
-      }
-    });
-
-    sampleComps.forEach((comp) => {
-      const k = (comp.customerName || "").trim().toLowerCase();
-      if (missingParties.has(k) && !missingParties.get(k)?.phone) {
-        missingParties.set(k, {
-          phone: comp.customerPhone || undefined,
-          address: comp.customerAddress || undefined,
-        });
-      }
-    });
-
-    sampleDos.forEach((d) => {
-      const k = (d.clientName || "").trim().toLowerCase();
-      if (missingParties.has(k) && !missingParties.get(k)?.phone) {
-        missingParties.set(k, {
-          phone: d.clientPhone || undefined,
-          address: d.deliveryAddress || undefined,
-        });
-      }
-    });
-
-    for (const [lowerName, info] of Array.from(missingParties.entries())) {
-      const origName = ledgerEntries.find(l => (l.partyName || "").trim().toLowerCase() === lowerName)?.partyName?.trim() || lowerName;
-      const phone = info.phone || `0300-${Math.floor(1000000 + Math.random() * 9000000)}`;
-      try {
-        await prisma.customer.upsert({
-          where: { phone },
-          update: { name: origName, address: info.address || undefined },
-          create: {
-            name: origName,
-            phone,
-            address: info.address || null,
-            notes: "Linked Financial Ledger Party Account",
-          },
-        });
-      } catch (e) {
-        console.error("Auto customer creation error for party:", origName, e);
-      }
-    }
-
-    customers = await prisma.customer.findMany({
-      where: whereClause,
-      include: {
-        invoices: {
-          select: {
-            id: true,
-            invoiceNumber: true,
-            totalAmount: true,
-            amountPaid: true,
-            status: true,
-            date: true,
-          },
-        },
-        complaints: {
-          select: {
-            id: true,
-            complaintNumber: true,
-            status: true,
-            amount: true,
-            amountStatus: true,
-            date: true,
-          },
-        },
-        deliveryOrders: {
-          select: {
-            id: true,
-            doNumber: true,
-            status: true,
-            date: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-  }
 
   // Aggregate ledger entries per customer
   const ledgerMap = new Map<string, { debits: number; credits: number; entryCount: number }>();

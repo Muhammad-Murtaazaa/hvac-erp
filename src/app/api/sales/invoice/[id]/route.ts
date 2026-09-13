@@ -473,132 +473,88 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           });
         }
 
-        // Sync payment vouchers & journals
-        const isBank = pMethod === "BANK" || pMethod === "BANK_TRANSFER" || pMethod === "CHEQUE" || pMethod === "ONLINE";
-        const liquidAcc = isBank ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+        // Sync payment vouchers & journals per individual Payment record
+        // First clean up existing payment ledger entries and journals for this invoice
+        await tx.ledgerEntry.deleteMany({
+          where: {
+            OR: [
+              { referenceType: "INVOICE", referenceId: existingInvoice.id, voucherType: { in: ["CRV", "BRV"] } },
+              { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["CRV", "BRV"] } },
+            ],
+          },
+        });
 
-        if (finalAmountPaid > 0) {
-          // Check for existing payment ledger entries
-          const existingPaymentLedgers = await tx.ledgerEntry.findMany({
-            where: {
-              OR: [
-                { referenceType: "INVOICE", referenceId: existingInvoice.id, voucherType: { in: ["CRV", "BRV"] } },
-                { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["CRV", "BRV"] } },
-              ],
-            },
-          });
+        const paymentJournals = await tx.journalEntry.findMany({
+          where: {
+            OR: [
+              { sourceId: existingInvoice.id, sourceType: "INVOICE", idempotencyKey: { contains: "payment" } },
+              { idempotencyKey: { startsWith: `INVOICE:${existingInvoice.id}:payment` } },
+              ...existingPayments.map((p) => ({ sourceId: p.id })),
+            ],
+          },
+          select: { id: true },
+        });
+        if (paymentJournals.length > 0) {
+          const jIds = paymentJournals.map((j) => j.id);
+          await tx.journalLine.deleteMany({ where: { journalEntryId: { in: jIds } } });
+          await tx.journalEntry.deleteMany({ where: { id: { in: jIds } } });
+        }
 
-          if (existingPaymentLedgers.length > 0) {
-            // Update existing entry in-place without creating duplicate rows
-            await tx.ledgerEntry.updateMany({
-              where: {
-                id: { in: existingPaymentLedgers.map((l) => l.id) },
-              },
-              data: {
-                entryDate: invoiceDate,
-                description: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
-                debitAccount: liquidAcc,
-                creditAccount: "Accounts Receivable (Trade Debtors)",
-                amount: finalAmountPaid,
-                partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
-                partyId: isPartyPosting ? resolvedCustomerId : null,
-                partyName: isPartyPosting ? finalClientName : null,
-                voucherType: isBank ? "BRV" : "CRV",
-                paymentMethod: pMethod,
-              },
-            });
-          } else {
-            // Record payment ledger entry if none existed before
+        // Fetch current active payment records on this invoice
+        const activePayments = await tx.payment.findMany({
+          where: { invoiceId: existingInvoice.id },
+          orderBy: { paymentDate: "asc" },
+        });
+
+        if (finalAmountPaid > 0 && activePayments.length > 0) {
+          for (let pIdx = 0; pIdx < activePayments.length; pIdx++) {
+            const p = activePayments[pIdx];
+            const pAmount = Number(p.amountPaid || 0);
+            if (pAmount <= 0) continue;
+
+            const pMethodName = p.method || pMethod || "CASH";
+            const isBankPay = pMethodName === "BANK" || pMethodName === "BANK_TRANSFER" || pMethodName === "CHEQUE" || pMethodName === "ONLINE";
+            const liquidAccName = isBankPay ? "Bank Account (Meezan Bank)" : "Cash in Hand";
+
+            // Record distinct payment ledger entry matching this actual payment
             await recordLedgerEntry(tx, {
-              entryDate: invoiceDate,
-              description: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
-              debitAccount: liquidAcc,
+              entryDate: p.paymentDate || invoiceDate,
+              description: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethodName}${!isPartyPosting ? " (GL Only)" : ""}`,
+              debitAccount: liquidAccName,
               creditAccount: "Accounts Receivable (Trade Debtors)",
-              amount: finalAmountPaid,
+              amount: pAmount,
               referenceType: "INVOICE",
               referenceId: existingInvoice.id,
               partyType: isPartyPosting ? "CUSTOMER" : "GENERAL",
               partyId: isPartyPosting ? resolvedCustomerId : null,
               partyName: isPartyPosting ? finalClientName : null,
-              voucherType: isBank ? "BRV" : "CRV",
+              voucherType: isBankPay ? "BRV" : "CRV",
               voucherNumber: existingInvoice.invoiceNumber,
-              paymentMethod: pMethod,
+              paymentMethod: pMethodName,
             });
-          }
 
-          // Double-Entry Journal for Payments
-          const paymentJournals = await tx.journalEntry.findMany({
-            where: {
-              OR: [
-                { sourceId: existingInvoice.id, sourceType: "INVOICE" },
-                { idempotencyKey: { startsWith: `INVOICE:${existingInvoice.id}:payment` } },
-                ...existingPayments.map((p) => ({ sourceId: p.id })),
-              ],
-            },
-            include: { lines: true },
-          });
-
-          if (paymentJournals.length > 0) {
-            for (const pj of paymentJournals) {
-              for (const line of pj.lines) {
-                await tx.journalLine.update({
-                  where: { id: line.id },
-                  data: {
-                    debit: Number(line.debit) > 0 ? finalAmountPaid : 0,
-                    credit: Number(line.credit) > 0 ? finalAmountPaid : 0,
-                    partyId: isPartyPosting && line.partyId ? resolvedCustomerId : line.partyId,
-                  },
-                });
-              }
-            }
-          } else {
+            // Native Double-Entry Journal for this specific payment
             await postJournalEntry(tx, {
-              entryDate: invoiceDate,
-              narration: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethod}${!isPartyPosting ? " (GL Only)" : ""}`,
+              entryDate: p.paymentDate || invoiceDate,
+              narration: `Payment received against Invoice ${existingInvoice.invoiceNumber} via ${pMethodName}${!isPartyPosting ? " (GL Only)" : ""}`,
               sourceType: "INVOICE",
               sourceId: existingInvoice.id,
-              idempotencyKey: `INVOICE:${existingInvoice.id}:payment:default`,
+              idempotencyKey: `INVOICE:${existingInvoice.id}:payment:${p.id}`,
               lines: [
                 {
-                  accountName: mapPaymentMethodToAccount(pMethod),
+                  accountName: mapPaymentMethodToAccount(pMethodName),
                   partyId: null,
-                  debit: finalAmountPaid,
+                  debit: pAmount,
                   credit: 0,
                 },
                 {
                   accountName: "Accounts Receivable (Trade Debtors)",
                   partyId: isPartyPosting ? resolvedCustomerId : null,
                   debit: 0,
-                  credit: finalAmountPaid,
+                  credit: pAmount,
                 },
               ],
             });
-          }
-        } else {
-          // finalAmountPaid is 0: remove payment ledger entries and payment journals
-          await tx.ledgerEntry.deleteMany({
-            where: {
-              OR: [
-                { referenceType: "INVOICE", referenceId: existingInvoice.id, voucherType: { in: ["CRV", "BRV"] } },
-                { voucherNumber: existingInvoice.invoiceNumber, voucherType: { in: ["CRV", "BRV"] } },
-              ],
-            },
-          });
-
-          const paymentJournals = await tx.journalEntry.findMany({
-            where: {
-              OR: [
-                { sourceId: existingInvoice.id, sourceType: "INVOICE" },
-                { idempotencyKey: { startsWith: `INVOICE:${existingInvoice.id}:payment` } },
-                ...existingPayments.map((p) => ({ sourceId: p.id })),
-              ],
-            },
-            select: { id: true },
-          });
-          if (paymentJournals.length > 0) {
-            const jIds = paymentJournals.map((j) => j.id);
-            await tx.journalLine.deleteMany({ where: { journalEntryId: { in: jIds } } });
-            await tx.journalEntry.deleteMany({ where: { id: { in: jIds } } });
           }
         }
       }

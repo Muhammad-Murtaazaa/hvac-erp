@@ -272,6 +272,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       });
 
       return { invoice: createdInvoice, quotation: updatedQuotation };
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     return NextResponse.json({

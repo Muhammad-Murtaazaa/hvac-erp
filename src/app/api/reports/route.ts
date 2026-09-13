@@ -334,7 +334,7 @@ export async function GET(req: Request) {
         }),
         prisma.ledgerEntry.findMany({
           where: { partyType: "CUSTOMER" },
-          select: { partyName: true, debitAccount: true, creditAccount: true, amount: true },
+          select: { partyName: true, debitAccount: true, creditAccount: true, amount: true, referenceType: true },
         }),
       ]);
 
@@ -366,7 +366,10 @@ export async function GET(req: Request) {
         customerMap.set(name, cur);
       });
 
+      // Incorporate non-invoice ledger adjustments (e.g. returns, manual JVs, opening balances)
+      // while skipping referenceType === "INVOICE" to avoid double-counting invoice billings and invoice payments
       ledgerReceipts.forEach((l) => {
+        if (l.referenceType === "INVOICE") return;
         const name = (l.partyName || "").trim();
         if (!name) return;
         const cur = customerMap.get(name) || {
@@ -454,24 +457,17 @@ export async function GET(req: Request) {
         });
       });
 
+      // POs track open commitments
       pos.forEach((po) => {
         const vid = po.vendorId;
         if (!vid) return;
-        const cur = vendorMap.get(vid) || {
-          id: vid,
-          name: po.vendor?.name || "Vendor",
-          contactPerson: "",
-          phone: "",
-          totalPurchases: 0,
-          totalPaid: 0,
-          balance: 0,
-          openPOCount: 0,
-        };
-        cur.totalPurchases += Number(po.totalAmount || 0);
-        if (po.status !== "RECEIVED" && po.status !== "CANCELLED") cur.openPOCount += 1;
-        vendorMap.set(vid, cur);
+        const cur = vendorMap.get(vid);
+        if (cur) {
+          if (po.status !== "RECEIVED" && po.status !== "CANCELLED") cur.openPOCount += 1;
+        }
       });
 
+      // Trade Payables sub-ledger transactions come from actual AP ledger entries
       ledgerDisbursements.forEach((l) => {
         const vid = l.partyId || l.partyName;
         if (!vid) return;

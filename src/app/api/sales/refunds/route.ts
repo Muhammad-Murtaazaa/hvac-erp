@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const refundAmt = Number(amountRefunded);
 
     const refund = await prisma.$transaction(async (tx) => {
-      // 1. Calculate previous refunds
+      // 1. Calculate previous refunds on this return and overall invoice
       const priorRefunds = await tx.refund.aggregate({
         where: { returnId },
         _sum: { amountRefunded: true },
@@ -41,10 +41,25 @@ export async function POST(req: Request) {
       const previouslyRefunded = Number(priorRefunds._sum.amountRefunded || 0);
       const remainingRefundable = Number(ret.totalAmount) - previouslyRefunded;
 
-      // Allow a tiny margin for float rounding
+      // Ensure refund does not exceed this return's total amount
       if (refundAmt > remainingRefundable + 0.01) {
         throw new Error(
-          `Cannot refund ${refundAmt.toFixed(2)}. Only ${remainingRefundable.toFixed(2)} is remaining to be refunded on this return.`
+          `Cannot refund PKR ${refundAmt.toFixed(2)}. Only PKR ${remainingRefundable.toFixed(2)} is remaining to be refunded on this return.`
+        );
+      }
+
+      // Check against actual amount paid on the invoice to block cash refunds on unpaid invoices
+      const totalInvoicePaid = Number(ret.invoice.amountPaid || 0);
+      const allPriorInvoiceRefunds = await tx.refund.aggregate({
+        where: { returnOrder: { invoiceId: ret.invoiceId } },
+        _sum: { amountRefunded: true },
+      });
+      const totalCashAlreadyRefunded = Number(allPriorInvoiceRefunds._sum.amountRefunded || 0);
+      const remainingCashRefundableOnInvoice = Math.max(0, totalInvoicePaid - totalCashAlreadyRefunded);
+
+      if (refundAmt > remainingCashRefundableOnInvoice + 0.01) {
+        throw new Error(
+          `Cannot refund PKR ${refundAmt.toLocaleString()} in cash. The customer only paid PKR ${totalInvoicePaid.toLocaleString()} on Invoice ${ret.invoice.invoiceNumber} (already refunded: PKR ${totalCashAlreadyRefunded.toLocaleString()}). Unpaid returns are adjusted as credit against their receivable balance.`
         );
       }
 

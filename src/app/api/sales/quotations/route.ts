@@ -227,6 +227,9 @@ export async function POST(req: Request) {
       });
 
       return quotation;
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     return NextResponse.json({ quotation: createdQuotation, success: true }, { status: 201 });

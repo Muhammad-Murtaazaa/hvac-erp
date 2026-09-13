@@ -232,6 +232,50 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         where: { poId: params.id },
       });
 
+      // Resolve product rows: if unitCost is different from the product's existing stock price,
+      // create/find a new product row in stock with that price so the old price in stock remains unchanged.
+      const resolvedLineItems: any[] = [];
+      for (const item of lineItems) {
+        const cost = Number(item.unitCost);
+        const origProduct = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!origProduct) throw new Error(`Product not found: ${item.productId}`);
+
+        let targetProductId = origProduct.id;
+        const currentStockPrice = Number(origProduct.averageCost);
+
+        if (Math.abs(cost - currentStockPrice) > 0.01) {
+          const variantSku = `${origProduct.sku}-P${Math.round(cost)}`;
+          let priceVariant = await tx.product.findUnique({ where: { sku: variantSku } });
+          if (!priceVariant) {
+            priceVariant = await tx.product.create({
+              data: {
+                sku: variantSku,
+                name: `${origProduct.name} (PKR ${cost.toLocaleString()})`,
+                category: origProduct.category,
+                unit: origProduct.unit,
+                reorderLevel: origProduct.reorderLevel,
+                onHandQty: 0,
+                incomingQty: 0,
+                averageCost: cost,
+                salesPrice: origProduct.salesPrice,
+              },
+            });
+          }
+          targetProductId = priceVariant.id;
+        }
+
+        const qtyOrdered = parseInt(item.quantityOrdered);
+        const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);
+
+        resolvedLineItems.push({
+          productId: targetProductId,
+          quantityOrdered: qtyOrdered,
+          quantityReceived: qtyReceived,
+          unitCost: cost,
+          expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
+        });
+      }
+
       // Update PO
       const res = await tx.purchaseOrder.update({
         where: { id: params.id },
@@ -243,17 +287,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           status: nextStatus,
           createdAt: poDate ? new Date(poDate) : undefined,
           lineItems: {
-            create: lineItems.map((item: any) => {
-              const qtyOrdered = parseInt(item.quantityOrdered);
-              const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);
-              return {
-                productId: item.productId,
-                quantityOrdered: qtyOrdered,
-                quantityReceived: qtyReceived,
-                unitCost: Number(item.unitCost),
-                expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
-              };
-            }),
+            create: resolvedLineItems,
           },
         },
         include: {
@@ -264,22 +298,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         },
       });
 
-      // Update product's averageCost to entered unitCost
-      for (const item of lineItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            averageCost: Number(item.unitCost),
-          },
-        });
-      }
-
       // If next status is APPROVED, SUBMITTED or PARTIALLY_RECEIVED, add new unreceived incoming quantities
       if (nextStatus === "APPROVED" || nextStatus === "SUBMITTED" || nextStatus === "PARTIALLY_RECEIVED") {
-        for (const item of lineItems) {
-          const qtyOrdered = parseInt(item.quantityOrdered);
-          const qtyReceived = Math.min(qtyOrdered, receivedMap.get(item.productId) || 0);
-          const remaining = Math.max(0, qtyOrdered - qtyReceived);
+        for (const item of resolvedLineItems) {
+          const remaining = Math.max(0, item.quantityOrdered - item.quantityReceived);
           if (remaining > 0) {
             await tx.product.update({
               where: { id: item.productId },

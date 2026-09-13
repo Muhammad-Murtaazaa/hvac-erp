@@ -196,7 +196,6 @@ export async function GET(req: NextRequest) {
         e.debitAccount.toLowerCase().includes("utility") ||
         e.debitAccount.toLowerCase().includes("salary") ||
         e.debitAccount.toLowerCase().includes("logistics") ||
-        e.referenceType === "PO_RECEIPT" ||
         e.referenceType === "PAYROLL";
 
       if (isExpenseDebit) {
@@ -212,7 +211,7 @@ export async function GET(req: NextRequest) {
     let prevOperatingExpenses = 0;
     for (const p of prevPayrolls) prevOperatingExpenses += Number(p.netPay);
     for (const e of prevLedgerEntries) {
-      if (e.debitAccount.toLowerCase().includes("expense") || e.referenceType === "PO_RECEIPT") {
+      if (e.debitAccount.toLowerCase().includes("expense")) {
         prevOperatingExpenses += Number(e.amount);
       }
     }
@@ -223,41 +222,38 @@ export async function GET(req: NextRequest) {
     const prevNetMarginPct = prevNetRevenue > 0 ? (prevNetProfit / prevNetRevenue) * 100 : 0;
 
     // --- CASH FLOW CALCULATIONS ---
-    // Direct payments recorded + Ledger cash receipts
+    // Liquid cash flows from the General Ledger (avoiding double-counting)
     const directPayments = payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
     const ledgerInflows = ledgerEntries
       .filter((l) => isLiquid(l.debitAccount) && !isLiquid(l.creditAccount))
       .reduce((acc, l) => acc + Number(l.amount), 0);
 
-    const cashInflow = directPayments + ledgerInflows;
+    const cashInflow = ledgerInflows > 0 ? ledgerInflows : directPayments;
 
     const prevDirectPayments = prevPayments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
     const prevLedgerInflows = prevLedgerEntries
       .filter((l) => isLiquid(l.debitAccount) && !isLiquid(l.creditAccount))
       .reduce((acc, l) => acc + Number(l.amount), 0);
-    const prevCashInflow = prevDirectPayments + prevLedgerInflows;
-
-    const vendorPurchases = pos
-      .filter((p) => p.status === "COMPLETED" || p.status === "PARTIALLY_RECEIVED" || p.status === "SUBMITTED")
-      .reduce((acc, p) => acc + Number(p.totalAmount), 0);
-    const payrollPaid = payrolls.reduce((acc, p) => acc + Number(p.netPay), 0);
-    const refundsPaid = refunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0);
+    const prevCashInflow = prevLedgerInflows > 0 ? prevLedgerInflows : prevDirectPayments;
 
     const ledgerOutflows = ledgerEntries
       .filter((l) => isLiquid(l.creditAccount) && !isLiquid(l.debitAccount))
       .reduce((acc, l) => acc + Number(l.amount), 0);
+    const legacyOutflows =
+      payrolls.reduce((acc, p) => acc + Number(p.netPay), 0) +
+      refunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0);
 
-    const cashOutflow = vendorPurchases + payrollPaid + refundsPaid + ledgerOutflows;
+    const cashOutflow = ledgerOutflows > 0 ? ledgerOutflows : legacyOutflows;
 
     const prevLedgerOutflows = prevLedgerEntries
       .filter((l) => isLiquid(l.creditAccount) && !isLiquid(l.debitAccount))
       .reduce((acc, l) => acc + Number(l.amount), 0);
 
-    const prevCashOutflow =
-      prevPos.reduce((acc, p) => acc + Number(p.totalAmount), 0) +
+    const prevLegacyOutflows =
       prevPayrolls.reduce((acc, p) => acc + Number(p.netPay), 0) +
-      prevRefunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0) +
-      prevLedgerOutflows;
+      prevRefunds.reduce((acc, r) => acc + Number(r.amountRefunded), 0);
+
+    const prevCashOutflow = prevLedgerOutflows > 0 ? prevLedgerOutflows : prevLegacyOutflows;
 
     const netCashFlow = cashInflow - cashOutflow;
     const prevNetCashFlow = prevCashInflow - prevCashOutflow;

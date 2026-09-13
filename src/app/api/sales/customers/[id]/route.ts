@@ -257,7 +257,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     }
 
     (inv.payments || []).forEach((p: any) => {
-      const isPayCaptured = isInvCaptured || loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(`rec-${inv.invoiceNumber.toLowerCase()}`);
+      const isPayCaptured = loggedRefKeys.has(`payment:${p.id.toLowerCase()}`) || loggedRefKeys.has(p.id.toLowerCase());
       if (!isPayCaptured) {
         rawLedgerItems.push({
           id: `pay-${p.id}`,
@@ -269,6 +269,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
           debit: 0,
           credit: Math.round(Number(p.amountPaid || 0) * 100) / 100,
         });
+        loggedRefKeys.add(p.id.toLowerCase());
+        loggedRefKeys.add(`payment:${p.id.toLowerCase()}`);
       }
     });
   });
