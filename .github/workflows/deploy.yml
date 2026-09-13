@@ -8,18 +8,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up SSH Key
+      - name: Decode SSH Key
         run: |
-          mkdir -p /home/runner/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > /home/runner/.ssh/id_rsa
-          chmod 600 /home/runner/.ssh/id_rsa
+          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > ./deploy_key
+          chmod 600 ./deploy_key
 
       - name: Execute Deployment Script via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_IP }}
           username: root
-          key_path: /home/runner/.ssh/id_rsa
+          key_path: ./deploy_key
           port: 22
           script: |
             cd /var/www/hvac-erp
@@ -27,3 +26,7 @@ jobs:
             git reset --hard origin/main
             chmod +x /var/www/hvac-erp/deploy.sh
             /var/www/hvac-erp/deploy.sh
+
+      - name: Cleanup SSH Key
+        if: always()
+        run: rm -f ./deploy_key
