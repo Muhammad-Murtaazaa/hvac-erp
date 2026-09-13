@@ -1,19 +1,29 @@
-- name: Set up SSH Key
-  run: |
-    mkdir -p /root/.ssh
-    echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > /root/.ssh/id_rsa
-    chmod 600 /root/.ssh/id_rsa
+name: Deploy to VPS
 
-- name: Execute Deployment Script via SSH
-  uses: appleboy/ssh-action@v1.0.3
-  with:
-    host: ${{ secrets.VPS_IP }}
-    username: root
-    key_path: /root/.ssh/id_rsa
-    port: 22
-    script: |
-      cd /var/www/hvac-erp
-      git fetch origin main
-      git reset --hard origin/main
-      chmod +x /var/www/hvac-erp/deploy.sh
-      /var/www/hvac-erp/deploy.sh
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH Key
+        run: |
+          mkdir -p /home/runner/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > /home/runner/.ssh/id_rsa
+          chmod 600 /home/runner/.ssh/id_rsa
+
+      - name: Execute Deployment Script via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: root
+          key_path: /home/runner/.ssh/id_rsa
+          port: 22
+          script: |
+            cd /var/www/hvac-erp
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x /var/www/hvac-erp/deploy.sh
+            /var/www/hvac-erp/deploy.sh
