@@ -6,12 +6,96 @@ export async function getNextVoucherNumber(
   tx: PrismaTransactionClient,
   prefix: "CRV" | "BRV" | "CPV" | "BPV" | "JV" | "CV" | "EAV" | "VOUCHER"
 ): Promise<string> {
-  const count = await tx.ledgerEntry.count({
+  // Query existing ledger entries matching prefix to find max sequence number
+  const ledgerEntries = await tx.ledgerEntry.findMany({
     where: {
-      voucherType: prefix,
+      OR: [
+        { voucherNumber: { startsWith: `${prefix}-` } },
+        { referenceId: { startsWith: `${prefix}-` } }
+      ]
     },
+    select: { voucherNumber: true, referenceId: true }
   });
-  return `${prefix}-${10001 + count}`;
+
+  // Query existing journal entries matching prefix to prevent idempotencyKey collisions
+  const journalEntries = await tx.journalEntry.findMany({
+    where: {
+      OR: [
+        { idempotencyKey: { startsWith: `VOUCHER:${prefix}-` } },
+        { sourceId: { startsWith: `${prefix}-` } }
+      ]
+    },
+    select: { idempotencyKey: true, sourceId: true }
+  });
+
+  let maxNum = 10000;
+  const numRegex = new RegExp(`^${prefix}-(\\d+)`);
+  const keyRegex = new RegExp(`^VOUCHER:${prefix}-(\\d+):entry`);
+
+  for (const le of ledgerEntries) {
+    if (le.voucherNumber) {
+      const m = le.voucherNumber.match(numRegex);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+    if (le.referenceId) {
+      const m = le.referenceId.match(numRegex);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+  }
+
+  for (const je of journalEntries) {
+    if (je.sourceId) {
+      const m = je.sourceId.match(numRegex);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+    if (je.idempotencyKey) {
+      const m = je.idempotencyKey.match(keyRegex);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+  }
+
+  let nextNum = maxNum + 1;
+  let candidate = `${prefix}-${nextNum}`;
+
+  // Collision-proof verification loop
+  while (true) {
+    const [conflictLedger, conflictJournal] = await Promise.all([
+      tx.ledgerEntry.findFirst({
+        where: {
+          OR: [
+            { voucherNumber: candidate },
+            { referenceId: candidate }
+          ]
+        },
+        select: { id: true }
+      }),
+      tx.journalEntry.findUnique({
+        where: { idempotencyKey: `VOUCHER:${candidate}:entry` },
+        select: { id: true }
+      })
+    ]);
+
+    if (!conflictLedger && !conflictJournal) {
+      break;
+    }
+
+    nextNum++;
+    candidate = `${prefix}-${nextNum}`;
+  }
+
+  return candidate;
 }
 
 export async function recordLedgerEntry(

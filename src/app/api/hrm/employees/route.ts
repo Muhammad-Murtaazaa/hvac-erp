@@ -90,8 +90,26 @@ export async function POST(req: Request) {
     // Auto-generate employee number if not explicitly provided
     let employeeNo = customEmpNo ? customEmpNo.trim() : "";
     if (!employeeNo) {
-      const count = await prisma.employee.count();
-      employeeNo = `EMP-${1001 + count}`;
+      const allEmps = await prisma.employee.findMany({
+        where: { employeeNo: { startsWith: "EMP-" } },
+        select: { employeeNo: true },
+      });
+      let maxNum = 1000;
+      for (const e of allEmps) {
+        if (e.employeeNo) {
+          const m = e.employeeNo.match(/^EMP-(\d+)/);
+          if (m) {
+            const n = parseInt(m[1], 10);
+            if (n > maxNum) maxNum = n;
+          }
+        }
+      }
+      let nextNum = maxNum + 1;
+      employeeNo = `EMP-${nextNum}`;
+      while (await prisma.employee.findFirst({ where: { employeeNo } })) {
+        nextNum++;
+        employeeNo = `EMP-${nextNum}`;
+      }
     }
 
     const employee = await prisma.employee.create({
