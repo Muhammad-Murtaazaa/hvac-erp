@@ -9,6 +9,54 @@ import { sendTechnicianPushNotification } from "@/lib/push-notify";
 import { parseDateForStorage } from "@/lib/dateUtils";
 import { sendCustomerComplaintWhatsApp, sendTechnicianComplaintWhatsApp } from "@/lib/whatsapp";
 
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const rawId = decodeURIComponent(params.id);
+    const complaint = await prisma.complaint.findFirst({
+      where: {
+        OR: [
+          { id: rawId },
+          { complaintNumber: rawId },
+        ],
+      },
+      include: {
+        technician: {
+          select: {
+            id: true,
+            employeeNo: true,
+            name: true,
+            phone: true,
+            position: true,
+            department: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileType: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!complaint) {
+      return NextResponse.json({ error: "Complaint ticket not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ complaint }, {
+      headers: {
+        "Cache-Control": "public, max-age=30, s-maxage=30",
+      },
+    });
+  } catch (error: any) {
+    console.error("[Complaint GET] Error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
   const isTechnician = session?.role?.name === "Technician";
@@ -287,8 +335,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       // Asynchronous Dual WhatsApp Notifications on Reassignment
       const assignedTech = updatedTicket.technician;
       if (assignedTech) {
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-        const complaintPdfUrl = `${baseUrl}/api/pdf?type=complaint&id=${updatedTicket.id}&inline=true`;
+        const forwardedHost = req.headers.get("x-forwarded-host");
+        const host = forwardedHost || req.headers.get("host");
+        const proto = req.headers.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+        const baseUrl = (host && !host.includes("localhost") ? `${proto}://${host}` : process.env.NEXTAUTH_URL || (host ? `${proto}://${host}` : "https://erp.technicool.com.pk")).replace(/\/+$/, "");
+        const complaintFormUrl = `${baseUrl}/complaint/${updatedTicket.complaintNumber}`;
 
         Promise.allSettled([
           sendCustomerComplaintWhatsApp({
@@ -305,7 +356,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             customerPhone: updatedTicket.customerPhone,
             location: updatedTicket.customerAddress,
             issueScope: updatedTicket.description,
-            pdfUrl: complaintPdfUrl,
+            pdfUrl: complaintFormUrl,
           }),
         ])
           .then((results) => {

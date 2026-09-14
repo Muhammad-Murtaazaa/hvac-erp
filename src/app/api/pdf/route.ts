@@ -132,9 +132,14 @@ export async function GET(req: Request) {
         reference: empNo ? `${empNo}_${payslip.month}-${payslip.year}` : `${payslip.month}-${payslip.year}`,
       });
     } else if (type === "complaint") {
-      const complaint = await prisma.complaint.findUnique({
-        where: { id: id! },
-        include: { technician: true },
+      const complaint = await prisma.complaint.findFirst({
+        where: {
+          OR: [
+            { id: id! },
+            { complaintNumber: id! },
+          ],
+        },
+        include: { technician: true, customer: true },
       });
       if (!complaint) return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
       pdfBuffer = await generateComplaintPDF(complaint);
@@ -288,12 +293,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid document type" }, { status: 400 });
     }
 
-    const inline = searchParams.get("inline") === "true";
+    const isDownload = searchParams.get("download") === "true";
+    const inline = !isDownload && searchParams.get("inline") === "true";
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": buildContentDispositionHeader(fileName, inline),
+        "Cache-Control": "public, max-age=60, s-maxage=60",
       },
     });
   } catch (error: any) {

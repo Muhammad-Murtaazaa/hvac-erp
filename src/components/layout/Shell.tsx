@@ -281,7 +281,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const isPublicPage =
     pathname === "/" ||
     pathname.startsWith("/auth/reset-password") ||
-    pathname.startsWith("/delivery/confirm");
+    pathname.startsWith("/delivery/confirm") ||
+    pathname.startsWith("/complaint");
 
   const isPdfPage = pathname.endsWith("/pdf") || pathname.includes("/pdf/");
 
@@ -294,6 +295,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     const verifySession = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
+        // If unauthenticated technician or client visits legacy /support?ticket=... link, forward them seamlessly to public complaint form
+        if (pathname === "/support" && searchParams.get("ticket")) {
+          const ticketNum = searchParams.get("ticket");
+          router.push(`/complaint/${encodeURIComponent(ticketNum!)}`);
+          return;
+        }
         router.push("/");
         return;
       }

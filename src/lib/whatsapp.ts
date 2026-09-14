@@ -109,10 +109,13 @@ export async function sendWhatsAppTemplate(
         components: [
           {
             type: "body",
-            parameters: options.bodyParameters.map((param) => ({
-              type: "text",
-              text: String(param !== undefined && param !== null ? param : ""),
-            })),
+            parameters: options.bodyParameters.map((param) => {
+              const val = String(param !== undefined && param !== null ? param : "").trim();
+              return {
+                type: "text",
+                text: val.length > 0 ? val.slice(0, 1000) : "N/A",
+              };
+            }),
           },
         ],
       },

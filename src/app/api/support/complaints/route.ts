@@ -182,8 +182,11 @@ export async function POST(req: Request) {
         })
         .then((tech) => {
           if (!tech) return;
-          const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-          const complaintPdfUrl = `${baseUrl}/api/pdf?type=complaint&id=${complaint.id}&inline=true`;
+          const forwardedHost = req.headers.get("x-forwarded-host");
+          const host = forwardedHost || req.headers.get("host");
+          const proto = req.headers.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+          const baseUrl = (host && !host.includes("localhost") ? `${proto}://${host}` : process.env.NEXTAUTH_URL || (host ? `${proto}://${host}` : "https://erp.technicool.com.pk")).replace(/\/+$/, "");
+          const complaintFormUrl = `${baseUrl}/complaint/${complaint.complaintNumber}`;
 
           return Promise.allSettled([
             sendCustomerComplaintWhatsApp({
@@ -200,7 +203,7 @@ export async function POST(req: Request) {
               customerPhone: complaint.customerPhone,
               location: complaint.customerAddress,
               issueScope: complaint.description,
-              pdfUrl: complaintPdfUrl,
+              pdfUrl: complaintFormUrl,
             }),
           ]);
         })

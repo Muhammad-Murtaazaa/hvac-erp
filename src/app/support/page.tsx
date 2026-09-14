@@ -45,17 +45,22 @@ function SupportPageContent() {
   }, [searchParams, complaints]);
 
   const handleViewPDF = (ticketId?: string) => {
-    const id = ticketId || selectedTicket?.id;
+    const id = ticketId || selectedTicket?.complaintNumber || selectedTicket?.id;
     if (!id) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
-    window.open(`/api/pdf?type=complaint&id=${id}&inline=true&token=${token}`, "_blank");
+    window.open(`/api/pdf?type=complaint&id=${encodeURIComponent(id)}&inline=true`, "_blank");
+  };
+
+  const handleDownloadPDF = (ticketId?: string) => {
+    const id = ticketId || selectedTicket?.complaintNumber || selectedTicket?.id;
+    if (!id) return;
+    window.open(`/api/pdf?type=complaint&id=${encodeURIComponent(id)}&download=true`, "_blank");
   };
 
   const handleShareLink = () => {
     if (!selectedTicket) return;
-    const url = `${window.location.origin}/support?ticket=${selectedTicket.complaintNumber}`;
+    const url = `${window.location.origin}/complaint/${selectedTicket.complaintNumber}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Link Copied", message: `Shareable ticket link copied to clipboard: ${url}`, type: "info" });
+    toast({ title: "Link Copied", message: `Public technician complaint link copied: ${url}`, type: "info" });
   };
 
   // Toggles
@@ -1168,8 +1173,15 @@ function SupportPageContent() {
                       <Eye className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      onClick={() => handleDownloadPDF()}
+                      title="Download PDF Complaint Sheet"
+                      className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-emerald-500 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={handleShareLink}
-                      title="Copy Shareable Link"
+                      title="Copy Public Complaint Link for Technician"
                       className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-blue-500 transition-all"
                     >
                       <Share2 className="w-3.5 h-3.5" />
