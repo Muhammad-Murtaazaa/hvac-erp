@@ -191,18 +191,27 @@ export function generateInvoicePDF(invoiceData: any, companyOverride?: string): 
         leftY += 18;
       }
 
+      let rightY = 148;
+      const effectivePoNumber = invoiceData.poNumber || meta.poNumber || invoiceData.deliveryOrder?.poNumber;
+      if (effectivePoNumber) {
+        doc.text(`Ref PO Number: ${effectivePoNumber}`, 340, rightY);
+        rightY += 14;
+      }
       if (invoiceData.deliveryOrder) {
-        doc.text(`Ref Delivery Order: ${invoiceData.deliveryOrder.doNumber}`, 340, 148);
+        doc.text(`Ref Delivery Order: ${invoiceData.deliveryOrder.doNumber}`, 340, rightY);
+        rightY += 14;
       }
       if (invoiceData.complaint) {
-        doc.text(`Ref Support Ticket: ${invoiceData.complaint.complaintNumber}`, 340, 162);
+        doc.text(`Ref Support Ticket: ${invoiceData.complaint.complaintNumber}`, 340, rightY);
+        rightY += 14;
       }
       if (company === "TCE") {
-        doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, 176);
+        doc.text(`NTN: G535752  |  STRN: 3277876376780`, 340, rightY);
+        rightY += 14;
       }
 
       // Subject Block
-      let y = Math.max(220, leftY + 12);
+      let y = Math.max(220, leftY + 12, rightY + 12);
       if (invoiceData.subjectHeading) {
         doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937").text(`Subject: ${invoiceData.subjectHeading}`, 50, y);
         y += 15;

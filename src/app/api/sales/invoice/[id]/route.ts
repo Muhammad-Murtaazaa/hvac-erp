@@ -60,6 +60,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       notes,
       subjectHeading,
       subjectDescription,
+      poNumber,
       isGst,
       postingOption,
       discountType: reqDiscountType,
@@ -199,6 +200,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
+        poNumber: poNumber !== undefined ? (poNumber ? poNumber.trim() : "") : (((existingInvoice as any).poNumber as string | null) || existingMeta.poNumber || ""),
         company: invoiceCompany,
       });
 
@@ -303,6 +305,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           notes: formattedNotes,
           subjectHeading: subjectHeading || null,
           subjectDescription: subjectDescription || null,
+          poNumber: poNumber !== undefined ? (poNumber.trim() || null) : (((existingInvoice as any).poNumber as string | null) ?? null),
           isGst: isGstEnabled,
           complaintId: effectiveComplaintId || null,
           lineItems: {
@@ -314,7 +317,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
               extraFields: l.extraFields,
             })),
           },
-        },
+        } as any,
         include: {
           lineItems: {
             include: {

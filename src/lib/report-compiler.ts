@@ -19,6 +19,7 @@ export const ALLOWED_ENTITY_FIELDS: Record<string, string[]> = {
   INVOICE: [
     "id",
     "invoiceNumber",
+    "poNumber",
     "clientName",
     "clientPhone",
     "clientAddress",

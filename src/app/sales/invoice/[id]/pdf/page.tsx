@@ -288,6 +288,14 @@ export default function InvoicePdfPage() {
                   <span className="font-bold text-black">Invoice No.</span>{" "}
                   <span className="font-extrabold text-black font-mono text-sm">{invoice.invoiceNumber.replace("INV-", "")}</span>
                 </div>
+                {(invoice.poNumber || meta.poNumber || invoice.deliveryOrder?.poNumber) && (
+                  <div>
+                    <span className="font-bold text-black">PO No.</span>{" "}
+                    <span className="font-extrabold text-black font-mono text-sm">
+                      {invoice.poNumber || meta.poNumber || invoice.deliveryOrder?.poNumber}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="font-bold text-black">Date:</span>{" "}
                   <span className="font-bold text-black">

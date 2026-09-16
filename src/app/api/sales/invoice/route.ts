@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       { invoiceNumber: { contains: search } },
       { clientName: { contains: search } },
       { clientPhone: { contains: search } },
+      { poNumber: { contains: search } },
     ];
   }
 
@@ -85,6 +86,7 @@ export async function POST(req: Request) {
       notes,
       subjectHeading,
       subjectDescription,
+      poNumber,
       isGst,
       postingOption,
     } = body;
@@ -229,6 +231,7 @@ export async function POST(req: Request) {
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
+        poNumber: (poNumber || body.poNumber || "").trim(),
         company: (body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE",
       });
 
@@ -271,6 +274,7 @@ export async function POST(req: Request) {
           notes: formattedNotes,
           subjectHeading: subjectHeading || null,
           subjectDescription: subjectDescription || null,
+          poNumber: (poNumber || body.poNumber || "").trim() || null,
           deliveryOrder: doId ? { connect: { id: doId } } : undefined,
           complaint: complaintId ? { connect: { id: complaintId } } : undefined,
           isGst: isGst !== false,
@@ -284,7 +288,7 @@ export async function POST(req: Request) {
               extraFields: l.extraFields,
             })),
           },
-        },
+        } as any,
         include: {
           lineItems: true,
           complaint: true,

@@ -35,6 +35,7 @@ const ENTITY_CONFIGS: Record<string, EntityConfig> = {
     label: "Sales Invoices",
     fields: [
       "invoiceNumber",
+      "poNumber",
       "clientName",
       "clientPhone",
       "clientAddress",

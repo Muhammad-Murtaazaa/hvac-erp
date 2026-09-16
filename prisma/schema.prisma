@@ -333,6 +333,7 @@ model Invoice {
   notes              String?
   subjectHeading     String?
   subjectDescription String?
+  poNumber           String?
   doId               String?
   deliveryOrder      DeliveryOrder? @relation(fields: [doId], references: [id])
   isGst              Boolean       @default(true)

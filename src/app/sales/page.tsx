@@ -131,6 +131,7 @@ function SalesPageContent() {
   const [clientPhone, setClientPhone] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [site, setSite] = useState("");
+  const [invoicePoNumber, setInvoicePoNumber] = useState("");
   const [selectedComplaintId, setSelectedComplaintId] = useState("");
   const [complaints, setComplaints] = useState<any[]>([]);
   const [invLines, setInvLines] = useState<any[]>([
@@ -158,6 +159,7 @@ function SalesPageContent() {
   const [editClientPhone, setEditClientPhone] = useState("");
   const [editClientAddress, setEditClientAddress] = useState("");
   const [editSite, setEditSite] = useState("");
+  const [editInvoicePoNumber, setEditInvoicePoNumber] = useState("");
   const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [editIsGst, setEditIsGst] = useState(true);
@@ -609,6 +611,7 @@ function SalesPageContent() {
       clientPhone,
       clientAddress,
       site,
+      poNumber: invoicePoNumber.trim() || undefined,
       date: invoiceDate,
       lineItems: formattedLines,
       payments: paymentsList,
@@ -641,6 +644,7 @@ function SalesPageContent() {
       setClientPhone("");
       setClientAddress("");
       setSite("");
+      setInvoicePoNumber("");
       setNotes("");
       setDiscountType("FIXED");
       setDiscountValue("0");
@@ -672,6 +676,7 @@ function SalesPageContent() {
     const meta = parseInvoiceMetadata(inv.notes, inv);
     setEditInvoiceCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditSite(meta.site || (inv as any).site || "");
+    setEditInvoicePoNumber(inv.poNumber || meta.poNumber || (inv.deliveryOrder?.poNumber) || "");
     setEditNotes(meta.userNotes || "");
     setEditIsGst(meta.isGst);
     setEditSalesTaxRate(meta.taxRate || salesTaxRate || 18);
@@ -774,6 +779,7 @@ function SalesPageContent() {
           clientPhone: editClientPhone.trim(),
           clientAddress: editClientAddress.trim(),
           site: editSite.trim(),
+          poNumber: editInvoicePoNumber.trim() || null,
           date: editDate || formatDateForInput(editingInvoice.date),
           lineItems: formattedLines,
           notes: editNotes,
@@ -1991,6 +1997,14 @@ function SalesPageContent() {
                                   );
                                 })()}
                               </div>
+                              {(() => {
+                                const po = inv.poNumber || parseInvoiceMetadata(inv.notes, inv).poNumber || inv.deliveryOrder?.poNumber;
+                                return po ? (
+                                  <div className="text-[11px] font-normal text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                                    PO: {po}
+                                  </div>
+                                ) : null;
+                              })()}
                             </td>
                             <td className="p-3 font-semibold">{inv.clientName}</td>
                             <td className="p-3">
@@ -2694,7 +2708,7 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
                   <input
@@ -2714,6 +2728,24 @@ function SalesPageContent() {
                     value={site}
                     onChange={(e) => setSite(e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">PO Number (Optional)</label>
+                  <input
+                    type="text"
+                    list="invoice-po-options"
+                    placeholder="Type or select PO number..."
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono shadow-sm"
+                    value={invoicePoNumber}
+                    onChange={(e) => setInvoicePoNumber(e.target.value)}
+                  />
+                  <datalist id="invoice-po-options">
+                    {purchaseOrders.map((po) => (
+                      <option key={po.id} value={po.poNumber}>
+                        {po.poNumber} ({po.vendor?.name || "No Vendor"})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
@@ -3347,7 +3379,7 @@ function SalesPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Client Address</label>
                   <input
@@ -3367,6 +3399,24 @@ function SalesPageContent() {
                     value={editSite}
                     onChange={(e) => setEditSite(e.target.value)}
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">PO Number (Optional)</label>
+                  <input
+                    type="text"
+                    list="edit-invoice-po-options"
+                    placeholder="Type or select PO number..."
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-mono shadow-sm"
+                    value={editInvoicePoNumber}
+                    onChange={(e) => setEditInvoicePoNumber(e.target.value)}
+                  />
+                  <datalist id="edit-invoice-po-options">
+                    {purchaseOrders.map((po) => (
+                      <option key={po.id} value={po.poNumber}>
+                        {po.poNumber} ({po.vendor?.name || "No Vendor"})
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Invoice Type</label>
@@ -6551,7 +6601,14 @@ function SalesPageContent() {
                             const balanceDue = Math.max(0, Math.round(Number(inv.totalAmount) - Number(inv.amountPaid)));
                             return (
                               <tr key={inv.id} className="hover:bg-white dark:hover:bg-slate-900/60">
-                                <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{inv.invoiceNumber}</td>
+                                <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">
+                                  <div>{inv.invoiceNumber}</div>
+                                  {(inv.poNumber || parseInvoiceMetadata(inv.notes, inv).poNumber) && (
+                                    <div className="text-[10px] font-normal text-slate-400 font-mono">
+                                      PO: {inv.poNumber || parseInvoiceMetadata(inv.notes, inv).poNumber}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(inv.date)}</td>
                                 <td className="p-3">
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${

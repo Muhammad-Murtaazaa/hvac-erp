@@ -9,6 +9,7 @@ export interface InvoiceMetadata {
   subtotalAmount: number;
   totalAmount: number;
   site?: string;
+  poNumber?: string;
   company?: "TCE" | "TECAIR" | "MTS";
 }
 
@@ -23,6 +24,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
   let subtotalAmount = 0;
   let totalAmount = invoice ? Number(invoice.totalAmount || 0) : 0;
   let site = invoice?.site ? String(invoice.site) : "";
+  let poNumber = invoice?.poNumber ? String(invoice.poNumber) : (invoice?.deliveryOrder?.poNumber ? String(invoice.deliveryOrder.poNumber) : "");
   let company: "TCE" | "TECAIR" | "MTS" = (invoice?.company === "TECAIR" || invoice?.company === "MTS") ? invoice.company : "TCE";
 
   if (notes && typeof notes === "string") {
@@ -40,6 +42,9 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
         if (parsed.subtotalAmount !== undefined) subtotalAmount = Number(parsed.subtotalAmount);
         if (parsed.totalAmount !== undefined) totalAmount = Number(parsed.totalAmount);
         if (parsed.site !== undefined && parsed.site !== null) site = String(parsed.site);
+        if (parsed.poNumber !== undefined && parsed.poNumber !== null && String(parsed.poNumber).trim()) {
+          poNumber = String(parsed.poNumber).trim();
+        }
         if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS") {
           company = parsed.company;
         }
@@ -84,6 +89,7 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
     subtotalAmount,
     totalAmount,
     site,
+    poNumber,
     company,
   };
 }
@@ -99,6 +105,7 @@ export function formatInvoiceNotesPayload(data: {
   subtotalAmount: number;
   totalAmount: number;
   site?: string;
+  poNumber?: string;
   company?: "TCE" | "TECAIR" | "MTS";
 }): string {
   return JSON.stringify({
@@ -112,6 +119,7 @@ export function formatInvoiceNotesPayload(data: {
     subtotalAmount: Number(data.subtotalAmount || 0),
     totalAmount: Number(data.totalAmount || 0),
     site: data.site ? data.site.trim() : "",
+    poNumber: data.poNumber ? data.poNumber.trim() : "",
     company: (data.company === "TECAIR" || data.company === "MTS") ? data.company : "TCE",
   });
 }
