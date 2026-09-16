@@ -347,7 +347,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
             customerName: updatedTicket.customerName,
             ticketNumber: updatedTicket.complaintNumber,
             technicianName: assignedTech.name,
-            technicianPhone: assignedTech.phone || "N/A",
+            technicianPhone: "03336286800",
             scope: updatedTicket.description,
           }),
           sendTechnicianComplaintWhatsApp({

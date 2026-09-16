@@ -194,7 +194,7 @@ export async function POST(req: Request) {
               customerName: complaint.customerName,
               ticketNumber: complaint.complaintNumber,
               technicianName: tech.name,
-              technicianPhone: tech.phone || "N/A",
+              technicianPhone: "03336286800",
               scope: complaint.description,
             }),
             sendTechnicianComplaintWhatsApp({

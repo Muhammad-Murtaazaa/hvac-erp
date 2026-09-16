@@ -23,7 +23,7 @@ export interface CustomerComplaintNotificationPayload {
   customerName: string;
   ticketNumber: string;
   technicianName: string;
-  technicianPhone: string;
+  technicianPhone?: string;
   scope: string;
   languageCode?: string;
 }
@@ -164,6 +164,11 @@ export async function sendWhatsAppTemplate(
 }
 
 /**
+ * Official technician contact number sent to clients for support/dispatch
+ */
+export const CLIENT_NOTIFICATION_TECHNICIAN_PHONE = "03336286800";
+
+/**
  * Sends customer notification when their complaint/service request is received and assigned.
  * Template: customer_complaint (Utility)
  * 
@@ -171,13 +176,13 @@ export async function sendWhatsAppTemplate(
  * {{1}}: Customer Name
  * {{2}}: Complaint / Ticket Number (e.g. COMP-10024)
  * {{3}}: Assigned Technician Name
- * {{4}}: Assigned Technician Phone Number
+ * {{4}}: Assigned Technician Phone Number (Always 03336286800)
  * {{5}}: Scheduled Scope / Work Description
  */
 export async function sendCustomerComplaintWhatsApp(
   payload: CustomerComplaintNotificationPayload
 ): Promise<WhatsAppSendResult> {
-  const { customerPhone, customerName, ticketNumber, technicianName, technicianPhone, scope, languageCode } = payload;
+  const { customerPhone, customerName, ticketNumber, technicianName, scope, languageCode } = payload;
 
   return await sendWhatsAppTemplate({
     to: customerPhone,
@@ -187,7 +192,7 @@ export async function sendCustomerComplaintWhatsApp(
       customerName || "Valued Customer",
       ticketNumber || "N/A",
       technicianName || "Assigned Technician",
-      technicianPhone || "N/A",
+      CLIENT_NOTIFICATION_TECHNICIAN_PHONE,
       scope || "HVAC Inspection & Maintenance",
     ],
   });
