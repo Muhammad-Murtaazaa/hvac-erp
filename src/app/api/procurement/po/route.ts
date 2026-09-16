@@ -150,7 +150,7 @@ export async function POST(req: Request) {
         totalAmount: finalTotalAmount,
         createdByName: session.name || "Saleem",
         deliveryAddress: deliveryAddress || "",
-        company: company === "TECAIR" ? "TECAIR" : "TCE",
+        company: (company === "TECAIR" || company === "MTS") ? company : "TCE",
       });
 
       // Resolve product rows: if unitCost is different from the product's existing stock price,

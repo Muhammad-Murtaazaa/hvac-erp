@@ -87,8 +87,6 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
       { name: "Sales Setup", href: "/sales?tab=sales_setup", icon: Settings, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES"] },
       { name: "Delivery Order", href: "/sales?tab=dos", icon: Receipt, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "MANAGE_INVENTORY"] },
       { name: "Returns", href: "/sales?tab=customer_returns", icon: ShoppingBag, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES"] },
-      { name: "Customer Care", href: "/customer-care", icon: Headphones, roles: ["Admin", "Support", "Sales", "Accountant"], permissions: ["MANAGE_SUPPORT", "MANAGE_SALES"] },
-      { name: "Automations", href: "/automations", icon: Zap, roles: ["Admin", "Sales", "Accountant"], permissions: ["MANAGE_SALES", "MANAGE_SUPPORT"] },
     ],
   },
   {

@@ -169,7 +169,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTotalAmount = Math.round(taxableAmount + taxAmount);
 
       const existingMeta = parseInvoiceMetadata(existingQuotation.notes, existingQuotation);
-      const quoCompany = body.company ? (body.company === "TECAIR" ? "TECAIR" : "TCE") : (existingMeta.company || "TCE");
+      const quoCompany = body.company ? ((body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE") : (existingMeta.company || "TCE");
 
       const formattedNotes = formatInvoiceNotesPayload({
         userNotes: notes || "",

@@ -37,7 +37,7 @@ export default function POPdfPage() {
 
   const [po, setPo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -61,7 +61,7 @@ export default function POPdfPage() {
         setPo(data.purchaseOrder);
         if (data.purchaseOrder) {
           const m = data.purchaseOrder.meta || parsePoMetadata(data.purchaseOrder.notes, data.purchaseOrder);
-          if (m.company === "TECAIR" || m.company === "TCE") {
+          if (m.company === "TECAIR" || m.company === "TCE" || m.company === "MTS") {
             setSelectedCompany(m.company);
           }
           document.title = buildPdfFileName({
@@ -181,6 +181,17 @@ export default function POPdfPage() {
           >
             ❄️ TECAIR
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("MTS")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "MTS"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            ⚙️ MTS
+          </button>
         </div>
 
         <button
@@ -197,14 +208,31 @@ export default function POPdfPage() {
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
             <img
-              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : "/logo.png"}
+              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : "/logo.png"}
               alt="Watermark"
-              className={selectedCompany === "TECAIR" ? "w-[480px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
+              className={selectedCompany === "TECAIR" ? "w-[480px] h-auto object-contain" : selectedCompany === "MTS" ? "w-[360px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
             />
           </div>
 
           {/* Brand Header */}
-          {selectedCompany === "TECAIR" ? (
+          {selectedCompany === "MTS" ? (
+            /* Official MTS Letterhead Header */
+            <div className="flex items-center gap-5 border-b-[3px] border-double border-black pb-2 mb-4 relative z-10">
+              <div className="shrink-0">
+                <img src="/MTS-logo.png" alt="MTS Logo" className="h-14 w-auto object-contain" />
+              </div>
+              <div className="flex-1">
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black uppercase font-sans">
+                  MIA TECHNICAL SERVICES (PVT) LTD.
+                </h1>
+                <div className="text-[11px] text-black font-semibold mt-1 leading-tight">
+                  <div>Plot # 2, Industrial Triangle, Model Town,</div>
+                  <div>Kahuta Road, Islamabad, Federal 44000</div>
+                  <div>PAK</div>
+                </div>
+              </div>
+            </div>
+          ) : selectedCompany === "TECAIR" ? (
             /* Official TECAIR Letterhead Header */
             <div className="border-b-2 border-black pb-2 mb-4 relative z-10">
               <img src="/TECAIR logo.png" alt="TECAIR Logo" className="h-14 w-auto object-contain" />
@@ -261,7 +289,7 @@ export default function POPdfPage() {
               <div className="mt-2 pt-1.5 border-t border-dashed border-black/40">
                 <span className="text-black block font-bold text-xs">Delivery Address:</span>
                 <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
-                  {meta.deliveryAddress || (selectedCompany === "TECAIR" ? "TECAIR Warehouse, 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan" : "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan")}
+                  {meta.deliveryAddress || (selectedCompany === "TECAIR" ? "TECAIR Warehouse, 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan" : selectedCompany === "MTS" ? "MTS Warehouse, Plot # 2, Industrial Triangle, Model Town, Kahuta Road, Islamabad" : "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan")}
                 </div>
               </div>
             </div>
@@ -392,7 +420,7 @@ export default function POPdfPage() {
         </div>
 
         {/* Letterhead Footer */}
-        {selectedCompany === "TECAIR" ? (
+        {selectedCompany === "MTS" ? null : selectedCompany === "TECAIR" ? (
           /* Official TECAIR Letterhead Footer */
           <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans font-normal">
             <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">

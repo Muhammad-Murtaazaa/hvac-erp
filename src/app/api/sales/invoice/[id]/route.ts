@@ -187,7 +187,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
       // 4. Format notes payload with updated metadata
       const existingMeta = parseInvoiceMetadata(existingInvoice.notes, existingInvoice);
-      const invoiceCompany = body.company ? (body.company === "TECAIR" ? "TECAIR" : "TCE") : (existingMeta.company || "TCE");
+      const invoiceCompany = body.company ? ((body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE") : (existingMeta.company || "TCE");
       const formattedNotes = formatInvoiceNotesPayload({
         userNotes: notes || "",
         isGst: isGstEnabled,

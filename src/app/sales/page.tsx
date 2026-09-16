@@ -123,7 +123,7 @@ function SalesPageContent() {
   const [salesTaxRate, setSalesTaxRate] = useState(18);
 
   // Standalone Invoice State
-  const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [clientName, setClientName] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(getLocalDateString());
   const [isGst, setIsGst] = useState(true);
@@ -153,7 +153,7 @@ function SalesPageContent() {
   // Edit Commercial Invoice State
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
-  const [editInvoiceCompany, setEditInvoiceCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [editInvoiceCompany, setEditInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [editClientName, setEditClientName] = useState("");
   const [editClientPhone, setEditClientPhone] = useState("");
   const [editClientAddress, setEditClientAddress] = useState("");
@@ -182,7 +182,7 @@ function SalesPageContent() {
   const [selectedQuotationIds, setSelectedQuotationIds] = useState<string[]>([]);
 
   // Create Quotation State
-  const [quoCompany, setQuoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [quoCompany, setQuoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [quoClientName, setQuoClientName] = useState("");
   const [quoClientPhone, setQuoClientPhone] = useState("");
   const [quoClientAddress, setQuoClientAddress] = useState("");
@@ -203,7 +203,7 @@ function SalesPageContent() {
   const [quotationError, setQuotationError] = useState("");
 
   // Edit Quotation State
-  const [editQuoCompany, setEditQuoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [editQuoCompany, setEditQuoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [editQuoClientName, setEditQuoClientName] = useState("");
   const [editQuoClientPhone, setEditQuoClientPhone] = useState("");
   const [editQuoClientAddress, setEditQuoClientAddress] = useState("");
@@ -224,7 +224,7 @@ function SalesPageContent() {
   const [editQuotationError, setEditQuotationError] = useState("");
 
   // Delivery Order Creation State
-  const [doCompany, setDoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [doCompany, setDoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [doClientName, setDoClientName] = useState("");
   const [doClientPhone, setDoClientPhone] = useState("");
   const [doAddress, setDoAddress] = useState("");
@@ -241,7 +241,7 @@ function SalesPageContent() {
   // Edit Delivery Order State
   const [isEditDoOpen, setIsEditDoOpen] = useState(false);
   const [editingDo, setEditingDo] = useState<any>(null);
-  const [editDoCompany, setEditDoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [editDoCompany, setEditDoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [editDoClientName, setEditDoClientName] = useState("");
   const [editDoClientPhone, setEditDoClientPhone] = useState("");
   const [editDoAddress, setEditDoAddress] = useState("");
@@ -670,7 +670,7 @@ function SalesPageContent() {
     setEditDate(formatDateForInput(inv.date));
 
     const meta = parseInvoiceMetadata(inv.notes, inv);
-    setEditInvoiceCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
+    setEditInvoiceCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditSite(meta.site || (inv as any).site || "");
     setEditNotes(meta.userNotes || "");
     setEditIsGst(meta.isGst);
@@ -923,7 +923,7 @@ function SalesPageContent() {
     setEditQuoStatus(quo.status || "DRAFT");
 
     const meta = parseInvoiceMetadata(quo.notes, quo);
-    setEditQuoCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
+    setEditQuoCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditQuoNotes(meta.userNotes || "");
     setEditQuoSite(meta.site || (quo as any).site || "");
     setEditQuoIsGst(meta.isGst);
@@ -1201,7 +1201,7 @@ function SalesPageContent() {
   const handleOpenEditDo = (doRec: any) => {
     setEditingDo(doRec);
     const doMeta = parseDoMetadata(doRec.notes, doRec);
-    setEditDoCompany(doMeta.company === "TECAIR" ? "TECAIR" : "TCE");
+    setEditDoCompany(doMeta.company === "TECAIR" ? "TECAIR" : doMeta.company === "MTS" ? "MTS" : "TCE");
     setEditDoClientName(doRec.clientName || "");
     setEditDoClientPhone(doRec.clientPhone || "");
     setEditDoAddress(doRec.deliveryAddress || "");
@@ -1980,6 +1980,10 @@ function SalesPageContent() {
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                       TECAIR
                                     </span>
+                                  ) : c === "MTS" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                                      MTS
+                                    </span>
                                   ) : (
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
                                       TCE
@@ -2156,6 +2160,10 @@ function SalesPageContent() {
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                       TECAIR
                                     </span>
+                                  ) : c === "MTS" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                                      MTS
+                                    </span>
                                   ) : (
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
                                       TCE
@@ -2269,6 +2277,10 @@ function SalesPageContent() {
                               return c === "TECAIR" ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                   TECAIR
+                                </span>
+                              ) : c === "MTS" ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                                  MTS
                                 </span>
                               ) : (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
@@ -2570,6 +2582,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      invoiceCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>
@@ -3268,6 +3291,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditInvoiceCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editInvoiceCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>
@@ -3977,6 +4011,17 @@ function SalesPageContent() {
                   >
                     ❄️ TECAIR
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      quoCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
+                  </button>
                 </div>
               </div>
 
@@ -4432,6 +4477,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditQuoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editQuoCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>
@@ -4912,6 +4968,17 @@ function SalesPageContent() {
                   >
                     ❄️ TECAIR
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setDoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      doCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
+                  </button>
                 </div>
               </div>
 
@@ -5256,6 +5323,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditDoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editDoCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>

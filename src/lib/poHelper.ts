@@ -10,7 +10,7 @@ export interface POMetadata {
   totalAmount: number;
   createdByName?: string;
   deliveryAddress?: string;
-  company?: "TCE" | "TECAIR";
+  company?: "TCE" | "TECAIR" | "MTS";
 }
 
 export function parsePoMetadata(notes: string | null | undefined, po?: any): POMetadata {
@@ -25,7 +25,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
   let totalAmount = po ? Number(po.totalAmount || 0) : 0;
   let createdByName = "Saleem";
   let deliveryAddress = "";
-  let company: "TCE" | "TECAIR" = po?.company === "TECAIR" ? "TECAIR" : "TCE";
+  let company: "TCE" | "TECAIR" | "MTS" = (po?.company === "TECAIR" || po?.company === "MTS") ? po.company : "TCE";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -45,7 +45,7 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
           createdByName = String(parsed.createdByName) === "System Admin" ? "Saleem" : String(parsed.createdByName);
         }
         if (parsed.deliveryAddress) deliveryAddress = String(parsed.deliveryAddress);
-        if (parsed.company === "TECAIR" || parsed.company === "TCE") {
+        if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS") {
           company = parsed.company;
         }
       } catch {
@@ -105,7 +105,7 @@ export function formatPoNotesPayload(data: {
   totalAmount: number;
   createdByName?: string;
   deliveryAddress?: string;
-  company?: "TCE" | "TECAIR";
+  company?: "TCE" | "TECAIR" | "MTS";
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -119,6 +119,6 @@ export function formatPoNotesPayload(data: {
     totalAmount: Number(data.totalAmount || 0),
     createdByName: (data.createdByName === "System Admin" || !data.createdByName) ? "Saleem" : data.createdByName,
     deliveryAddress: data.deliveryAddress || "",
-    company: data.company === "TECAIR" ? "TECAIR" : "TCE",
+    company: (data.company === "TECAIR" || data.company === "MTS") ? data.company : "TCE",
   });
 }

@@ -15,7 +15,7 @@ export default function DeliveryOrderPdfPage() {
   const doId = params.id as string;
 
   const [doRecord, setDoRecord] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -33,7 +33,7 @@ export default function DeliveryOrderPdfPage() {
         setDoRecord(data.deliveryOrder);
         if (data.deliveryOrder) {
           const doMeta = parseDoMetadata(data.deliveryOrder.notes, data.deliveryOrder);
-          const initialCompany = (data.deliveryOrder.company === "TECAIR" || doMeta.company === "TECAIR") ? "TECAIR" : "TCE";
+          const initialCompany = (data.deliveryOrder.company === "TECAIR" || doMeta.company === "TECAIR") ? "TECAIR" : (data.deliveryOrder.company === "MTS" || doMeta.company === "MTS") ? "MTS" : "TCE";
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({
@@ -159,6 +159,17 @@ export default function DeliveryOrderPdfPage() {
           >
             ❄️ TECAIR
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("MTS")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "MTS"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            ⚙️ MTS
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -188,7 +199,7 @@ export default function DeliveryOrderPdfPage() {
           <div className="flex justify-between items-start border-b-2 border-black pb-3">
             <div>
               <div className="text-[11px] font-black uppercase tracking-widest text-black">
-                {selectedCompany === "TECAIR" ? "TECAIR" : "TECHNICOOL ENGINEERING"}
+                {selectedCompany === "TECAIR" ? "TECAIR" : selectedCompany === "MTS" ? "MIA TECHNICAL SERVICES" : "TECHNICOOL ENGINEERING"}
               </div>
               <h2 className="text-xl font-extrabold text-black">{formattedDN}</h2>
             </div>
@@ -229,11 +240,28 @@ export default function DeliveryOrderPdfPage() {
           <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
-            <img src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : "/logo.png"} alt="Watermark" className="w-[400px] h-[400px] object-contain" />
+            <img src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : "/logo.png"} alt="Watermark" className="w-[400px] h-[400px] object-contain" />
           </div>
 
           {/* Brand Header */}
-          {selectedCompany === "TECAIR" ? (
+          {selectedCompany === "MTS" ? (
+            /* Official MTS Letterhead Header */
+            <div className="flex items-center gap-5 border-b-[3px] border-double border-black pb-2 mb-4 relative z-10">
+              <div className="shrink-0">
+                <img src="/MTS-logo.png" alt="MTS Logo" className="h-14 w-auto object-contain" />
+              </div>
+              <div className="flex-1">
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black uppercase font-sans">
+                  MIA TECHNICAL SERVICES (PVT) LTD.
+                </h1>
+                <div className="text-[11px] text-black font-semibold mt-1 leading-tight">
+                  <div>Plot # 2, Industrial Triangle, Model Town,</div>
+                  <div>Kahuta Road, Islamabad, Federal 44000</div>
+                  <div>PAK</div>
+                </div>
+              </div>
+            </div>
+          ) : selectedCompany === "TECAIR" ? (
             /* Official TECAIR Letterhead Header */
             <div className="border-b-2 border-black pb-2 mb-4 relative z-10">
               <img src="/TECAIR logo.png" alt="TECAIR Logo" className="h-14 w-auto object-contain" />
@@ -417,7 +445,7 @@ export default function DeliveryOrderPdfPage() {
         </div>
 
         {/* Letterhead Footer */}
-        {selectedCompany === "TECAIR" ? (
+        {selectedCompany === "MTS" ? null : selectedCompany === "TECAIR" ? (
           /* Official TECAIR Letterhead Footer */
           <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
             <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">

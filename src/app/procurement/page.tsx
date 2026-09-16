@@ -96,7 +96,7 @@ function ProcurementPageContent() {
   const [updatingVendor, setUpdatingVendor] = useState(false);
 
   // New PO state
-  const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
@@ -115,7 +115,7 @@ function ProcurementPageContent() {
   // Edit PO state
   const [isEditPoOpen, setIsEditPoOpen] = useState(false);
   const [editingPoId, setEditingPoId] = useState("");
-  const [editPoCompany, setEditPoCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [editPoCompany, setEditPoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
   const [editPoNumber, setEditPoNumber] = useState("");
   const [editPoVendor, setEditPoVendor] = useState("");
   const [editPoDate, setEditPoDate] = useState("");
@@ -240,7 +240,7 @@ function ProcurementPageContent() {
   const openEditPo = (po: any) => {
     const meta = po.meta || parsePoMetadata(po.notes, po);
     setEditingPoId(po.id);
-    setEditPoCompany(meta.company === "TECAIR" ? "TECAIR" : "TCE");
+    setEditPoCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditPoNumber(po.poNumber || "");
     setEditPoVendor(po.vendorId || "");
     setEditPoDate(po.createdAt ? new Date(po.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -695,6 +695,10 @@ function ProcurementPageContent() {
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                 TECAIR
                               </span>
+                            ) : c === "MTS" ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800">
+                                MTS
+                              </span>
                             ) : (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
                                 TCE
@@ -1052,6 +1056,17 @@ function ProcurementPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      newPoCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>
@@ -1444,6 +1459,17 @@ function ProcurementPageContent() {
                     }`}
                   >
                     ❄️ TECAIR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPoCompany("MTS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editPoCompany === "MTS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    ⚙️ MTS
                   </button>
                 </div>
               </div>

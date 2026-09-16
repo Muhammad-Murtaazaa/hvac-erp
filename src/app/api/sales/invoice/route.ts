@@ -229,7 +229,7 @@ export async function POST(req: Request) {
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
-        company: body.company === "TECAIR" ? "TECAIR" : "TCE",
+        company: (body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE",
       });
 
       // If converting from DO, check and verify the DO status
