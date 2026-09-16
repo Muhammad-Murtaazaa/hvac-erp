@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         });
         data = rows.map((r) => ({
           Invoice_Number: r.invoiceNumber,
-          PO_Number: r.poNumber || "",
+          PO_Number: (r as any).poNumber || "",
           Client_Name: r.clientName,
           Client_Phone: r.clientPhone || "N/A",
           Date: r.date.toISOString().split("T")[0],
