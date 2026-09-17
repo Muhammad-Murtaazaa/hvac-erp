@@ -139,9 +139,19 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
             }
           }
 
-          // Delete financial ledger entries
+          // Delete financial ledger & journal entries
           await tx.ledgerEntry.deleteMany({
             where: { referenceType: "INVOICE", referenceId: entityId },
+          });
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "INVOICE", sourceId: entityId },
+                { sourceType: "INVOICE", sourceId: invoice.invoiceNumber },
+                { idempotencyKey: { contains: entityId } },
+                { idempotencyKey: { contains: invoice.invoiceNumber } },
+              ],
+            },
           });
 
           // Delete payments & line items
@@ -225,9 +235,19 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
             }
           }
 
-          // Delete financial ledger entries
+          // Delete financial ledger & journal entries
           await tx.ledgerEntry.deleteMany({
             where: { referenceType: "PO_RECEIPT", referenceId: entityId },
+          });
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "GRN", sourceId: entityId },
+                { sourceType: "GRN", sourceId: grn.grnNumber },
+                { idempotencyKey: { contains: entityId } },
+                { idempotencyKey: { contains: grn.grnNumber } },
+              ],
+            },
           });
 
           await tx.gRNLineItem.deleteMany({ where: { grnId: entityId } });
@@ -284,6 +304,14 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
           }
           await tx.ledgerEntry.deleteMany({
             where: { referenceType: "STOCK_ADJUSTMENT", referenceId: entityId },
+          });
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "ADJUSTMENT", sourceId: entityId },
+                { idempotencyKey: { contains: entityId } },
+              ],
+            },
           });
           await tx.stockAdjustment.delete({ where: { id: entityId } });
         }
@@ -358,11 +386,27 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
         await tx.ledgerEntry.deleteMany({
           where: { referenceType: "PAYROLL", referenceId: entityId },
         });
+        await tx.journalEntry.deleteMany({
+          where: {
+            OR: [
+              { sourceType: "PAYROLL", sourceId: entityId },
+              { idempotencyKey: { contains: entityId } },
+            ],
+          },
+        });
         await tx.payrollRun.delete({ where: { id: entityId } });
       } else if (beforeState) {
         const prev = JSON.parse(beforeState);
         await tx.ledgerEntry.deleteMany({
           where: { referenceType: "PAYROLL", referenceId: entityId },
+        });
+        await tx.journalEntry.deleteMany({
+          where: {
+            OR: [
+              { sourceType: "PAYROLL", sourceId: entityId },
+              { idempotencyKey: { contains: entityId } },
+            ],
+          },
         });
         await tx.payrollRun.update({
           where: { id: entityId },
@@ -493,6 +537,17 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
             });
           }
 
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "RETURN", sourceId: entityId },
+                { sourceType: "RETURN", sourceId: ret.returnNumber },
+                { idempotencyKey: { contains: entityId } },
+                { idempotencyKey: { contains: ret.returnNumber } },
+              ],
+            },
+          });
+
           await tx.refund.deleteMany({ where: { returnId: entityId } });
           await tx.returnLineItem.deleteMany({ where: { returnId: entityId } });
           await tx.return.delete({ where: { id: entityId } });
@@ -537,6 +592,17 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
             where: { referenceType: "VENDOR_RETURN", referenceId: entityId },
           });
 
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "VENDOR_RETURN", sourceId: entityId },
+                { sourceType: "VENDOR_RETURN", sourceId: vret.vendorReturnNumber },
+                { idempotencyKey: { contains: entityId } },
+                { idempotencyKey: { contains: vret.vendorReturnNumber } },
+              ],
+            },
+          });
+
           await tx.vendorReturnLineItem.deleteMany({ where: { vendorReturnId: entityId } });
           await tx.vendorReturn.delete({ where: { id: entityId } });
         }
@@ -575,6 +641,17 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
             },
           });
 
+          // Delete corresponding double-entry journal entry
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceType: "PAYMENT", sourceId: entityId },
+                { idempotencyKey: `PAYMENT:${entityId}:receipt` },
+                { idempotencyKey: { contains: entityId } },
+              ],
+            },
+          });
+
           await tx.payment.delete({ where: { id: entityId } });
         }
       }
@@ -583,9 +660,37 @@ export async function rollbackSnapshot(snapshotId: string, actor: AuditActor) {
     // ----------------------------------------------------
     // 14. FINANCIAL VOUCHER / LEDGER ENTRY ROLLBACK
     // ----------------------------------------------------
-    else if (entityName === "LedgerEntry") {
+    else if (entityName === "LedgerEntry" || entityName === "Voucher") {
       if (action === "CREATE") {
-        await tx.ledgerEntry.delete({ where: { id: entityId } });
+        const ledgerEntry = await tx.ledgerEntry.findUnique({ where: { id: entityId } });
+        if (ledgerEntry) {
+          const vNum = ledgerEntry.voucherNumber || ledgerEntry.referenceId;
+          // Delete associated double-entry JournalEntry
+          await tx.journalEntry.deleteMany({
+            where: {
+              OR: [
+                { sourceId: vNum },
+                { idempotencyKey: `VOUCHER:${vNum}:entry` },
+                { idempotencyKey: { contains: vNum } },
+                { idempotencyKey: { contains: entityId } },
+              ],
+            },
+          });
+          await tx.ledgerEntry.delete({ where: { id: entityId } });
+        }
+      } else if (beforeState) {
+        const prev = JSON.parse(beforeState);
+        await tx.ledgerEntry.update({
+          where: { id: entityId },
+          data: {
+            description: prev.description,
+            amount: prev.amount,
+            entryDate: prev.entryDate ? new Date(prev.entryDate) : undefined,
+            debitAccount: prev.debitAccount,
+            creditAccount: prev.creditAccount,
+            notes: prev.notes,
+          },
+        });
       }
     }
 

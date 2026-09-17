@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { getCurrentUser, hasPermission } from "@/lib/auth";
+import { getCurrentUser, hasPermission, isSuperAdmin } from "@/lib/auth";
 import { getNextVoucherNumber, recordLedgerEntry } from "@/lib/ledger";
-import { postJournalEntry } from "@/lib/journal";
+import { postJournalEntry, getAccountId } from "@/lib/journal";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { ensureCustomer } from "@/lib/customerSync";
 
@@ -222,3 +222,215 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
+
+export async function PATCH(req: Request) {
+  const session = await getCurrentUser(req);
+  if (!session || !isSuperAdmin(session)) {
+    return NextResponse.json({ error: "Unauthorized. Super Admin or Admin access required." }, { status: 403 });
+  }
+
+  try {
+    const body = await req.json();
+    const {
+      voucherId,
+      voucherNumber,
+      description,
+      entryDate,
+      amount,
+      debitAccount,
+      creditAccount,
+      paymentMethod,
+      chequeNumber,
+      notes,
+    } = body;
+
+    if (!voucherId && !voucherNumber) {
+      return NextResponse.json({ error: "voucherId or voucherNumber is required" }, { status: 400 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const ledgerWhere: any = {};
+      if (voucherId) ledgerWhere.id = voucherId;
+      if (voucherNumber) ledgerWhere.voucherNumber = voucherNumber;
+
+      const currentLedger = await tx.ledgerEntry.findFirst({ where: ledgerWhere });
+      if (!currentLedger) {
+        throw new Error(`Financial voucher not found: ${voucherNumber || voucherId}`);
+      }
+
+      const vNum = currentLedger.voucherNumber || currentLedger.referenceId;
+      const newDesc = description !== undefined ? description : currentLedger.description;
+      const newDate = entryDate ? new Date(entryDate) : currentLedger.entryDate;
+      const newAmount = amount !== undefined ? Math.round(Number(amount) * 100) / 100 : Number(currentLedger.amount);
+      const newDebitAcc = debitAccount || currentLedger.debitAccount;
+      const newCreditAcc = creditAccount || currentLedger.creditAccount;
+
+      // Update LedgerEntry
+      const updatedLedger = await tx.ledgerEntry.update({
+        where: { id: currentLedger.id },
+        data: {
+          description: newDesc,
+          entryDate: newDate,
+          amount: newAmount,
+          debitAccount: newDebitAcc,
+          creditAccount: newCreditAcc,
+          paymentMethod: paymentMethod !== undefined ? paymentMethod : currentLedger.paymentMethod,
+          chequeNumber: chequeNumber !== undefined ? chequeNumber : currentLedger.chequeNumber,
+          notes: notes !== undefined ? notes : currentLedger.notes,
+        },
+      });
+
+      // Update corresponding JournalEntry and lines
+      const journalEntries = await tx.journalEntry.findMany({
+        where: {
+          OR: [
+            { sourceId: vNum },
+            { idempotencyKey: `VOUCHER:${vNum}:entry` },
+            { idempotencyKey: { contains: vNum } },
+          ],
+        },
+        include: { lines: { include: { account: true } } },
+      });
+
+      for (const je of journalEntries) {
+        await tx.journalEntry.update({
+          where: { id: je.id },
+          data: {
+            narration: newDesc,
+            entryDate: newDate,
+          },
+        });
+
+        // If amount or accounts changed, update journal lines
+        if (amount !== undefined || debitAccount || creditAccount) {
+          const debitLine = je.lines.find((l) => Number(l.debit) > 0);
+          const creditLine = je.lines.find((l) => Number(l.credit) > 0);
+
+          if (debitLine) {
+            const debitAccId = await getAccountId(tx, newDebitAcc);
+            await tx.journalLine.update({
+              where: { id: debitLine.id },
+              data: {
+                accountId: debitAccId,
+                debit: newAmount,
+                credit: 0,
+              },
+            });
+          }
+
+          if (creditLine) {
+            const creditAccId = await getAccountId(tx, newCreditAcc);
+            await tx.journalLine.update({
+              where: { id: creditLine.id },
+              data: {
+                accountId: creditAccId,
+                debit: 0,
+                credit: newAmount,
+              },
+            });
+          }
+        }
+      }
+
+      await recordAuditSnapshot({
+        entityName: "Voucher",
+        entityId: currentLedger.id,
+        action: "UPDATE",
+        actor: { id: session.id, email: session.email },
+        beforeState: currentLedger,
+        afterState: updatedLedger,
+      });
+
+      return updatedLedger;
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Voucher ${updated.voucherNumber || updated.referenceId} updated successfully`,
+      voucher: updated,
+    });
+  } catch (error: any) {
+    console.error("[Voucher PATCH] Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to update voucher" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const session = await getCurrentUser(req);
+  if (!session || !isSuperAdmin(session)) {
+    return NextResponse.json({ error: "Unauthorized. Super Admin or Admin access required." }, { status: 403 });
+  }
+
+  try {
+    const body = await req.json();
+    const { voucherId, voucherNumber, reason } = body;
+
+    if (!voucherId && !voucherNumber) {
+      return NextResponse.json({ error: "voucherId or voucherNumber is required" }, { status: 400 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Locate the LedgerEntry
+      const ledgerWhere: any = {};
+      if (voucherId) ledgerWhere.id = voucherId;
+      if (voucherNumber) ledgerWhere.voucherNumber = voucherNumber;
+
+      const ledgerEntry = await tx.ledgerEntry.findFirst({ where: ledgerWhere });
+      if (!ledgerEntry) {
+        throw new Error(`Financial voucher not found: ${voucherNumber || voucherId}`);
+      }
+
+      const vNum = ledgerEntry.voucherNumber || ledgerEntry.referenceId;
+
+      // 2. Locate associated JournalEntry(ies)
+      const journalEntries = await tx.journalEntry.findMany({
+        where: {
+          OR: [
+            { sourceId: vNum },
+            { idempotencyKey: `VOUCHER:${vNum}:entry` },
+            { idempotencyKey: { contains: vNum } },
+          ],
+        },
+        include: { lines: true },
+      });
+
+      // 3. Delete Journal Entries (cascades to JournalLines)
+      for (const je of journalEntries) {
+        await tx.journalEntry.delete({ where: { id: je.id } });
+      }
+
+      // 4. Delete the LedgerEntry
+      await tx.ledgerEntry.delete({ where: { id: ledgerEntry.id } });
+
+      // 5. Create audit snapshot
+      await recordAuditSnapshot({
+        entityName: "Voucher",
+        entityId: ledgerEntry.id,
+        action: "ROLLBACK",
+        actor: { id: session.id, email: session.email },
+        beforeState: {
+          ledgerEntry,
+          journalEntries,
+          rollbackReason: reason || "Super Admin financial voucher rollback",
+        },
+      });
+
+      return {
+        deletedVoucherNumber: vNum,
+        deletedAmount: ledgerEntry.amount,
+        partyName: ledgerEntry.partyName,
+        journalsRemoved: journalEntries.length,
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Voucher ${result.deletedVoucherNumber} rolled back successfully`,
+      result,
+    });
+  } catch (error: any) {
+    console.error("[Voucher DELETE] Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to rollback voucher" }, { status: 500 });
+  }
+}
+

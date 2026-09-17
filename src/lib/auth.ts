@@ -93,9 +93,16 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
   }
 }
 
+export function isSuperAdmin(session: UserSession | null): boolean {
+  if (!session) return false;
+  const rName = (session.role?.name || "").trim().toLowerCase();
+  return rName === "admin" || rName === "super admin" || rName === "superadmin";
+}
+
 export function hasPermission(session: UserSession | null, requiredPermission: string): boolean {
   if (!session) return false;
-  // Admin role automatically has all permissions
-  if (session.role.name.toLowerCase() === "admin") return true;
+  // Admin & Super Admin roles automatically have all permissions
+  if (isSuperAdmin(session)) return true;
   return session.permissions.includes(requiredPermission);
 }
+
