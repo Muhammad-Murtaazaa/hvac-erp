@@ -66,8 +66,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const session = await getCurrentUser(req);
-  if (!session || !hasPermission(session, "MANAGE_SALES")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const canManage =
+    session &&
+    (session.role?.name?.toLowerCase() === "admin" ||
+     session.role?.name?.toLowerCase() === "accountant" ||
+     hasPermission(session, "MANAGE_SALES") ||
+     hasPermission(session, "VIEW_FINANCIALS") ||
+     hasPermission(session, "MANAGE_FINANCIALS") ||
+     hasPermission(session, "ADMIN"));
+
+  if (!canManage) {
+    return NextResponse.json({ error: "Unauthorized: You do not have permission to create invoices" }, { status: 401 });
   }
 
   try {
@@ -91,9 +100,9 @@ export async function POST(req: Request) {
       postingOption,
     } = body;
 
-    const finalClientName = (clientName || "").trim();
-    const finalClientPhone = (clientPhone || "").trim();
-    const finalClientAddress = (clientAddress || "").trim();
+    const finalClientName = String(clientName || "").trim();
+    const finalClientPhone = String(clientPhone || "").trim();
+    const finalClientAddress = String(clientAddress || "").trim();
 
     if (!finalClientName || !lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Client details and billing line items are required" }, { status: 400 });
@@ -231,7 +240,7 @@ export async function POST(req: Request) {
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
-        poNumber: (poNumber || body.poNumber || "").trim(),
+        poNumber: String(poNumber || body.poNumber || "").trim(),
         company: (body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE",
       });
 
@@ -272,9 +281,9 @@ export async function POST(req: Request) {
           totalAmount: finalTotalAmount,
           amountPaid,
           notes: formattedNotes,
-          subjectHeading: subjectHeading || null,
-          subjectDescription: subjectDescription || null,
-          poNumber: (poNumber || body.poNumber || "").trim() || null,
+          subjectHeading: subjectHeading ? String(subjectHeading).trim() : null,
+          subjectDescription: subjectDescription ? String(subjectDescription).trim() : null,
+          poNumber: String(poNumber || body.poNumber || "").trim() || null,
           deliveryOrder: doId ? { connect: { id: doId } } : undefined,
           complaint: complaintId ? { connect: { id: complaintId } } : undefined,
           isGst: isGst !== false,

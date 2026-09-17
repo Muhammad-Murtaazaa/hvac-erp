@@ -42,8 +42,17 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 export async function PUT(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
-  if (!session || !hasPermission(session, "MANAGE_SALES")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const canManage =
+    session &&
+    (session.role?.name?.toLowerCase() === "admin" ||
+     session.role?.name?.toLowerCase() === "accountant" ||
+     hasPermission(session, "MANAGE_SALES") ||
+     hasPermission(session, "VIEW_FINANCIALS") ||
+     hasPermission(session, "MANAGE_FINANCIALS") ||
+     hasPermission(session, "ADMIN"));
+
+  if (!canManage) {
+    return NextResponse.json({ error: "Unauthorized: You do not have permission to update invoices" }, { status: 401 });
   }
 
   try {
@@ -85,9 +94,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    const finalClientName = (clientName || "").trim();
-    const finalClientPhone = (clientPhone || "").trim();
-    const finalClientAddress = (clientAddress || "").trim();
+    const finalClientName = String(clientName || "").trim();
+    const finalClientPhone = String(clientPhone || "").trim();
+    const finalClientAddress = String(clientAddress || "").trim();
 
     if (!finalClientName || !lineItems || lineItems.length === 0) {
       return NextResponse.json({ error: "Client details and billing line items are required" }, { status: 400 });
@@ -200,7 +209,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
-        poNumber: poNumber !== undefined ? (poNumber ? poNumber.trim() : "") : (((existingInvoice as any).poNumber as string | null) || existingMeta.poNumber || ""),
+        poNumber: poNumber !== undefined ? (poNumber ? String(poNumber).trim() : "") : (((existingInvoice as any).poNumber as string | null) || existingMeta.poNumber || ""),
         company: invoiceCompany,
       });
 
@@ -303,9 +312,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           totalAmount: finalTotalAmount,
           amountPaid: finalAmountPaid,
           notes: formattedNotes,
-          subjectHeading: subjectHeading || null,
-          subjectDescription: subjectDescription || null,
-          poNumber: poNumber !== undefined ? (poNumber.trim() || null) : (((existingInvoice as any).poNumber as string | null) ?? null),
+          subjectHeading: subjectHeading ? String(subjectHeading).trim() : null,
+          subjectDescription: subjectDescription ? String(subjectDescription).trim() : null,
+          poNumber: poNumber !== undefined ? (poNumber ? String(poNumber).trim() || null : null) : (((existingInvoice as any).poNumber as string | null) ?? null),
           isGst: isGstEnabled,
           complaintId: effectiveComplaintId || null,
           lineItems: {
@@ -587,8 +596,15 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const session = await getCurrentUser(req);
-  if (!session || !hasPermission(session, "MANAGE_SALES")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const canDelete =
+    session &&
+    (session.role?.name?.toLowerCase() === "admin" ||
+     session.role?.name?.toLowerCase() === "accountant" ||
+     hasPermission(session, "MANAGE_SALES") ||
+     hasPermission(session, "ADMIN"));
+
+  if (!canDelete) {
+    return NextResponse.json({ error: "Unauthorized: You do not have permission to delete invoices" }, { status: 401 });
   }
 
   try {

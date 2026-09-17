@@ -557,9 +557,16 @@ function SalesPageContent() {
       extraFieldsObj.unit = lineUnit;
 
       if (l.isCustom) {
+        const itemTitle = String(l.customName || "").trim();
+        const itemDesc = String(l.description || "").trim();
+        const fullDesc = itemTitle && itemDesc && itemTitle !== itemDesc
+          ? `${itemTitle} - ${itemDesc}`
+          : (itemTitle || itemDesc || "Custom Item");
+        extraFieldsObj.customName = itemTitle;
+        extraFieldsObj.scope = itemDesc;
         return {
           productId: null,
-          description: l.customName + (l.description ? " - " + l.description : ""),
+          description: fullDesc,
           quantity: l.quantity,
           salesPrice: l.salesPrice,
           unit: lineUnit,
@@ -568,7 +575,7 @@ function SalesPageContent() {
       }
       return {
         productId: l.productId || null,
-        description: l.description,
+        description: String(l.description || "").trim(),
         quantity: l.quantity,
         salesPrice: l.salesPrice,
         unit: lineUnit,
@@ -607,11 +614,11 @@ function SalesPageContent() {
       company: invoiceCompany,
       customerId: selectedCustomerId || null,
       complaintId: selectedComplaintId || undefined,
-      clientName,
-      clientPhone,
-      clientAddress,
-      site,
-      poNumber: invoicePoNumber.trim() || undefined,
+      clientName: String(clientName || "").trim(),
+      clientPhone: String(clientPhone || "").trim(),
+      clientAddress: String(clientAddress || "").trim(),
+      site: String(site || "").trim(),
+      poNumber: String(invoicePoNumber || "").trim() || undefined,
       date: invoiceDate,
       lineItems: formattedLines,
       payments: paymentsList,
@@ -709,8 +716,8 @@ function SalesPageContent() {
         return {
           id: l.id,
           productId: l.productId || "",
-          customName: isCustom ? l.description || "" : "",
-          description: l.description || "",
+          customName: isCustom ? (parsedExtra.customName || l.description || "") : "",
+          description: isCustom ? (parsedExtra.scope || (parsedExtra.customName ? l.description?.replace(parsedExtra.customName, "").replace(/^ - /, "") : l.description) || "") : (l.description || ""),
           quantity: String(l.quantity || 1),
           salesPrice: String(l.salesPrice || 0),
           unit: unit,
@@ -733,14 +740,21 @@ function SalesPageContent() {
     if (!editingInvoice) return;
 
     const formattedLines = editInvLines.map((l) => {
-      const lineUnit = (l.unit || "Nos").trim();
+      const lineUnit = String(l.unit || "Nos").trim();
       const extraFieldsObj = typeof l.extraFields === "object" && l.extraFields !== null ? { ...l.extraFields } : {};
       extraFieldsObj.unit = lineUnit;
 
       if (l.isCustom) {
+        const itemTitle = String(l.customName || "").trim();
+        const itemDesc = String(l.description || "").trim();
+        const fullDesc = itemTitle && itemDesc && itemTitle !== itemDesc
+          ? `${itemTitle} - ${itemDesc}`
+          : (itemTitle || itemDesc || "Custom Item");
+        extraFieldsObj.customName = itemTitle;
+        extraFieldsObj.scope = itemDesc;
         return {
           productId: null,
-          description: (l.customName || l.description || "").trim(),
+          description: fullDesc,
           quantity: l.quantity,
           salesPrice: l.salesPrice,
           unit: lineUnit,
@@ -749,7 +763,7 @@ function SalesPageContent() {
       }
       return {
         productId: l.productId || null,
-        description: (l.description || "").trim(),
+        description: String(l.description || "").trim(),
         quantity: l.quantity,
         salesPrice: l.salesPrice,
         unit: lineUnit,
@@ -757,14 +771,20 @@ function SalesPageContent() {
       };
     });
 
-    if (!editClientName.trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+    if (!String(editClientName || "").trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
       setEditInvoiceError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
       return;
     }
 
     setSubmittingEditInvoice(true);
     setEditInvoiceError("");
-    const token = localStorage.getItem("token");
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      setEditInvoiceError("Missing login token. Please log in again.");
+      toast({ title: "Unauthorized", message: "Missing login token. Please log in again.", type: "error" });
+      setSubmittingEditInvoice(false);
+      return;
+    }
 
     const discVal = Number(editDiscountValue) || 0;
 
@@ -775,16 +795,16 @@ function SalesPageContent() {
         body: JSON.stringify({
           company: editInvoiceCompany,
           customerId: editCustomerId,
-          clientName: editClientName.trim(),
-          clientPhone: editClientPhone.trim(),
-          clientAddress: editClientAddress.trim(),
-          site: editSite.trim(),
-          poNumber: editInvoicePoNumber.trim() || null,
+          clientName: String(editClientName || "").trim(),
+          clientPhone: String(editClientPhone || "").trim(),
+          clientAddress: String(editClientAddress || "").trim(),
+          site: String(editSite || "").trim(),
+          poNumber: String(editInvoicePoNumber || "").trim() || null,
           date: editDate || formatDateForInput(editingInvoice.date),
           lineItems: formattedLines,
           notes: editNotes,
-          subjectHeading: editSubjectHeading.trim() || null,
-          subjectDescription: editSubjectDescription.trim() || null,
+          subjectHeading: String(editSubjectHeading || "").trim() || null,
+          subjectDescription: String(editSubjectDescription || "").trim() || null,
           isGst: editIsGst,
           taxRate: editSalesTaxRate,
           discountType: editDiscountType,
@@ -797,7 +817,12 @@ function SalesPageContent() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update invoice");
+      if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error("Unauthorized: You do not have permission to update invoices or your session has expired. Please log in again.");
+        }
+        throw new Error(data.error || "Failed to update invoice");
+      }
 
       toast({
         title: "Invoice Updated",
@@ -2810,7 +2835,7 @@ function SalesPageContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setInvLines([...invLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      onClick={() => setInvLines([...invLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
                       className="text-xs text-emerald-500 hover:underline font-bold"
                     >
                       + Add Custom Row
@@ -3481,7 +3506,7 @@ function SalesPageContent() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setEditInvLines([...editInvLines, { productId: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
+                      onClick={() => setEditInvLines([...editInvLines, { productId: "", customName: "", description: "", quantity: "1", salesPrice: "", unit: "Nos", isCustom: true, extraFields: {} }])}
                       className="text-xs text-emerald-500 hover:underline font-bold"
                     >
                       + Add Custom Row
