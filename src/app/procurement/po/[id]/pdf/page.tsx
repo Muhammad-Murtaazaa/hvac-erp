@@ -37,7 +37,7 @@ export default function POPdfPage() {
 
   const [po, setPo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -61,8 +61,8 @@ export default function POPdfPage() {
         setPo(data.purchaseOrder);
         if (data.purchaseOrder) {
           const m = data.purchaseOrder.meta || parsePoMetadata(data.purchaseOrder.notes, data.purchaseOrder);
-          if (m.company === "TECAIR" || m.company === "TCE" || m.company === "MTS") {
-            setSelectedCompany(m.company);
+          if (m.company === "TECAIR" || m.company === "TCE" || m.company === "MTS" || m.company === "GREEN_LEAVES" || m.company === "GREEN LEAVES") {
+            setSelectedCompany((m.company === "GREEN LEAVES" || m.company === "GREEN_LEAVES") ? "GREEN_LEAVES" : m.company);
           }
           document.title = buildPdfFileName({
             docType: "PO",
@@ -192,6 +192,17 @@ export default function POPdfPage() {
           >
             ⚙️ MTS
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("GREEN_LEAVES")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "GREEN_LEAVES"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🍃 Green Leaves
+          </button>
         </div>
 
         <button
@@ -208,14 +219,19 @@ export default function POPdfPage() {
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
             <img
-              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : "/logo.png"}
+              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : selectedCompany === "GREEN_LEAVES" ? "/green leaves.png" : "/logo.png"}
               alt="Watermark"
-              className={selectedCompany === "TECAIR" ? "w-[480px] h-auto object-contain" : selectedCompany === "MTS" ? "w-[360px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
+              className={selectedCompany === "TECAIR" ? "w-[480px] h-auto object-contain" : selectedCompany === "MTS" ? "w-[360px] h-auto object-contain" : selectedCompany === "GREEN_LEAVES" ? "w-[500px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
             />
           </div>
 
           {/* Brand Header */}
-          {selectedCompany === "MTS" ? (
+          {selectedCompany === "GREEN_LEAVES" ? (
+            /* Official Green Leaves Letterhead Header */
+            <div className="mb-4 relative z-10">
+              <img src="/green leaves.png" alt="Green Leaves Pvt Ltd." className="w-full h-auto object-contain" />
+            </div>
+          ) : selectedCompany === "MTS" ? (
             /* Official MTS Letterhead Header */
             <div className="flex items-center gap-5 border-b-[3px] border-double border-black pb-2 mb-4 relative z-10">
               <div className="shrink-0">
@@ -289,7 +305,7 @@ export default function POPdfPage() {
               <div className="mt-2 pt-1.5 border-t border-dashed border-black/40">
                 <span className="text-black block font-bold text-xs">Delivery Address:</span>
                 <div className="text-black font-semibold leading-relaxed whitespace-pre-line text-xs">
-                  {meta.deliveryAddress || (selectedCompany === "TECAIR" ? "TECAIR Warehouse, 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan" : selectedCompany === "MTS" ? "MTS Warehouse, Plot # 2, Industrial Triangle, Model Town, Kahuta Road, Islamabad" : "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan")}
+                  {meta.deliveryAddress || (selectedCompany === "GREEN_LEAVES" ? "Office # 2, 4th Floor, Corporate #7, Executive Block, Civil Center, Gulberg Greens Islamabad" : selectedCompany === "TECAIR" ? "TECAIR Warehouse, 3rd Floor Home Sphere Plaza R-Sector, C-18 DHA Multan" : selectedCompany === "MTS" ? "MTS Warehouse, Plot # 2, Industrial Triangle, Model Town, Kahuta Road, Islamabad" : "Technicool Engineering Warehouse, Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan")}
                 </div>
               </div>
             </div>
@@ -420,7 +436,14 @@ export default function POPdfPage() {
         </div>
 
         {/* Letterhead Footer */}
-        {selectedCompany === "MTS" ? null : selectedCompany === "TECAIR" ? (
+        {selectedCompany === "MTS" ? null : selectedCompany === "GREEN_LEAVES" ? (
+          /* Official Green Leaves Letterhead Footer */
+          <div className="page-footer mt-auto border-t border-black pt-2 text-center font-sans font-normal">
+            <div className="text-xs text-black font-semibold">
+              Office # 2, 4<sup>th</sup> Floor, Corporate #7, Executive Block, Civil Center, Gulberg Greens Islamabad
+            </div>
+          </div>
+        ) : selectedCompany === "TECAIR" ? (
           /* Official TECAIR Letterhead Footer */
           <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans font-normal">
             <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">

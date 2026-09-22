@@ -15,7 +15,7 @@ export default function DeliveryOrderPdfPage() {
   const doId = params.id as string;
 
   const [doRecord, setDoRecord] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -33,7 +33,14 @@ export default function DeliveryOrderPdfPage() {
         setDoRecord(data.deliveryOrder);
         if (data.deliveryOrder) {
           const doMeta = parseDoMetadata(data.deliveryOrder.notes, data.deliveryOrder);
-          const initialCompany = (data.deliveryOrder.company === "TECAIR" || doMeta.company === "TECAIR") ? "TECAIR" : (data.deliveryOrder.company === "MTS" || doMeta.company === "MTS") ? "MTS" : "TCE";
+          const initialCompany: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
+            ((data.deliveryOrder as any).company === "GREEN_LEAVES" || doMeta.company === "GREEN_LEAVES")
+              ? "GREEN_LEAVES"
+              : ((data.deliveryOrder as any).company === "TECAIR" || doMeta.company === "TECAIR")
+              ? "TECAIR"
+              : ((data.deliveryOrder as any).company === "MTS" || doMeta.company === "MTS")
+              ? "MTS"
+              : "TCE";
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({
@@ -170,6 +177,17 @@ export default function DeliveryOrderPdfPage() {
           >
             ⚙️ MTS
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("GREEN_LEAVES")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "GREEN_LEAVES"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🍃 Green Leaves
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -199,7 +217,7 @@ export default function DeliveryOrderPdfPage() {
           <div className="flex justify-between items-start border-b-2 border-black pb-3">
             <div>
               <div className="text-[11px] font-black uppercase tracking-widest text-black">
-                {selectedCompany === "TECAIR" ? "TECAIR" : selectedCompany === "MTS" ? "MIA TECHNICAL SERVICES" : "TECHNICOOL ENGINEERING"}
+                {selectedCompany === "TECAIR" ? "TECAIR" : selectedCompany === "MTS" ? "MIA TECHNICAL SERVICES" : selectedCompany === "GREEN_LEAVES" ? "GREEN LEAVES PVT LTD" : "TECHNICOOL ENGINEERING"}
               </div>
               <h2 className="text-xl font-extrabold text-black">{formattedDN}</h2>
             </div>
@@ -240,11 +258,20 @@ export default function DeliveryOrderPdfPage() {
           <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
-            <img src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : "/logo.png"} alt="Watermark" className="w-[400px] h-[400px] object-contain" />
+            <img
+              src={selectedCompany === "TECAIR" ? "/TECAIR logo.png" : selectedCompany === "MTS" ? "/MTS-logo.png" : selectedCompany === "GREEN_LEAVES" ? "/green leaves.png" : "/logo.png"}
+              alt="Watermark"
+              className={selectedCompany === "GREEN_LEAVES" ? "w-[500px] h-auto object-contain" : "w-[400px] h-[400px] object-contain"}
+            />
           </div>
 
           {/* Brand Header */}
-          {selectedCompany === "MTS" ? (
+          {selectedCompany === "GREEN_LEAVES" ? (
+            /* Official Green Leaves Letterhead Header */
+            <div className="mb-4 relative z-10">
+              <img src="/green leaves.png" alt="Green Leaves Pvt Ltd." className="w-full h-auto object-contain" />
+            </div>
+          ) : selectedCompany === "MTS" ? (
             /* Official MTS Letterhead Header */
             <div className="flex items-center gap-5 border-b-[3px] border-double border-black pb-2 mb-4 relative z-10">
               <div className="shrink-0">
@@ -445,7 +472,14 @@ export default function DeliveryOrderPdfPage() {
         </div>
 
         {/* Letterhead Footer */}
-        {selectedCompany === "MTS" ? null : selectedCompany === "TECAIR" ? (
+        {selectedCompany === "MTS" ? null : selectedCompany === "GREEN_LEAVES" ? (
+          /* Official Green Leaves Letterhead Footer */
+          <div className="page-footer mt-auto border-t border-black pt-2 text-center font-sans">
+            <div className="text-xs text-black font-semibold">
+              Office # 2, 4<sup>th</sup> Floor, Corporate #7, Executive Block, Civil Center, Gulberg Greens Islamabad
+            </div>
+          </div>
+        ) : selectedCompany === "TECAIR" ? (
           /* Official TECAIR Letterhead Footer */
           <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
             <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">

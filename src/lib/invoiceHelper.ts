@@ -10,7 +10,7 @@ export interface InvoiceMetadata {
   totalAmount: number;
   site?: string;
   poNumber?: string;
-  company?: "TCE" | "TECAIR" | "MTS";
+  company?: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES";
 }
 
 export function parseInvoiceMetadata(notes: string | null | undefined, invoice?: any): InvoiceMetadata {
@@ -25,7 +25,12 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
   let totalAmount = invoice ? Number(invoice.totalAmount || 0) : 0;
   let site = invoice?.site ? String(invoice.site) : "";
   let poNumber = invoice?.poNumber ? String(invoice.poNumber) : (invoice?.deliveryOrder?.poNumber ? String(invoice.deliveryOrder.poNumber) : "");
-  let company: "TCE" | "TECAIR" | "MTS" = (invoice?.company === "TECAIR" || invoice?.company === "MTS") ? invoice.company : "TCE";
+  let company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
+    (invoice?.company === "GREEN_LEAVES" || invoice?.company === "GREEN LEAVES")
+      ? "GREEN_LEAVES"
+      : (invoice?.company === "TECAIR" || invoice?.company === "MTS")
+      ? invoice.company
+      : "TCE";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -45,8 +50,8 @@ export function parseInvoiceMetadata(notes: string | null | undefined, invoice?:
         if (parsed.poNumber !== undefined && parsed.poNumber !== null && String(parsed.poNumber).trim()) {
           poNumber = String(parsed.poNumber).trim();
         }
-        if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS") {
-          company = parsed.company;
+        if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS" || parsed.company === "GREEN_LEAVES" || parsed.company === "GREEN LEAVES") {
+          company = (parsed.company === "GREEN LEAVES" || parsed.company === "GREEN_LEAVES") ? "GREEN_LEAVES" : parsed.company;
         }
       } catch {
         userNotes = notes;
@@ -106,7 +111,7 @@ export function formatInvoiceNotesPayload(data: {
   totalAmount: number;
   site?: string;
   poNumber?: string;
-  company?: "TCE" | "TECAIR" | "MTS";
+  company?: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" | string;
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -120,6 +125,10 @@ export function formatInvoiceNotesPayload(data: {
     totalAmount: Number(data.totalAmount || 0),
     site: data.site ? data.site.trim() : "",
     poNumber: data.poNumber ? data.poNumber.trim() : "",
-    company: (data.company === "TECAIR" || data.company === "MTS") ? data.company : "TCE",
+    company: (data.company === "GREEN_LEAVES" || data.company === "GREEN LEAVES")
+      ? "GREEN_LEAVES"
+      : (data.company === "TECAIR" || data.company === "MTS")
+      ? data.company
+      : "TCE",
   });
 }

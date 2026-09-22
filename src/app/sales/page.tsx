@@ -123,7 +123,7 @@ function SalesPageContent() {
   const [salesTaxRate, setSalesTaxRate] = useState(18);
 
   // Standalone Invoice State
-  const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [clientName, setClientName] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(getLocalDateString());
   const [isGst, setIsGst] = useState(true);
@@ -154,7 +154,7 @@ function SalesPageContent() {
   // Edit Commercial Invoice State
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
-  const [editInvoiceCompany, setEditInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [editInvoiceCompany, setEditInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [editClientName, setEditClientName] = useState("");
   const [editClientPhone, setEditClientPhone] = useState("");
   const [editClientAddress, setEditClientAddress] = useState("");
@@ -184,7 +184,7 @@ function SalesPageContent() {
   const [selectedQuotationIds, setSelectedQuotationIds] = useState<string[]>([]);
 
   // Create Quotation State
-  const [quoCompany, setQuoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [quoCompany, setQuoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [quoClientName, setQuoClientName] = useState("");
   const [quoClientPhone, setQuoClientPhone] = useState("");
   const [quoClientAddress, setQuoClientAddress] = useState("");
@@ -205,7 +205,7 @@ function SalesPageContent() {
   const [quotationError, setQuotationError] = useState("");
 
   // Edit Quotation State
-  const [editQuoCompany, setEditQuoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [editQuoCompany, setEditQuoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [editQuoClientName, setEditQuoClientName] = useState("");
   const [editQuoClientPhone, setEditQuoClientPhone] = useState("");
   const [editQuoClientAddress, setEditQuoClientAddress] = useState("");
@@ -226,7 +226,7 @@ function SalesPageContent() {
   const [editQuotationError, setEditQuotationError] = useState("");
 
   // Delivery Order Creation State
-  const [doCompany, setDoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [doCompany, setDoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [doClientName, setDoClientName] = useState("");
   const [doClientPhone, setDoClientPhone] = useState("");
   const [doAddress, setDoAddress] = useState("");
@@ -243,7 +243,7 @@ function SalesPageContent() {
   // Edit Delivery Order State
   const [isEditDoOpen, setIsEditDoOpen] = useState(false);
   const [editingDo, setEditingDo] = useState<any>(null);
-  const [editDoCompany, setEditDoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [editDoCompany, setEditDoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [editDoClientName, setEditDoClientName] = useState("");
   const [editDoClientPhone, setEditDoClientPhone] = useState("");
   const [editDoAddress, setEditDoAddress] = useState("");
@@ -681,7 +681,7 @@ function SalesPageContent() {
     setEditDate(formatDateForInput(inv.date));
 
     const meta = parseInvoiceMetadata(inv.notes, inv);
-    setEditInvoiceCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
+    setEditInvoiceCompany(meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditSite(meta.site || (inv as any).site || "");
     setEditInvoicePoNumber(inv.poNumber || meta.poNumber || (inv.deliveryOrder?.poNumber) || "");
     setEditNotes(meta.userNotes || "");
@@ -954,7 +954,7 @@ function SalesPageContent() {
     setEditQuoStatus(quo.status || "DRAFT");
 
     const meta = parseInvoiceMetadata(quo.notes, quo);
-    setEditQuoCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
+    setEditQuoCompany(meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditQuoNotes(meta.userNotes || "");
     setEditQuoSite(meta.site || (quo as any).site || "");
     setEditQuoIsGst(meta.isGst);
@@ -1232,7 +1232,7 @@ function SalesPageContent() {
   const handleOpenEditDo = (doRec: any) => {
     setEditingDo(doRec);
     const doMeta = parseDoMetadata(doRec.notes, doRec);
-    setEditDoCompany(doMeta.company === "TECAIR" ? "TECAIR" : doMeta.company === "MTS" ? "MTS" : "TCE");
+    setEditDoCompany(doMeta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : doMeta.company === "TECAIR" ? "TECAIR" : doMeta.company === "MTS" ? "MTS" : "TCE");
     setEditDoClientName(doRec.clientName || "");
     setEditDoClientPhone(doRec.clientPhone || "");
     setEditDoAddress(doRec.deliveryAddress || "");
@@ -2007,7 +2007,11 @@ function SalesPageContent() {
                                 <span>{inv.invoiceNumber}</span>
                                 {(() => {
                                   const c = parseInvoiceMetadata(inv.notes, inv).company;
-                                  return c === "TECAIR" ? (
+                                  return c === "GREEN_LEAVES" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                      GREEN LEAVES
+                                    </span>
+                                  ) : c === "TECAIR" ? (
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                       TECAIR
                                     </span>
@@ -2195,7 +2199,11 @@ function SalesPageContent() {
                                 <span>{quo.quotationNumber}</span>
                                 {(() => {
                                   const c = parseInvoiceMetadata(quo.notes, quo).company;
-                                  return c === "TECAIR" ? (
+                                  return c === "GREEN_LEAVES" ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                      GREEN LEAVES
+                                    </span>
+                                  ) : c === "TECAIR" ? (
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                       TECAIR
                                     </span>
@@ -2313,7 +2321,11 @@ function SalesPageContent() {
                             <span>{doRec.doNumber}</span>
                             {(() => {
                               const c = parseDoMetadata(doRec.notes, doRec).company;
-                              return c === "TECAIR" ? (
+                              return c === "GREEN_LEAVES" ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                  GREEN LEAVES
+                                </span>
+                              ) : c === "TECAIR" ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                   TECAIR
                                 </span>
@@ -2632,6 +2644,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      invoiceCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>
@@ -3359,6 +3382,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditInvoiceCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editInvoiceCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>
@@ -4097,6 +4131,17 @@ function SalesPageContent() {
                   >
                     ⚙️ MTS
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      quoCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
+                  </button>
                 </div>
               </div>
 
@@ -4563,6 +4608,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditQuoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editQuoCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>
@@ -5054,6 +5110,17 @@ function SalesPageContent() {
                   >
                     ⚙️ MTS
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setDoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      doCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
+                  </button>
                 </div>
               </div>
 
@@ -5409,6 +5476,17 @@ function SalesPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditDoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editDoCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>

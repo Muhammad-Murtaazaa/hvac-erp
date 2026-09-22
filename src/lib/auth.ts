@@ -12,6 +12,7 @@ export interface UserSession {
     name: string;
   };
   permissions: string[];
+  isDeveloper?: boolean;
 }
 
 export function signToken(payload: { id: string; email: string; name: string }) {
@@ -77,7 +78,7 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
 
     const permissions = user.role.permissions.map((rp) => rp.permission.name);
 
-    return {
+    const session: UserSession = {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -87,6 +88,9 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
       },
       permissions,
     };
+    session.isDeveloper = isDeveloper(session);
+
+    return session;
   } catch (error) {
     console.error("[Auth Helper] Error getting current user:", error);
     return null;
@@ -99,10 +103,25 @@ export function isSuperAdmin(session: UserSession | null): boolean {
   return rName === "admin" || rName === "super admin" || rName === "superadmin";
 }
 
+export function isDeveloper(session: UserSession | null): boolean {
+  if (!session) return false;
+  if (!isSuperAdmin(session)) return false;
+
+  const email = (session.email || "").trim().toLowerCase();
+  const devEmailsEnv = process.env.DEVELOPER_EMAILS || "";
+  const allowedDevEmails = [
+    "muhammad.murtaazaa@gmail.com",
+    ...devEmailsEnv.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+  ];
+
+  return allowedDevEmails.includes(email);
+}
+
 export function hasPermission(session: UserSession | null, requiredPermission: string): boolean {
   if (!session) return false;
   // Admin & Super Admin roles automatically have all permissions
   if (isSuperAdmin(session)) return true;
   return session.permissions.includes(requiredPermission);
 }
+
 

@@ -187,7 +187,11 @@ export async function POST(req: Request) {
         subtotalAmount,
         totalAmount: finalTotalAmount,
         site: site ? String(site).trim() : "",
-        company: (body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE",
+        company: (body.company === "GREEN_LEAVES" || body.company === "GREEN LEAVES")
+          ? "GREEN_LEAVES"
+          : (body.company === "TECAIR" || body.company === "MTS")
+          ? body.company
+          : "TCE",
       });
 
       // 5. Create Quotation Record (Zero Ledger, Zero Stock Deduction)

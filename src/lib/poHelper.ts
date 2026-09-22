@@ -10,7 +10,7 @@ export interface POMetadata {
   totalAmount: number;
   createdByName?: string;
   deliveryAddress?: string;
-  company?: "TCE" | "TECAIR" | "MTS";
+  company?: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES";
 }
 
 export function parsePoMetadata(notes: string | null | undefined, po?: any): POMetadata {
@@ -25,7 +25,12 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
   let totalAmount = po ? Number(po.totalAmount || 0) : 0;
   let createdByName = "Saleem";
   let deliveryAddress = "";
-  let company: "TCE" | "TECAIR" | "MTS" = (po?.company === "TECAIR" || po?.company === "MTS") ? po.company : "TCE";
+  let company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
+    (po?.company === "GREEN_LEAVES" || po?.company === "GREEN LEAVES")
+      ? "GREEN_LEAVES"
+      : (po?.company === "TECAIR" || po?.company === "MTS")
+      ? po.company
+      : "TCE";
 
   if (notes && typeof notes === "string") {
     const trimmed = notes.trim();
@@ -45,8 +50,8 @@ export function parsePoMetadata(notes: string | null | undefined, po?: any): POM
           createdByName = String(parsed.createdByName) === "System Admin" ? "Saleem" : String(parsed.createdByName);
         }
         if (parsed.deliveryAddress) deliveryAddress = String(parsed.deliveryAddress);
-        if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS") {
-          company = parsed.company;
+        if (parsed.company === "TECAIR" || parsed.company === "TCE" || parsed.company === "MTS" || parsed.company === "GREEN_LEAVES" || parsed.company === "GREEN LEAVES") {
+          company = (parsed.company === "GREEN LEAVES" || parsed.company === "GREEN_LEAVES") ? "GREEN_LEAVES" : parsed.company;
         }
       } catch {
         userNotes = notes;
@@ -105,7 +110,7 @@ export function formatPoNotesPayload(data: {
   totalAmount: number;
   createdByName?: string;
   deliveryAddress?: string;
-  company?: "TCE" | "TECAIR" | "MTS";
+  company?: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" | string;
 }): string {
   return JSON.stringify({
     userNotes: data.userNotes || "",
@@ -119,6 +124,10 @@ export function formatPoNotesPayload(data: {
     totalAmount: Number(data.totalAmount || 0),
     createdByName: (data.createdByName === "System Admin" || !data.createdByName) ? "Saleem" : data.createdByName,
     deliveryAddress: data.deliveryAddress || "",
-    company: (data.company === "TECAIR" || data.company === "MTS") ? data.company : "TCE",
+    company: (data.company === "GREEN_LEAVES" || data.company === "GREEN LEAVES")
+      ? "GREEN_LEAVES"
+      : (data.company === "TECAIR" || data.company === "MTS")
+      ? data.company
+      : "TCE",
   });
 }

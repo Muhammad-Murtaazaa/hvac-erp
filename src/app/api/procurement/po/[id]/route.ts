@@ -209,7 +209,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       const finalTotalAmount = Math.max(0, taxableAmount + finalTaxAmount);
 
       const existingMeta = parsePoMetadata(po.notes, po);
-      const poCompany = body.company ? ((body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE") : (existingMeta.company || "TCE");
+      const poCompany = body.company
+        ? ((body.company === "GREEN_LEAVES" || body.company === "GREEN LEAVES")
+          ? "GREEN_LEAVES"
+          : (body.company === "TECAIR" || body.company === "MTS")
+          ? body.company
+          : "TCE")
+        : (existingMeta.company || "TCE");
       const notesPayload = formatPoNotesPayload({
         userNotes: notes || "",
         isGst: Boolean(isGst),

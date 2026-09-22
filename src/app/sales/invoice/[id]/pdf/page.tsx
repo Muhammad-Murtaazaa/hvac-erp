@@ -36,7 +36,7 @@ export default function InvoicePdfPage() {
   const invoiceId = params.id as string;
 
   const [invoice, setInvoice] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -52,7 +52,14 @@ export default function InvoicePdfPage() {
         setInvoice(data.invoice);
         if (data.invoice) {
           const meta = parseInvoiceMetadata(data.invoice.notes, data.invoice);
-          const initialCompany = (data.invoice.company === "TECAIR" || meta.company === "TECAIR") ? "TECAIR" : (data.invoice.company === "MTS" || meta.company === "MTS") ? "MTS" : "TCE";
+          const initialCompany: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
+            ((data.invoice as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES")
+              ? "GREEN_LEAVES"
+              : ((data.invoice as any).company === "TECAIR" || meta.company === "TECAIR")
+              ? "TECAIR"
+              : ((data.invoice as any).company === "MTS" || meta.company === "MTS")
+              ? "MTS"
+              : "TCE";
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({
@@ -188,6 +195,17 @@ export default function InvoicePdfPage() {
           >
             ⚙️ MTS
           </button>
+          <button
+            type="button"
+            onClick={() => setSelectedCompany("GREEN_LEAVES")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              selectedCompany === "GREEN_LEAVES"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+            }`}
+          >
+            🍃 Green Leaves
+          </button>
         </div>
 
         <div className="flex gap-2">
@@ -203,7 +221,12 @@ export default function InvoicePdfPage() {
       {/* Main A4 Document Paper Container */}
       <div className="page-container max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-8 sm:p-12 rounded-2xl shadow-xl print:border-none print:shadow-none print:m-0 print:max-w-none print:w-full print:bg-white text-black">
         <div className="page-content">
-          {selectedCompany === "MTS" ? (
+          {selectedCompany === "GREEN_LEAVES" ? (
+            /* Official Green Leaves Letterhead Header */
+            <div className="mb-3">
+              <img src="/green leaves.png" alt="Green Leaves Pvt Ltd." className="w-full h-auto object-contain" />
+            </div>
+          ) : selectedCompany === "MTS" ? (
             /* Official MTS Letterhead Header */
             <div className="flex items-center gap-5 border-b-[3px] border-double border-black pb-2 mb-3">
               <div className="shrink-0">
@@ -442,7 +465,14 @@ export default function InvoicePdfPage() {
         </div>
 
         {/* Letterhead Footer */}
-        {selectedCompany === "MTS" ? null : selectedCompany === "TECAIR" ? (
+        {selectedCompany === "MTS" ? null : selectedCompany === "GREEN_LEAVES" ? (
+          /* Official Green Leaves Letterhead Footer */
+          <div className="page-footer mt-auto border-t border-black pt-2 text-center font-sans">
+            <div className="text-xs text-black font-semibold">
+              Office # 2, 4<sup>th</sup> Floor, Corporate #7, Executive Block, Civil Center, Gulberg Greens Islamabad
+            </div>
+          </div>
+        ) : selectedCompany === "TECAIR" ? (
           /* Official TECAIR Letterhead Footer */
           <div className="page-footer mt-auto border-t-2 border-black pt-2 text-center font-sans">
             <div className="text-xs font-bold text-black flex justify-center items-center gap-3 flex-wrap">

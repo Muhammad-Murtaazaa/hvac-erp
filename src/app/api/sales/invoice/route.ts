@@ -241,7 +241,11 @@ export async function POST(req: Request) {
         totalAmount: finalTotalAmount,
         site: site || body.site || "",
         poNumber: String(poNumber || body.poNumber || "").trim(),
-        company: (body.company === "TECAIR" || body.company === "MTS") ? body.company : "TCE",
+        company: (body.company === "GREEN_LEAVES" || body.company === "GREEN LEAVES")
+          ? "GREEN_LEAVES"
+          : (body.company === "TECAIR" || body.company === "MTS")
+          ? body.company
+          : "TCE",
       });
 
       // If converting from DO, check and verify the DO status

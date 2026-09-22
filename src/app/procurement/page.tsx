@@ -96,7 +96,7 @@ function ProcurementPageContent() {
   const [updatingVendor, setUpdatingVendor] = useState(false);
 
   // New PO state
-  const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
@@ -115,7 +115,7 @@ function ProcurementPageContent() {
   // Edit PO state
   const [isEditPoOpen, setIsEditPoOpen] = useState(false);
   const [editingPoId, setEditingPoId] = useState("");
-  const [editPoCompany, setEditPoCompany] = useState<"TCE" | "TECAIR" | "MTS">("TCE");
+  const [editPoCompany, setEditPoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
   const [editPoNumber, setEditPoNumber] = useState("");
   const [editPoVendor, setEditPoVendor] = useState("");
   const [editPoDate, setEditPoDate] = useState("");
@@ -240,7 +240,7 @@ function ProcurementPageContent() {
   const openEditPo = (po: any) => {
     const meta = po.meta || parsePoMetadata(po.notes, po);
     setEditingPoId(po.id);
-    setEditPoCompany(meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
+    setEditPoCompany(meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
     setEditPoNumber(po.poNumber || "");
     setEditPoVendor(po.vendorId || "");
     setEditPoDate(po.createdAt ? new Date(po.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -691,7 +691,11 @@ function ProcurementPageContent() {
                           <span>{po.poNumber || "-"}</span>
                           {(() => {
                             const c = (po.meta || parsePoMetadata(po.notes, po)).company;
-                            return c === "TECAIR" ? (
+                            return c === "GREEN_LEAVES" ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                GREEN LEAVES
+                              </span>
+                            ) : c === "TECAIR" ? (
                               <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
                                 TECAIR
                               </span>
@@ -1067,6 +1071,17 @@ function ProcurementPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      newPoCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>
@@ -1470,6 +1485,17 @@ function ProcurementPageContent() {
                     }`}
                   >
                     ⚙️ MTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPoCompany("GREEN_LEAVES")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      editPoCompany === "GREEN_LEAVES"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    🍃 Green Leaves
                   </button>
                 </div>
               </div>

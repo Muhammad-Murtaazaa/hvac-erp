@@ -39,6 +39,7 @@ import {
   ExternalLink,
   ArrowLeftRight,
   FileText,
+  Terminal,
 } from "lucide-react";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
@@ -50,6 +51,7 @@ interface MenuItem {
   icon: any;
   roles?: string[]; // Allowed roles fallback
   permissions?: string[]; // Allowed RBAC permissions
+  devOnly?: boolean; // Strictly visible to developer only
 }
 
 interface NavigationGroup {
@@ -134,6 +136,7 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     items: [
       { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"], permissions: ["MANAGE_ROLES", "MANAGE_USERS"] },
       { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"], permissions: ["VIEW_DASHBOARD"] },
+      { name: "Developer Console", href: "/dev", icon: Terminal, devOnly: true },
     ],
   },
 ];
@@ -396,6 +399,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const isAdmin = userRole.toLowerCase() === "admin";
 
   const isItemVisible = (item: MenuItem) => {
+    // Developer-only items are strictly for the verified developer account
+    if (item.devOnly) {
+      return Boolean(
+        currentUser?.isDeveloper ||
+        (currentUser?.email && currentUser.email.toLowerCase() === "muhammad.murtaazaa@gmail.com")
+      );
+    }
+
     if (isAdmin) return true;
     // 1. Dynamic RBAC permissions check: if user has any assigned permission matching this item
     if (item.permissions && item.permissions.some((p) => userPermissions.includes(p))) {

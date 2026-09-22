@@ -17,8 +17,32 @@ function registerAppFonts(doc: any) {
   doc.font("Roboto-Regular"); // Set default
 }
 
-export function drawLetterheadHeader(doc: any, company: "TCE" | "TECAIR" | "MTS") {
-  if (company === "MTS") {
+export function drawLetterheadHeader(doc: any, company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES") {
+  if (company === "GREEN_LEAVES") {
+    let glLogoLoaded = false;
+    try {
+      let glPath = path.resolve("public/green leaves.png");
+      if (!fs.existsSync(glPath)) {
+        glPath = path.resolve("public/green-leaves.png");
+      }
+      if (fs.existsSync(glPath)) {
+        // green leaves header banner (703x109) -> width 500 => height ~77.5
+        doc.image(glPath, 50, 22, { width: 500 });
+        glLogoLoaded = true;
+      }
+    } catch (e) {
+      console.error("Error loading Green Leaves logo image:", e);
+    }
+
+    if (!glLogoLoaded) {
+      doc.save();
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#15803d").text("Green Leaves Pvt Ltd.", 50, 38);
+      doc.font("Roboto-Bold").fontSize(20).fillColor("#0284c7").text("Midea", 460, 38);
+      doc.moveTo(50, 93).lineTo(550, 93).strokeColor("#000000").lineWidth(1.5).stroke();
+      doc.moveTo(50, 96).lineTo(550, 96).strokeColor("#000000").lineWidth(0.75).stroke();
+      doc.restore();
+    }
+  } else if (company === "MTS") {
     let mtsLogoLoaded = false;
     try {
       let mtsPath = path.resolve("public/MTS-logo.png");
@@ -125,9 +149,15 @@ export function drawLetterheadHeader(doc: any, company: "TCE" | "TECAIR" | "MTS"
   }
 }
 
-export function drawLetterheadFooter(doc: any, company: "TCE" | "TECAIR" | "MTS", footerY: number = 742) {
+export function drawLetterheadFooter(doc: any, company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES", footerY: number = 742) {
   if (company === "MTS") {
     // MTS letterhead has no footer
+    return;
+  }
+  if (company === "GREEN_LEAVES") {
+    doc.moveTo(50, footerY).lineTo(550, footerY).strokeColor("#000000").lineWidth(0.75).stroke();
+    doc.font("Roboto-Regular").fontSize(8).fillColor("#000000");
+    doc.text("Office # 2, 4th Floor, Corporate #7, Executive Block, Civil Center, Gulberg Greens Islamabad", 50, footerY + 6, { align: "center", width: 500 });
     return;
   }
   if (company === "TECAIR") {
@@ -157,9 +187,11 @@ export function generateInvoicePDF(invoiceData: any, companyOverride?: string): 
       registerAppFonts(doc);
 
       const meta = parseInvoiceMetadata(invoiceData.notes, invoiceData);
-      const company: "TCE" | "TECAIR" | "MTS" = (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
+      const company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" = (companyOverride === "GREEN_LEAVES" || companyOverride === "GREEN LEAVES")
+        ? "GREEN_LEAVES"
+        : (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
         ? companyOverride
-        : (invoiceData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : invoiceData.company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
+        : ((invoiceData as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : (invoiceData as any).company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : (invoiceData as any).company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
 
       // Draw Company Letterhead Header
       drawLetterheadHeader(doc, company);
@@ -340,9 +372,11 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string, 
       registerAppFonts(doc);
 
       const doMeta = parseDoMetadata(doData.notes, doData);
-      const company: "TCE" | "TECAIR" | "MTS" = (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
+      const company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" = (companyOverride === "GREEN_LEAVES" || companyOverride === "GREEN LEAVES")
+        ? "GREEN_LEAVES"
+        : (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
         ? companyOverride
-        : (doData.company === "TECAIR" || doMeta.company === "TECAIR" ? "TECAIR" : doData.company === "MTS" || doMeta.company === "MTS" ? "MTS" : "TCE");
+        : ((doData as any).company === "GREEN_LEAVES" || doMeta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : (doData as any).company === "TECAIR" || doMeta.company === "TECAIR" ? "TECAIR" : (doData as any).company === "MTS" || doMeta.company === "MTS" ? "MTS" : "TCE");
 
       // Draw Company Letterhead Header
       drawLetterheadHeader(doc, company);
@@ -1515,9 +1549,11 @@ export function generateQuotationPDF(quotationData: any, companyOverride?: strin
       registerAppFonts(doc);
 
       const meta = parseInvoiceMetadata(quotationData.notes, quotationData);
-      const company: "TCE" | "TECAIR" | "MTS" = (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
+      const company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" = (companyOverride === "GREEN_LEAVES" || companyOverride === "GREEN LEAVES")
+        ? "GREEN_LEAVES"
+        : (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
         ? companyOverride
-        : (quotationData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : quotationData.company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
+        : ((quotationData as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : (quotationData as any).company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : (quotationData as any).company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
 
       // Draw Company Letterhead Header
       drawLetterheadHeader(doc, company);
@@ -1864,9 +1900,11 @@ export function generatePurchaseOrderPDF(poData: any, companyOverride?: string):
       registerAppFonts(doc);
 
       const meta = poData.meta || parsePoMetadata(poData.notes, poData);
-      const company: "TCE" | "TECAIR" | "MTS" = (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
+      const company: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" = (companyOverride === "GREEN_LEAVES" || companyOverride === "GREEN LEAVES")
+        ? "GREEN_LEAVES"
+        : (companyOverride === "TECAIR" || companyOverride === "TCE" || companyOverride === "MTS")
         ? companyOverride
-        : (poData.company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : poData.company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
+        : ((poData as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : (poData as any).company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : (poData as any).company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
 
       // Draw Company Letterhead Header
       drawLetterheadHeader(doc, company);
@@ -1887,7 +1925,7 @@ export function generatePurchaseOrderPDF(poData: any, companyOverride?: string):
 
       doc.text(`Status: ${poData.status || "APPROVED"}`, 340, 148);
       if (vendor.ntn) doc.text(`Vendor NTN: ${vendor.ntn}`, 340, 162);
-      doc.text(`Delivery Location: ${company === "TECAIR" ? "TECAIR Multan" : company === "MTS" ? "MTS Islamabad" : "Technicool Multan"}`, 340, 176);
+      doc.text(`Delivery Location: ${company === "GREEN_LEAVES" ? "Green Leaves Islamabad" : company === "TECAIR" ? "TECAIR Multan" : company === "MTS" ? "MTS Islamabad" : "Technicool Multan"}`, 340, 176);
 
       let y = 220;
 

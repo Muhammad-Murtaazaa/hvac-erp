@@ -42,7 +42,12 @@ export async function GET(req: Request) {
     let pdfBuffer: Buffer;
     let fileName = `Document_${id || "export"}.pdf`;
     const companyParam = searchParams.get("company");
-    const companyOverride = (companyParam === "TECAIR" || companyParam === "TCE" || companyParam === "MTS") ? companyParam : undefined;
+    const companyOverride: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" | undefined =
+      (companyParam === "GREEN_LEAVES" || companyParam === "GREEN LEAVES")
+        ? "GREEN_LEAVES"
+        : (companyParam === "TECAIR" || companyParam === "TCE" || companyParam === "MTS")
+        ? companyParam
+        : undefined;
 
     if (type === "quotation") {
       const quotation = await prisma.quotation.findUnique({
