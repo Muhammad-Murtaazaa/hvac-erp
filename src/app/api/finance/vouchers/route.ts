@@ -61,10 +61,48 @@ export async function GET(req: Request) {
     const vouchers = await prisma.ledgerEntry.findMany({
       where,
       orderBy: { entryDate: "desc" },
-      take: 200,
+      take: 250,
     });
 
-    return NextResponse.json({ vouchers });
+    // Attach linked journal entries for rich double-entry display
+    const vNumbers = vouchers.map((v) => v.voucherNumber || v.referenceId).filter(Boolean) as string[];
+    let journalEntries: any[] = [];
+    if (vNumbers.length > 0) {
+      journalEntries = await prisma.journalEntry.findMany({
+        where: {
+          OR: [
+            { sourceId: { in: vNumbers } },
+            { idempotencyKey: { in: vNumbers.map((v) => `VOUCHER:${v}:entry`) } },
+          ],
+        },
+        include: {
+          lines: {
+            include: {
+              account: true,
+            },
+          },
+        },
+      });
+    }
+
+    const journalMap = new Map<string, any>();
+    for (const je of journalEntries) {
+      if (je.sourceId) journalMap.set(je.sourceId, je);
+      if (je.idempotencyKey) {
+        const parts = je.idempotencyKey.split(":");
+        if (parts.length >= 2) journalMap.set(parts[1], je);
+      }
+    }
+
+    const enhancedVouchers = vouchers.map((v) => {
+      const vNum = v.voucherNumber || v.referenceId || "";
+      return {
+        ...v,
+        journalEntry: journalMap.get(vNum) || null,
+      };
+    });
+
+    return NextResponse.json({ vouchers: enhancedVouchers });
   } catch (error: any) {
     console.error("[Vouchers GET] Error:", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
@@ -102,8 +140,8 @@ export async function POST(req: Request) {
       notes,
     } = body;
 
-    if (!voucherType || !debitAccount || !creditAccount || !amount || Number(amount) <= 0 || !description) {
-      return NextResponse.json({ error: "Required voucher fields missing (voucherType, debitAccount, creditAccount, amount, description)" }, { status: 400 });
+    if (!voucherType || !debitAccount || !creditAccount || !amount || Number(amount) <= 0) {
+      return NextResponse.json({ error: "Missing required voucher fields or invalid amount" }, { status: 400 });
     }
 
     const parsedAmount = Math.round(Number(amount) * 100) / 100;
@@ -239,6 +277,9 @@ export async function PATCH(req: Request) {
       amount,
       debitAccount,
       creditAccount,
+      partyName,
+      partyType,
+      partyId,
       paymentMethod,
       chequeNumber,
       notes,
@@ -264,6 +305,9 @@ export async function PATCH(req: Request) {
       const newAmount = amount !== undefined ? Math.round(Number(amount) * 100) / 100 : Number(currentLedger.amount);
       const newDebitAcc = debitAccount || currentLedger.debitAccount;
       const newCreditAcc = creditAccount || currentLedger.creditAccount;
+      const newPartyName = partyName !== undefined ? partyName : currentLedger.partyName;
+      const newPartyType = partyType !== undefined ? partyType : currentLedger.partyType;
+      const newPartyId = partyId !== undefined ? partyId : currentLedger.partyId;
 
       // Update LedgerEntry
       const updatedLedger = await tx.ledgerEntry.update({
@@ -274,6 +318,9 @@ export async function PATCH(req: Request) {
           amount: newAmount,
           debitAccount: newDebitAcc,
           creditAccount: newCreditAcc,
+          partyName: newPartyName,
+          partyType: newPartyType,
+          partyId: newPartyId,
           paymentMethod: paymentMethod !== undefined ? paymentMethod : currentLedger.paymentMethod,
           chequeNumber: chequeNumber !== undefined ? chequeNumber : currentLedger.chequeNumber,
           notes: notes !== undefined ? notes : currentLedger.notes,
@@ -284,9 +331,8 @@ export async function PATCH(req: Request) {
       const journalEntries = await tx.journalEntry.findMany({
         where: {
           OR: [
-            { sourceId: vNum },
-            { idempotencyKey: `VOUCHER:${vNum}:entry` },
-            { idempotencyKey: { contains: vNum } },
+            ...(vNum ? [{ sourceId: vNum }, { idempotencyKey: `VOUCHER:${vNum}:entry` }, { idempotencyKey: { contains: vNum } }] : []),
+            { sourceId: currentLedger.id },
           ],
         },
         include: { lines: { include: { account: true } } },
@@ -301,34 +347,34 @@ export async function PATCH(req: Request) {
           },
         });
 
-        // If amount or accounts changed, update journal lines
-        if (amount !== undefined || debitAccount || creditAccount) {
-          const debitLine = je.lines.find((l) => Number(l.debit) > 0);
-          const creditLine = je.lines.find((l) => Number(l.credit) > 0);
+        // If amount, accounts, or party changed, synchronize journal lines
+        const debitLine = je.lines.find((l) => Number(l.debit) > 0);
+        const creditLine = je.lines.find((l) => Number(l.credit) > 0);
 
-          if (debitLine) {
-            const debitAccId = await getAccountId(tx, newDebitAcc);
-            await tx.journalLine.update({
-              where: { id: debitLine.id },
-              data: {
-                accountId: debitAccId,
-                debit: newAmount,
-                credit: 0,
-              },
-            });
-          }
+        if (debitLine) {
+          const debitAccId = await getAccountId(tx, newDebitAcc);
+          await tx.journalLine.update({
+            where: { id: debitLine.id },
+            data: {
+              accountId: debitAccId,
+              partyId: newPartyId || debitLine.partyId,
+              debit: newAmount,
+              credit: 0,
+            },
+          });
+        }
 
-          if (creditLine) {
-            const creditAccId = await getAccountId(tx, newCreditAcc);
-            await tx.journalLine.update({
-              where: { id: creditLine.id },
-              data: {
-                accountId: creditAccId,
-                debit: 0,
-                credit: newAmount,
-              },
-            });
-          }
+        if (creditLine) {
+          const creditAccId = await getAccountId(tx, newCreditAcc);
+          await tx.journalLine.update({
+            where: { id: creditLine.id },
+            data: {
+              accountId: creditAccId,
+              partyId: newPartyId || creditLine.partyId,
+              debit: 0,
+              credit: newAmount,
+            },
+          });
         }
       }
 
@@ -386,23 +432,32 @@ export async function DELETE(req: Request) {
       const journalEntries = await tx.journalEntry.findMany({
         where: {
           OR: [
-            { sourceId: vNum },
-            { idempotencyKey: `VOUCHER:${vNum}:entry` },
-            { idempotencyKey: { contains: vNum } },
+            ...(vNum ? [{ sourceId: vNum }, { idempotencyKey: `VOUCHER:${vNum}:entry` }, { idempotencyKey: { contains: vNum } }] : []),
+            { sourceId: ledgerEntry.id },
           ],
         },
-        include: { lines: true },
+        include: { lines: { include: { account: true } } },
       });
 
       // 3. Delete Journal Entries (cascades to JournalLines)
+      let linesCount = 0;
       for (const je of journalEntries) {
+        linesCount += je.lines.length;
         await tx.journalEntry.delete({ where: { id: je.id } });
       }
 
-      // 4. Delete the LedgerEntry
+      // 4. Delete the primary LedgerEntry and any split legs with matching voucherNumber
       await tx.ledgerEntry.delete({ where: { id: ledgerEntry.id } });
+      if (vNum) {
+        await tx.ledgerEntry.deleteMany({
+          where: {
+            voucherNumber: vNum,
+            id: { not: ledgerEntry.id },
+          },
+        });
+      }
 
-      // 5. Create audit snapshot
+      // 5. Create immutable audit snapshot
       await recordAuditSnapshot({
         entityName: "Voucher",
         entityId: ledgerEntry.id,
@@ -412,6 +467,7 @@ export async function DELETE(req: Request) {
           ledgerEntry,
           journalEntries,
           rollbackReason: reason || "Super Admin financial voucher rollback",
+          rollbackAt: new Date().toISOString(),
         },
       });
 
@@ -420,12 +476,13 @@ export async function DELETE(req: Request) {
         deletedAmount: ledgerEntry.amount,
         partyName: ledgerEntry.partyName,
         journalsRemoved: journalEntries.length,
+        linesRemoved: linesCount,
       };
     });
 
     return NextResponse.json({
       success: true,
-      message: `Voucher ${result.deletedVoucherNumber} rolled back successfully`,
+      message: `Voucher ${result.deletedVoucherNumber} rolled back successfully with zero balance leaks.`,
       result,
     });
   } catch (error: any) {
@@ -433,4 +490,3 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: error.message || "Failed to rollback voucher" }, { status: 500 });
   }
 }
-

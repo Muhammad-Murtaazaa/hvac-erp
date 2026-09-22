@@ -40,6 +40,7 @@ import {
   ArrowLeftRight,
   FileText,
   Terminal,
+  ShieldAlert,
 } from "lucide-react";
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
@@ -134,6 +135,7 @@ const NAVIGATION_GROUPS: NavigationGroup[] = [
     title: "System",
     defaultOpen: false, // Collapsed by default
     items: [
+      { name: "Super Admin Mode", href: "/admin/super-mode", icon: ShieldAlert, roles: ["Admin"] },
       { name: "Audit Trail", href: "/audit", icon: ShieldCheck, roles: ["Admin"], permissions: ["MANAGE_ROLES", "MANAGE_USERS"] },
       { name: "System Info", href: "/system-info", icon: Info, roles: ["Admin", "Accountant"], permissions: ["VIEW_DASHBOARD"] },
       { name: "Developer Console", href: "/dev", icon: Terminal, devOnly: true },
