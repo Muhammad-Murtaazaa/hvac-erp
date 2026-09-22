@@ -18,6 +18,9 @@ npx prisma generate
 echo "🗄️ Applying safe database schema updates (Zero data loss)..."
 npx prisma db push --skip-generate
 
+echo "🛡️ Ensuring developer clearance user is provisioned..."
+node scripts/seed_dev_user.js
+
 echo "🏗️ Building production Next.js application..."
 npm run build
 

@@ -61,6 +61,10 @@ export async function POST(req: Request) {
       },
     });
 
+    const devEmailsEnv = process.env.DEVELOPER_EMAILS || "";
+    const isDev = (user.role.name.toLowerCase() === "admin" || user.role.name.toLowerCase() === "super admin") &&
+      ["muhammad.murtaazaa@gmail.com", ...devEmailsEnv.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)].includes(user.email.toLowerCase());
+
     const response = NextResponse.json({
       message: "Login successful",
       token,
@@ -69,6 +73,7 @@ export async function POST(req: Request) {
         email: user.email,
         name: user.name,
         role: user.role.name,
+        isDeveloper: isDev,
       },
     });
 

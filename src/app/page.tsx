@@ -43,7 +43,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       if (localStorage.getItem("token")) {
-        router.push("/dashboard");
+        if (localStorage.getItem("is_developer") === "true") {
+          router.push("/dev");
+        } else {
+          router.push("/dashboard");
+        }
         return;
       }
 
@@ -75,6 +79,11 @@ export default function LoginPage() {
         throw new Error(data.error || "Invalid email or password");
       }
 
+      const isDev = Boolean(
+        data.user?.isDeveloper ||
+        data.user?.email?.toLowerCase() === "muhammad.murtaazaa@gmail.com"
+      );
+
       // Handle Remember Me storage
       if (typeof window !== "undefined") {
         if (rememberMe) {
@@ -85,10 +94,20 @@ export default function LoginPage() {
           localStorage.removeItem("tce_remember_me");
         }
 
+        if (isDev) {
+          localStorage.setItem("is_developer", "true");
+        } else {
+          localStorage.removeItem("is_developer");
+        }
+
         localStorage.setItem("token", data.token);
       }
 
-      router.push("/dashboard");
+      if (isDev) {
+        router.push("/dev");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

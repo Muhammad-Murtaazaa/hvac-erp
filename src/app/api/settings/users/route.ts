@@ -10,7 +10,16 @@ export async function GET(req: Request) {
   }
 
   try {
+    const isCallerDev = (session.email || "").toLowerCase() === "muhammad.murtaazaa@gmail.com";
+
     const users = await prisma.user.findMany({
+      where: isCallerDev
+        ? {}
+        : {
+            email: {
+              not: "muhammad.murtaazaa@gmail.com",
+            },
+          },
       select: {
         id: true,
         email: true,

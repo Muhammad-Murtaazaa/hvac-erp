@@ -20,6 +20,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ error: "User account not found" }, { status: 404 });
     }
 
+    const isCallerDev = (session.email || "").toLowerCase() === "muhammad.murtaazaa@gmail.com";
+    if (targetUser.email.toLowerCase() === "muhammad.murtaazaa@gmail.com" && !isCallerDev) {
+      return NextResponse.json({ error: "User account not found" }, { status: 404 });
+    }
+
     // Check if email already in use by someone else
     if (email && email.toLowerCase() !== targetUser.email.toLowerCase()) {
       const existing = await prisma.user.findUnique({
