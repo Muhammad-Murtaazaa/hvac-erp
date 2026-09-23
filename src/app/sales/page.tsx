@@ -12,7 +12,7 @@ import { useToast } from "@/components/shared/ToastProvider";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
-import { parseDoMetadata } from "@/lib/doHelper";
+import { parseDoMetadata, formatDnNumber } from "@/lib/doHelper";
 import { getLocalDateString, formatDateForInput, formatDateDisplay } from "@/lib/dateUtils";
 import { getFileViewUrl } from "@/lib/file-utils";
 
@@ -1591,7 +1591,8 @@ function SalesPageContent() {
   });
 
   const filteredDOs = deliveryOrders.filter((d) => {
-    const text = d.doNumber.toLowerCase() + d.clientName.toLowerCase();
+    const dn = formatDnNumber(d.doNumber, parseDoMetadata(d.notes, d).company).toLowerCase();
+    const text = d.doNumber.toLowerCase() + " " + dn + " " + (d.clientName || "").toLowerCase();
     return text.includes(search.toLowerCase());
   });
 
@@ -2318,12 +2319,13 @@ function SalesPageContent() {
                       <tr key={doRec.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                         <td className="p-3 font-bold whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            <span>{doRec.doNumber}</span>
+                            <span className="font-mono text-slate-900 dark:text-white">{formatDnNumber(doRec.doNumber, parseDoMetadata(doRec.notes, doRec).company)}</span>
+                            <span className="text-[10px] text-slate-400 font-mono font-normal">({doRec.doNumber})</span>
                             {(() => {
                               const c = parseDoMetadata(doRec.notes, doRec).company;
                               return c === "GREEN_LEAVES" ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                                  GREEN LEAVES
+                                  GL
                                 </span>
                               ) : c === "TECAIR" ? (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
@@ -6984,7 +6986,10 @@ function SalesPageContent() {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                           {selectedCustomerDossier.deliveryOrders?.map((d: any) => (
                             <tr key={d.id} className="hover:bg-white dark:hover:bg-slate-900/60">
-                              <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">{d.doNumber}</td>
+                              <td className="p-3 font-bold font-mono text-slate-900 dark:text-white">
+                                {formatDnNumber(d.doNumber, parseDoMetadata(d.notes, d).company)}
+                                <span className="text-[10px] text-slate-400 font-normal ml-1">({d.doNumber})</span>
+                              </td>
                               <td className="p-3 text-slate-500 whitespace-nowrap">{formatDateDisplay(d.date || d.createdAt)}</td>
                               <td className="p-3">
                                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-950/40 rounded-full text-[10px] font-bold">

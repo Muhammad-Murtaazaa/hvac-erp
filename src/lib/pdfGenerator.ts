@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { parseInvoiceMetadata } from "./invoiceHelper";
 import { parsePoMetadata } from "./poHelper";
-import { parseDoMetadata } from "./doHelper";
+import { parseDoMetadata, formatDnNumber } from "./doHelper";
 import { formatDateDisplay } from "./dateUtils";
 
 // Setup font paths dynamically using absolute path resolution
@@ -386,7 +386,8 @@ export function generateDeliveryOrderPDF(doData: any, baseUrlOverride?: string, 
       doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("DELIVERY ORDER / DISPATCH CHALLAN", 50, 107, { align: "center", width: 500 });
 
       // Info metadata block
-      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`DO NUMBER: ${doData.doNumber}`, 50, 130);
+      const formattedDN = formatDnNumber(doData.doNumber, company);
+      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`DN NUMBER: ${formattedDN}`, 50, 130);
       doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
       let leftY = 148;
       doc.text(`Date: ${formatDateDisplay(doData.date, "en-GB")}`, 50, leftY);

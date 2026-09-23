@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { recordAuditSnapshot } from "@/lib/audit";
 import { sendMail } from "@/lib/mail";
+import { parseDoMetadata, formatDnNumber } from "@/lib/doHelper";
 
 export async function GET(req: NextRequest) {
   try {
@@ -110,7 +111,8 @@ export async function POST(req: NextRequest) {
     // Send Automated Delivery Notification Email
     try {
       const notifyEmail = process.env.ADMIN_NOTIFY_EMAIL || process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || "admin@hvacerp.com";
-      const formattedDN = existingDO.doNumber ? existingDO.doNumber.replace("DO-", "TCE/") : existingDO.doNumber;
+      const doMeta = parseDoMetadata(existingDO.notes, existingDO);
+      const formattedDN = formatDnNumber(existingDO.doNumber, doMeta.company);
 
       const htmlEmail = `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">

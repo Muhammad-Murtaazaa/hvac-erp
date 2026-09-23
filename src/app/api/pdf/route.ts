@@ -15,6 +15,7 @@ import {
 } from "@/lib/pdfGenerator";
 import { getPartyLedgerReportData } from "@/lib/partyLedger";
 import { buildPdfFileName, buildContentDispositionHeader } from "@/lib/pdfFileName";
+import { parseDoMetadata, formatDnNumber } from "@/lib/doHelper";
 
 export const dynamic = "force-dynamic";
 
@@ -101,10 +102,12 @@ export async function GET(req: Request) {
       const baseUrl = host ? `${proto}://${host}` : undefined;
 
       pdfBuffer = await generateDeliveryOrderPDF(doRecord, baseUrl, companyOverride);
+      const doMeta = parseDoMetadata(doRecord.notes, doRecord);
+      const effectiveCompany = companyOverride || (doRecord as any).company || doMeta.company;
       fileName = buildPdfFileName({
         docType: "DO",
         partyName: doRecord.customer?.name || "Customer",
-        reference: doRecord.doNumber || doRecord.id,
+        reference: formatDnNumber(doRecord.doNumber, effectiveCompany) || doRecord.id,
       });
     } else if (type === "po" || type === "purchase-order") {
       const poRecord = await prisma.purchaseOrder.findUnique({

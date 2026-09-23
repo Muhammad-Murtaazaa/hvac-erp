@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { formatDateDisplay } from "@/lib/dateUtils";
 import { buildPdfFileName } from "@/lib/pdfFileName";
-import { parseDoMetadata } from "@/lib/doHelper";
+import { parseDoMetadata, formatDnNumber } from "@/lib/doHelper";
 
 export default function DeliveryOrderPdfPage() {
   const params = useParams();
@@ -46,7 +46,7 @@ export default function DeliveryOrderPdfPage() {
           document.title = buildPdfFileName({
             docType: "DO",
             partyName: data.deliveryOrder.customer?.name || "Customer",
-            reference: data.deliveryOrder.doNumber || data.deliveryOrder.id,
+            reference: formatDnNumber(data.deliveryOrder.doNumber, initialCompany) || data.deliveryOrder.id,
             extension: false,
           });
         }
@@ -69,6 +69,18 @@ export default function DeliveryOrderPdfPage() {
     };
     if (doId) fetchDO();
   }, [doId]);
+
+  // Update PDF document title whenever letterhead or DO changes
+  useEffect(() => {
+    if (doRecord) {
+      document.title = buildPdfFileName({
+        docType: "DO",
+        partyName: doRecord.customer?.name || doRecord.clientName || "Customer",
+        reference: formatDnNumber(doRecord.doNumber, selectedCompany) || doRecord.id,
+        extension: false,
+      });
+    }
+  }, [doRecord, selectedCompany]);
 
   if (loading) {
     return (
@@ -94,8 +106,8 @@ export default function DeliveryOrderPdfPage() {
 
   const totalQty = doRecord.lineItems.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
 
-  // DN Number format from DO-10001 to TCE/10001 or TCE/352
-  const formattedDN = doRecord.doNumber ? doRecord.doNumber.replace("DO-", "TCE/") : "";
+  // DN Number formatted dynamically by selected letterhead (TCE/..., TECAIR/..., MTS/..., GL/...)
+  const formattedDN = formatDnNumber(doRecord.doNumber, selectedCompany);
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">

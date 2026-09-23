@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 import { useToast } from "@/components/shared/ToastProvider";
+import { parseDoMetadata, formatDnNumber } from "@/lib/doHelper";
 
 export default function DeliveryConfirmationPage() {
   const params = useParams();
@@ -139,9 +140,8 @@ export default function DeliveryConfirmationPage() {
     );
   }
 
-  const formattedDN = deliveryOrder.doNumber
-    ? deliveryOrder.doNumber.replace("DO-", "TCE/")
-    : deliveryOrder.doNumber || "DO";
+  const doMeta = parseDoMetadata(deliveryOrder.notes, deliveryOrder);
+  const formattedDN = formatDnNumber(deliveryOrder.doNumber, doMeta.company);
 
   const isDelivered = confirmedSuccess || deliveryOrder.status === "DELIVERED";
 
@@ -158,9 +158,25 @@ export default function DeliveryConfirmationPage() {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 text-center shadow-xs">
           <div className="flex justify-center items-center mb-3">
             <img
-              src="/logo.png"
-              alt="Technicool Engineering"
-              className="h-12 w-auto object-contain"
+              src={
+                doMeta.company === "TECAIR"
+                  ? "/TECAIR logo.png"
+                  : doMeta.company === "MTS"
+                  ? "/MTS-logo.png"
+                  : doMeta.company === "GREEN_LEAVES"
+                  ? "/green leaves.png"
+                  : "/logo.png"
+              }
+              alt={
+                doMeta.company === "TECAIR"
+                  ? "TECAIR"
+                  : doMeta.company === "MTS"
+                  ? "MIA TECHNICAL SERVICES"
+                  : doMeta.company === "GREEN_LEAVES"
+                  ? "Green Leaves Pvt Ltd"
+                  : "Technicool Engineering"
+              }
+              className={doMeta.company === "GREEN_LEAVES" ? "h-14 w-auto object-contain" : "h-12 w-auto object-contain"}
               onError={(e: any) => {
                 e.currentTarget.style.display = "none";
               }}
@@ -170,7 +186,13 @@ export default function DeliveryConfirmationPage() {
             Delivery Order Confirmation
           </h1>
           <p className="text-[11px] text-slate-500">
-            Technicool Engineering • Official Electronic Receiving Gateway
+            {doMeta.company === "TECAIR"
+              ? "TECAIR • Official Electronic Receiving Gateway"
+              : doMeta.company === "MTS"
+              ? "MIA Technical Services • Official Electronic Receiving Gateway"
+              : doMeta.company === "GREEN_LEAVES"
+              ? "Green Leaves Pvt Ltd • Official Electronic Receiving Gateway"
+              : "Technicool Engineering • Official Electronic Receiving Gateway"}
           </p>
         </div>
 

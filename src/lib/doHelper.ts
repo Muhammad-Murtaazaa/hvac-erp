@@ -49,3 +49,50 @@ export function formatDoNotesPayload(data: {
     company,
   });
 }
+
+/**
+ * Returns the company initials / prefix for Delivery Notes (DN.No):
+ * - TCE -> TCE
+ * - TECAIR -> TECAIR
+ * - MTS -> MTS
+ * - GREEN_LEAVES -> GL
+ */
+export function getCompanyDnPrefix(company?: string | null): "TCE" | "TECAIR" | "MTS" | "GL" {
+  const normalized = (company || "").trim().toUpperCase();
+  if (normalized === "GREEN_LEAVES" || normalized === "GREEN LEAVES" || normalized === "GL") {
+    return "GL";
+  }
+  if (normalized === "TECAIR" || normalized === "TEC") {
+    return "TECAIR";
+  }
+  if (normalized === "MTS") {
+    return "MTS";
+  }
+  return "TCE";
+}
+
+/**
+ * Formats a DO number (e.g. "DO-10032" or "10032") into official Delivery Note format matching the letter pad:
+ * - TCE: "TCE/10032"
+ * - TECAIR: "TECAIR/10032"
+ * - MTS: "MTS/10032"
+ * - GREEN_LEAVES: "GL/10032"
+ */
+export function formatDnNumber(doNumber?: string | null, company?: string | null): string {
+  if (!doNumber) return "";
+  const prefix = getCompanyDnPrefix(company);
+  
+  // Replace standard DO- prefix (e.g. DO-10032 -> GL/10032, TECAIR/10032, etc.)
+  if (doNumber.startsWith("DO-")) {
+    return doNumber.replace("DO-", `${prefix}/`);
+  }
+  
+  // If it already has any company prefix (e.g. TCE/10032, GL/10032, etc.), swap prefix to selected company
+  const companyPrefixRegex = /^(TCE|TECAIR|TEC|MTS|GL|GREEN LEAVES|GREEN_LEAVES)\//i;
+  if (companyPrefixRegex.test(doNumber)) {
+    return doNumber.replace(companyPrefixRegex, `${prefix}/`);
+  }
+  
+  // If raw number or other string, prefix with selected letterhead brand
+  return `${prefix}/${doNumber}`;
+}
