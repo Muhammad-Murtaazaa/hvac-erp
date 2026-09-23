@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 
 export default function HrmPage() {
   const { toast } = useToast();
@@ -33,6 +34,7 @@ export default function HrmPage() {
 
   const [activeTab, setActiveTab] = useState<"employees" | "attendance" | "salary-sheet">("salary-sheet");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [mounted, setMounted] = useState(false);
 
   // Employee States (Create & Edit)
@@ -165,11 +167,13 @@ export default function HrmPage() {
 
   const handleMonthChange = (newMonth: string) => {
     setSalaryMonth(newMonth);
+    setPage(1);
     fetchSalarySheet(newMonth, salaryYear);
   };
 
   const handleYearChange = (newYear: string) => {
     setSalaryYear(newYear);
+    setPage(1);
     fetchSalarySheet(salaryMonth, newYear);
   };
 
@@ -454,6 +458,7 @@ export default function HrmPage() {
       e.department.toLowerCase().includes(search.toLowerCase()) ||
       e.cnic.toLowerCase().includes(search.toLowerCase())
   );
+  const paginatedEmployees = filteredEmployees.slice((page - 1) * 20, page * 20);
 
   const filteredSalarySheet = salarySheet.filter(
     (r) =>
@@ -462,6 +467,17 @@ export default function HrmPage() {
       r.position.toLowerCase().includes(search.toLowerCase()) ||
       r.department.toLowerCase().includes(search.toLowerCase())
   );
+  const paginatedSalarySheet = filteredSalarySheet.slice((page - 1) * 20, page * 20);
+
+  const filteredAttendance = attendanceList.filter((att) => {
+    const q = search.toLowerCase();
+    if (!q) return true;
+    const name = att.employee?.name || "";
+    const dept = att.employee?.department || "";
+    const status = att.status || "";
+    return `${name} ${dept} ${status}`.toLowerCase().includes(q);
+  });
+  const paginatedAttendance = filteredAttendance.slice((page - 1) * 20, page * 20);
 
   return (
     <div className="space-y-6">
@@ -482,7 +498,11 @@ export default function HrmPage() {
           <div className="inline-flex bg-slate-100 dark:bg-slate-800/90 p-1.5 rounded-2xl text-xs font-bold gap-1 self-start sm:self-auto shadow-inner">
             <button
               type="button"
-              onClick={() => setActiveTab("salary-sheet")}
+              onClick={() => {
+                setActiveTab("salary-sheet");
+                setSearch("");
+                setPage(1);
+              }}
               className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
                 activeTab === "salary-sheet"
                   ? "bg-blue-600 text-white shadow-md font-black"
@@ -495,7 +515,11 @@ export default function HrmPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab("employees")}
+              onClick={() => {
+                setActiveTab("employees");
+                setSearch("");
+                setPage(1);
+              }}
               className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
                 activeTab === "employees"
                   ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
@@ -508,7 +532,11 @@ export default function HrmPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab("attendance")}
+              onClick={() => {
+                setActiveTab("attendance");
+                setSearch("");
+                setPage(1);
+              }}
               className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${
                 activeTab === "attendance"
                   ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
@@ -565,7 +593,10 @@ export default function HrmPage() {
                     placeholder="Search staff in sheet..."
                     className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 w-48 sm:w-60"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
                   />
                 </div>
               </div>
@@ -665,7 +696,7 @@ export default function HrmPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredSalarySheet.map((item, idx) => (
+                  {paginatedSalarySheet.map((item, idx) => (
                     <tr key={item.employeeId} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                       {/* Employee Info */}
                       <td className="p-3.5">
@@ -813,6 +844,14 @@ export default function HrmPage() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredSalarySheet.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="staff records"
+            />
           </div>
         </div>
       )}
@@ -830,7 +869,10 @@ export default function HrmPage() {
                 placeholder="Search staff by name, phone, CNIC, designation..."
                 className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-full focus:ring-2 focus:ring-blue-500"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
               />
             </div>
 
@@ -860,7 +902,7 @@ export default function HrmPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredEmployees.map((emp) => (
+                  {paginatedEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                         {emp.name}
@@ -895,9 +937,22 @@ export default function HrmPage() {
                       </td>
                     </tr>
                   ))}
+                  {filteredEmployees.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">No staff members found matching search.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredEmployees.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="staff members"
+            />
           </div>
         </div>
       )}
@@ -907,20 +962,36 @@ export default function HrmPage() {
       {/* ========================================================================= */}
       {activeTab === "attendance" && (
         <div className="space-y-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs flex items-center justify-between gap-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-black text-slate-900 dark:text-white">Daily Attendance Register</h3>
               <p className="text-xs text-slate-500">Log daily check-ins, half days, and absences.</p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsAttOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
-            >
-              <ClipboardCheck className="w-4 h-4" />
-              <span>+ Mark Daily Attendance</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search staff or status..."
+                  className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 w-full"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAttOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                <span>+ Mark Daily Attendance</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xs">
@@ -937,7 +1008,7 @@ export default function HrmPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {attendanceList.map((att) => (
+                  {paginatedAttendance.map((att) => (
                     <tr key={att.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5 font-mono">{new Date(att.date).toLocaleDateString()}</td>
                       <td className="p-3.5 font-bold text-slate-900 dark:text-white">{att.employee?.name || "Staff"}</td>
@@ -963,9 +1034,22 @@ export default function HrmPage() {
                       </td>
                     </tr>
                   ))}
+                  {filteredAttendance.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">No attendance records found.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredAttendance.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="attendance logs"
+            />
           </div>
         </div>
       )}

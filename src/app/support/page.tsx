@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, CheckCircle, Clock, Wrench, User, MapPin, Phone, HelpCircle, FileText, CalendarDays, History, Download, Share2, Eye, Image as ImageIcon, Trash2, Upload, Paperclip, X, Receipt, ExternalLink, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import CustomerSelect from "@/components/shared/CustomerSelect";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { getFileViewUrl } from "@/lib/file-utils";
@@ -22,6 +23,7 @@ function SupportPageContent() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "tickets"); // tickets, technicians
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -522,6 +524,19 @@ function SupportPageContent() {
 
   const technicians = employees.filter((e) => e.department === "SERVICE");
 
+  const paginatedTickets = useMemo(() => {
+    return filteredTickets.slice((page - 1) * 20, page * 20);
+  }, [filteredTickets, page]);
+
+  const filteredTechnicians = useMemo(() => {
+    const s = search.toLowerCase();
+    return technicians.filter((t) => (t.name.toLowerCase() + t.position.toLowerCase()).includes(s));
+  }, [technicians, search]);
+
+  const paginatedTechnicians = useMemo(() => {
+    return filteredTechnicians.slice((page - 1) * 20, page * 20);
+  }, [filteredTechnicians, page]);
+
   const ticketStatusOptions = [
     { label: "Open / Pending", value: "OPEN" },
     { label: "In Progress / Working", value: "IN_PROGRESS" },
@@ -575,6 +590,7 @@ function SupportPageContent() {
               setActiveTab("tickets");
               setSearch("");
               setStatus("");
+              setPage(1);
             }}
             className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
               activeTab === "tickets"
@@ -590,6 +606,7 @@ function SupportPageContent() {
                 setActiveTab("technicians");
                 setSearch("");
                 setStatus("");
+                setPage(1);
               }}
               className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === "technicians"
@@ -612,9 +629,15 @@ function SupportPageContent() {
           <SearchFilter
             placeholder="Search tickets by COMP code, client name, description..."
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(val) => {
+              setSearch(val);
+              setPage(1);
+            }}
             status={status}
-            onStatusChange={setStatus}
+            onStatusChange={(val) => {
+              setStatus(val);
+              setPage(1);
+            }}
             statusOptions={ticketStatusOptions}
           />
 
@@ -745,7 +768,7 @@ function SupportPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredTickets.map((t, idx) => {
+                  {paginatedTickets.map((t, idx) => {
                     const { amt, rec, pend } = getTicketFinancials(t);
                     const isSelected = selectedTicketIds.includes(t.id);
                     return (
@@ -777,7 +800,7 @@ function SupportPageContent() {
                             }}
                           />
                         </td>
-                        <td className="p-3 text-center font-bold font-mono">{idx + 1}</td>
+                        <td className="p-3 text-center font-bold font-mono">{(page - 1) * 20 + idx + 1}</td>
                         <td className="p-3 whitespace-nowrap">{new Date(t.createdAt).toLocaleDateString("en-GB").replace(/\//g, "-")}</td>
                         <td className="p-3 font-bold text-slate-900 dark:text-white">{t.customerName}</td>
                         <td className="p-3 truncate max-w-[120px]" title={t.customerAddress}>{t.customerAddress}</td>
@@ -865,6 +888,14 @@ function SupportPageContent() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredTickets.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="complaints"
+            />
           </div>
 
           {/* Sticky Bulk Action Bar for Tickets */}
@@ -888,7 +919,10 @@ function SupportPageContent() {
           <SearchFilter
             placeholder="Search technicians by name or position..."
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(val) => {
+              setSearch(val);
+              setPage(1);
+            }}
           />
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -907,35 +941,27 @@ function SupportPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {technicians
-                    .filter((t) => {
-                      const text = t.name.toLowerCase() + t.position.toLowerCase();
-                      return text.includes(search.toLowerCase());
-                    })
-                    .map((tech) => (
-                      <tr key={tech.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                        <td className="p-3 font-bold">{tech.name}</td>
-                        <td className="p-3 font-semibold">{tech.cnic}</td>
-                        <td className="p-3 font-medium text-slate-600 dark:text-slate-400">{tech.position}</td>
-                        <td className="p-3 font-medium">{tech.phone}</td>
-                        <td className="p-3 text-slate-500 max-w-xs truncate" title={tech.address}>{tech.address || "-"}</td>
-                        <td className="p-3 text-right font-bold text-blue-500">{Number(tech.baseSalary).toFixed(2)}</td>
-                        <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(tech.joiningDate).toLocaleDateString()}</td>
-                        <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            tech.status === "ACTIVE"
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                              : "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                          }`}>
-                            {tech.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  {technicians.filter((t) => {
-                    const text = t.name.toLowerCase() + t.position.toLowerCase();
-                    return text.includes(search.toLowerCase());
-                  }).length === 0 && (
+                  {paginatedTechnicians.map((tech) => (
+                    <tr key={tech.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                      <td className="p-3 font-bold">{tech.name}</td>
+                      <td className="p-3 font-semibold">{tech.cnic}</td>
+                      <td className="p-3 font-medium text-slate-600 dark:text-slate-400">{tech.position}</td>
+                      <td className="p-3 font-medium">{tech.phone}</td>
+                      <td className="p-3 text-slate-500 max-w-xs truncate" title={tech.address}>{tech.address || "-"}</td>
+                      <td className="p-3 text-right font-bold text-blue-500">{Number(tech.baseSalary).toFixed(2)}</td>
+                      <td className="p-3 text-slate-500 whitespace-nowrap">{new Date(tech.joiningDate).toLocaleDateString()}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          tech.status === "ACTIVE"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                            : "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                        }`}>
+                          {tech.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredTechnicians.length === 0 && (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">No service technicians registered.</td>
                     </tr>
@@ -943,6 +969,14 @@ function SupportPageContent() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredTechnicians.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="technicians"
+            />
           </div>
         </div>
       )}

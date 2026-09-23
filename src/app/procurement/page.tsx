@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, ListFilter, Clipboard, AlertCircle, FileText, CheckCircle2, RotateCcw, Printer, BookOpen, ArrowRight, Building2, Phone, Mail, MapPin, Edit2 } from "lucide-react";
 import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
+import TablePagination from "@/components/shared/TablePagination";
 import ProductSelect from "@/components/shared/ProductSelect";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -27,12 +28,14 @@ function ProcurementPageContent() {
   const [activeTab, setActiveTab] = useState(initialTab); // pos, arrivals, shortages, vendors
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let tab = searchParams.get("tab");
     if (tab === "pending_stock") tab = "shortages";
     if (tab && tab !== activeTab) {
       setActiveTab(tab);
+      setPage(1);
     }
   }, [searchParams]);
 
@@ -567,6 +570,31 @@ function ProcurementPageContent() {
     const matchesStatus = status === "" || po.status === status;
     return matchesText && matchesStatus;
   });
+  const paginatedPOs = filteredPOs.slice((page - 1) * 20, page * 20);
+
+  const filteredArrivals = filteredPOs.filter(isPendingArrival);
+  const paginatedArrivals = filteredArrivals.slice((page - 1) * 20, page * 20);
+
+  const filteredShortages = (pendingItems || []).filter((item) => {
+    const q = (search || "").toLowerCase();
+    if (!q) return true;
+    const poNum = item.poNumber || "";
+    const vName = item.vendorName || "";
+    const sku = item.product?.sku || "";
+    const name = item.product?.name || "";
+    return `${poNum} ${vName} ${sku} ${name}`.toLowerCase().includes(q);
+  });
+  const paginatedShortages = filteredShortages.slice((page - 1) * 20, page * 20);
+
+  const filteredVendors = (vendors || []).filter((v) => {
+    const name = v?.name || "";
+    const email = v?.email || "";
+    const ntn = v?.ntn || "";
+    const contactPerson = v?.contactPerson || "";
+    const text = `${name} ${email} ${ntn} ${contactPerson}`.toLowerCase();
+    return text.includes((search || "").toLowerCase());
+  });
+  const paginatedVendors = filteredVendors.slice((page - 1) * 20, page * 20);
 
   const poStatusOptions = [
     { label: "Draft", value: "DRAFT" },
@@ -641,6 +669,7 @@ function ProcurementPageContent() {
                 setActiveTab(tab.id);
                 setSearch("");
                 setStatus("");
+                setPage(1);
               }}
               className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === tab.id
@@ -664,9 +693,15 @@ function ProcurementPageContent() {
           <SearchFilter
             placeholder="Search PO number or vendor..."
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
             status={status}
-            onStatusChange={setStatus}
+            onStatusChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
             statusOptions={poStatusOptions}
           />
 
@@ -684,7 +719,7 @@ function ProcurementPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredPOs.map((po) => (
+                  {paginatedPOs.map((po) => (
                     <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                       <td className="p-3 font-bold whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
@@ -764,6 +799,13 @@ function ProcurementPageContent() {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredPOs.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="purchase orders"
+            />
           </div>
         </div>
       ) : activeTab === "arrivals" ? (
@@ -772,7 +814,10 @@ function ProcurementPageContent() {
           <SearchFilter
             placeholder="Search pending arrivals by PO number or vendor..."
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
           />
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -789,39 +834,37 @@ function ProcurementPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredPOs
-                    .filter(isPendingArrival)
-                    .map((po) => {
-                      const isPartiallyReceived = po.status === "PARTIALLY_RECEIVED";
-                      return (
-                        <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                          <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
-                          <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
-                          <td className="p-3">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                isPartiallyReceived
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                                  : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
-                              }`}
-                            >
-                              {isPartiallyReceived ? "Partially Received (Pending Balance)" : "Dispatched / Pending Arrival"}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
-                          <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
-                          <td className="p-3 text-center">
-                            <button
-                              onClick={() => openGrnForm(po)}
-                              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto shadow-md shadow-blue-500/10"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" /> {isPartiallyReceived ? "Check-In Balance Delivery" : "Check-In 1st Delivery"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  {filteredPOs.filter(isPendingArrival).length === 0 && (
+                  {paginatedArrivals.map((po) => {
+                    const isPartiallyReceived = po.status === "PARTIALLY_RECEIVED";
+                    return (
+                      <tr key={po.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                        <td className="p-3 font-bold whitespace-nowrap">{po.poNumber || "-"}</td>
+                        <td className="p-3 font-semibold">{po.vendor?.name || "Unknown Vendor"}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isPartiallyReceived
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                            }`}
+                          >
+                            {isPartiallyReceived ? "Partially Received (Pending Balance)" : "Dispatched / Pending Arrival"}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-bold">{Number(po.totalAmount || 0).toFixed(2)}</td>
+                        <td className="p-3 text-slate-500 whitespace-nowrap">{po.createdAt ? new Date(po.createdAt).toLocaleDateString() : "-"}</td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => openGrnForm(po)}
+                            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto shadow-md shadow-blue-500/10"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> {isPartiallyReceived ? "Check-In Balance Delivery" : "Check-In 1st Delivery"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredArrivals.length === 0 && (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-slate-400">All deliveries checked in! No pending new arrivals.</td>
                     </tr>
@@ -829,57 +872,82 @@ function ProcurementPageContent() {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredArrivals.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="incoming shipments"
+            />
           </div>
         </div>
       ) : activeTab === "shortages" ? (
         /* ==================== SHORTAGE RESOLUTION TAB ==================== */
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
-                  <th className="p-3">PO Number</th>
-                  <th className="p-3">Vendor</th>
-                  <th className="p-3">Product SKU</th>
-                  <th className="p-3">Product Name</th>
-                  <th className="p-3 text-right">Shortage Qty</th>
-                  <th className="p-3 text-right">Resolved Qty</th>
-                  <th className="p-3 text-right font-bold text-rose-500">Outstanding</th>
-                  <th className="p-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                {pendingItems.map((item) => {
-                  const missing = item.quantityMissing || 0;
-                  const resolved = item.quantityResolved || 0;
-                  const outstanding = missing - resolved;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                      <td className="p-3 font-bold">{item.poNumber || "-"}</td>
-                      <td className="p-3 font-semibold">{item.vendorName || "Unknown Vendor"}</td>
-                      <td className="p-3 font-bold">{item.product?.sku || "-"}</td>
-                      <td className="p-3">{item.product?.name || "-"}</td>
-                      <td className="p-3 text-right text-slate-400 font-semibold">{missing}</td>
-                      <td className="p-3 text-right text-emerald-500 font-semibold">{resolved}</td>
-                      <td className="p-3 text-right font-black text-rose-500 text-sm">{outstanding}</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => openResolveForm(item)}
-                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" /> Receive Stock
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {pendingItems.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">All procurement shortfalls resolved! No pending stock shortages.</td>
+        <div className="space-y-4">
+          <SearchFilter
+            placeholder="Search shortages by PO number, vendor, or product..."
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+          />
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-100 dark:border-slate-800">
+                    <th className="p-3">PO Number</th>
+                    <th className="p-3">Vendor</th>
+                    <th className="p-3">Product SKU</th>
+                    <th className="p-3">Product Name</th>
+                    <th className="p-3 text-right">Shortage Qty</th>
+                    <th className="p-3 text-right">Resolved Qty</th>
+                    <th className="p-3 text-right font-bold text-rose-500">Outstanding</th>
+                    <th className="p-3 text-center">Action</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {paginatedShortages.map((item) => {
+                    const missing = item.quantityMissing || 0;
+                    const resolved = item.quantityResolved || 0;
+                    const outstanding = missing - resolved;
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                        <td className="p-3 font-bold">{item.poNumber || "-"}</td>
+                        <td className="p-3 font-semibold">{item.vendorName || "Unknown Vendor"}</td>
+                        <td className="p-3 font-bold">{item.product?.sku || "-"}</td>
+                        <td className="p-3">{item.product?.name || "-"}</td>
+                        <td className="p-3 text-right text-slate-400 font-semibold">{missing}</td>
+                        <td className="p-3 text-right text-emerald-500 font-semibold">{resolved}</td>
+                        <td className="p-3 text-right font-black text-rose-500 text-sm">{outstanding}</td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => openResolveForm(item)}
+                            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Receive Stock
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredShortages.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">All procurement shortfalls resolved! No pending stock shortages.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredShortages.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="backorder items"
+            />
           </div>
         </div>
       ) : (
@@ -888,7 +956,10 @@ function ProcurementPageContent() {
           <SearchFilter
             placeholder="Search vendors by name or email..."
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
           />
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -907,100 +978,84 @@ function ProcurementPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {vendors
-                    .filter((v) => {
-                      const name = v?.name || "";
-                      const email = v?.email || "";
-                      const ntn = v?.ntn || "";
-                      const contactPerson = v?.contactPerson || "";
-                      const text = `${name} ${email} ${ntn} ${contactPerson}`.toLowerCase();
-                      return text.includes((search || "").toLowerCase());
-                    })
-                    .map((vendor) => {
-                      const netPayable = vendor.ledgerBalance !== undefined ? vendor.ledgerBalance : 0;
-                      return (
-                        <tr key={vendor.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
-                          <td className="p-3">
-                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{vendor.name}</span>
-                              {vendor.ntn && (
-                                <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal" title={`NTN: ${vendor.ntn}`}>
-                                  NTN: {vendor.ntn}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate max-w-xs">{vendor.email || vendor.paymentTerms || "-"}</p>
-                          </td>
-                          <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{vendor.contactPerson}</td>
-                          <td className="p-3 font-mono font-medium whitespace-nowrap">
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-slate-400" />
-                              {vendor.phone}
-                            </span>
-                          </td>
-                          <td className="p-3 text-slate-500 max-w-xs truncate" title={vendor.address}>{vendor.address || "-"}</td>
-                          <td className="p-3 text-center">
-                            <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded font-bold font-mono text-[11px]">
-                              {vendor.totalPOs || 0}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono font-semibold">
-                            PKR {Number(vendor.totalPurchases || 0).toLocaleString()}
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold">
-                            <div>
-                              <span className={netPayable > 0 ? "text-amber-500" : netPayable < 0 ? "text-blue-500" : "text-emerald-500"}>
-                                PKR {Math.abs(netPayable).toLocaleString()}
+                  {paginatedVendors.map((vendor) => {
+                    const netPayable = vendor.ledgerBalance !== undefined ? vendor.ledgerBalance : 0;
+                    return (
+                      <tr key={vendor.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span>{vendor.name}</span>
+                            {vendor.ntn && (
+                              <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-normal" title={`NTN: ${vendor.ntn}`}>
+                                NTN: {vendor.ntn}
                               </span>
-                              <span className={`block text-[9px] font-bold uppercase tracking-wider ${
-                                netPayable > 0 ? "text-amber-600" : netPayable < 0 ? "text-blue-600" : "text-emerald-600"
-                              }`}>
-                                {netPayable > 0 ? "Payable" : netPayable < 0 ? "Advance Paid" : "Settled"}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => {
-                                  setSelectedVendor(vendor);
-                                  setIsLedgerOpen(true);
-                                  setLedgerTab("po");
-                                }}
-                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 rounded text-[10px] font-bold text-blue-600 dark:text-blue-400 transition-all flex items-center gap-1"
-                                title="View Complete Vendor History & Statement"
-                              >
-                                <FileText className="w-3 h-3" />
-                                <span>Statement</span>
-                              </button>
-                              <a
-                                href={`/financials?tab=ledger&partyType=VENDOR&partyName=${encodeURIComponent(vendor.name)}`}
-                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 rounded text-[10px] font-bold text-emerald-600 dark:text-emerald-400 transition-all flex items-center gap-1"
-                                title="Open Full Financial Ledger in Financials"
-                              >
-                                <BookOpen className="w-3 h-3" />
-                                <span>Ledger</span>
-                              </a>
-                              <button
-                                onClick={() => openEditVendor(vendor)}
-                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-200 transition-all flex items-center gap-1"
-                                title="Edit Vendor Details"
-                              >
-                                <span>✏️ Edit</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  {vendors.filter((v) => {
-                    const name = v?.name || "";
-                    const email = v?.email || "";
-                    const ntn = v?.ntn || "";
-                    const contactPerson = v?.contactPerson || "";
-                    const text = `${name} ${email} ${ntn} ${contactPerson}`.toLowerCase();
-                    return text.includes((search || "").toLowerCase());
-                  }).length === 0 && (
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate max-w-xs">{vendor.email || vendor.paymentTerms || "-"}</p>
+                        </td>
+                        <td className="p-3 font-semibold text-slate-700 dark:text-slate-200">{vendor.contactPerson}</td>
+                        <td className="p-3 font-mono font-medium whitespace-nowrap">
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 text-slate-400" />
+                            {vendor.phone}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-500 max-w-xs truncate" title={vendor.address}>{vendor.address || "-"}</td>
+                        <td className="p-3 text-center">
+                          <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded font-bold font-mono text-[11px]">
+                            {vendor.totalPOs || 0}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-mono font-semibold">
+                          PKR {Number(vendor.totalPurchases || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold">
+                          <div>
+                            <span className={netPayable > 0 ? "text-amber-500" : netPayable < 0 ? "text-blue-500" : "text-emerald-500"}>
+                              PKR {Math.abs(netPayable).toLocaleString()}
+                            </span>
+                            <span className={`block text-[9px] font-bold uppercase tracking-wider ${
+                              netPayable > 0 ? "text-amber-600" : netPayable < 0 ? "text-blue-600" : "text-emerald-600"
+                            }`}>
+                              {netPayable > 0 ? "Payable" : netPayable < 0 ? "Advance Paid" : "Settled"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedVendor(vendor);
+                                setIsLedgerOpen(true);
+                                setLedgerTab("po");
+                              }}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 rounded text-[10px] font-bold text-blue-600 dark:text-blue-400 transition-all flex items-center gap-1"
+                              title="View Complete Vendor History & Statement"
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>Statement</span>
+                            </button>
+                            <a
+                              href={`/financials?tab=ledger&partyType=VENDOR&partyName=${encodeURIComponent(vendor.name)}`}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 rounded text-[10px] font-bold text-emerald-600 dark:text-emerald-400 transition-all flex items-center gap-1"
+                              title="Open Full Financial Ledger in Financials"
+                            >
+                              <BookOpen className="w-3 h-3" />
+                              <span>Ledger</span>
+                            </a>
+                            <button
+                              onClick={() => openEditVendor(vendor)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-bold text-slate-700 dark:text-slate-200 transition-all flex items-center gap-1"
+                              title="Edit Vendor Details"
+                            >
+                              <span>✏️ Edit</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredVendors.length === 0 && (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">No vendors registered yet.</td>
                     </tr>
@@ -1008,6 +1063,13 @@ function ProcurementPageContent() {
                 </tbody>
               </table>
             </div>
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredVendors.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="vendors"
+            />
           </div>
         </div>
       )}

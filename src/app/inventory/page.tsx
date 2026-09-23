@@ -6,6 +6,7 @@ import SearchFilter from "@/components/shared/SearchFilter";
 import SkeletonTable from "@/components/shared/SkeletonTable";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 import { createPortal } from "react-dom";
 
 const DEFAULT_STOCKING_UNITS = [
@@ -42,6 +43,7 @@ export default function InventoryPage() {
   // Search/Filter states
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [page, setPage] = useState(1);
 
   // New Catalog Product states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -294,6 +296,10 @@ export default function InventoryPage() {
     value: c,
   }));
 
+  const paginatedProducts = React.useMemo(() => {
+    return filteredProducts.slice((page - 1) * 20, page * 20);
+  }, [filteredProducts, page]);
+
   const lowStockProducts = products.filter((p) => Math.max(0, Number(p.onHandQty || 0)) <= Number(p.reorderLevel || 0));
 
   return (
@@ -345,9 +351,15 @@ export default function InventoryPage() {
       <SearchFilter
         placeholder="Search products by SKU, name, or category..."
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(val) => {
+          setSearch(val);
+          setPage(1);
+        }}
         status={category}
-        onStatusChange={setCategory}
+        onStatusChange={(val) => {
+          setCategory(val);
+          setPage(1);
+        }}
         statusOptions={categories}
       />
 
@@ -390,7 +402,7 @@ export default function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                  {filteredProducts.map((p) => {
+                  {paginatedProducts.map((p) => {
                     const isLow = Number(p.onHandQty || 0) <= Number(p.reorderLevel || 0);
                     const isSelected = selectedProductIds.includes(p.id);
 
@@ -464,6 +476,14 @@ export default function InventoryPage() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={page}
+              totalItems={filteredProducts.length}
+              pageSize={20}
+              onPageChange={setPage}
+              itemLabel="products"
+            />
           </div>
 
           {/* Sticky Bulk Action Bar for Inventory */}

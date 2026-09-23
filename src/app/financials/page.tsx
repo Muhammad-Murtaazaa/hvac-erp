@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   TrendingUp,
@@ -86,6 +87,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 
 const PALETTE = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
@@ -912,6 +914,12 @@ function FinancialsPageContent() {
   const [glDirectionFilter, setGlDirectionFilter] = useState<"ALL" | "DEBIT" | "CREDIT">("ALL");
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
 
+  // Table Pagination & Search States
+  const [glPage, setGlPage] = useState(1);
+  const [soaPage, setSoaPage] = useState(1);
+  const [soaSearch, setSoaSearch] = useState("");
+  const [partyPage, setPartyPage] = useState(1);
+
   // Super Admin Voucher Edit & Rollback State
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [editingVoucher, setEditingVoucher] = useState<any>(null);
@@ -925,6 +933,12 @@ function FinancialsPageContent() {
   const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
   const [rollbackReason, setRollbackReason] = useState("");
   const [isRollingBack, setIsRollingBack] = useState(false);
+
+  // Portal mount
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -1144,6 +1158,31 @@ function FinancialsPageContent() {
     return simpleLedgerEntries.filter((item) => item.details.direction === glDirectionFilter);
   }, [simpleLedgerEntries, glDirectionFilter]);
 
+  const paginatedLedgerList = useMemo(() => {
+    return displayedLedgerList.slice((glPage - 1) * 20, glPage * 20);
+  }, [displayedLedgerList, glPage]);
+
+  const paginatedAccountingLedger = useMemo(() => {
+    return generalLedgerEntries.slice((glPage - 1) * 20, glPage * 20);
+  }, [generalLedgerEntries, glPage]);
+
+  const filteredSoaTransactions = useMemo(() => {
+    const txns = soaData?.transactions || [];
+    if (!soaSearch.trim()) return txns;
+    const q = soaSearch.toLowerCase();
+    return txns.filter((tx: any) =>
+      tx.referenceNumber?.toLowerCase().includes(q) ||
+      tx.description?.toLowerCase().includes(q) ||
+      tx.docType?.toLowerCase().includes(q) ||
+      tx.date?.includes(q)
+    );
+  }, [soaData, soaSearch]);
+
+  const paginatedSoaTransactions = useMemo(() => {
+    return filteredSoaTransactions.slice((soaPage - 1) * 20, soaPage * 20);
+  }, [filteredSoaTransactions, soaPage]);
+
+
   const simpleStats = useMemo(() => {
     let debits = 0;
     let credits = 0;
@@ -1186,6 +1225,26 @@ function FinancialsPageContent() {
   const [partyAccountTab, setPartyAccountTab] = useState<"all" | "customers" | "vendors" | "employees">("all");
   const [partyAccountSearch, setPartyAccountSearch] = useState("");
   const [partyStatusFilter, setPartyStatusFilter] = useState<"all" | "receivable" | "payable" | "settled">("all");
+
+  const filteredPartyAccounts = useMemo(() => {
+    const base = (partyAccountTab === "all"
+      ? partyAccountsList.all
+      : partyAccountTab === "customers"
+      ? partyAccountsList.customers
+      : partyAccountTab === "vendors"
+      ? partyAccountsList.vendors
+      : partyAccountsList.employees) || [];
+    if (!partyAccountSearch.trim()) return base;
+    const q = partyAccountSearch.toLowerCase();
+    return base.filter((p: any) =>
+      p.name?.toLowerCase().includes(q) ||
+      (p.phone && p.phone.includes(q))
+    );
+  }, [partyAccountTab, partyAccountsList, partyAccountSearch]);
+
+  const paginatedPartyAccounts = useMemo(() => {
+    return filteredPartyAccounts.slice((partyPage - 1) * 20, partyPage * 20);
+  }, [filteredPartyAccounts, partyPage]);
 
   const [partiesList, setPartiesList] = useState<any>({ customers: [], vendors: [], employees: [] });
   const [documentsList, setDocumentsList] = useState<any>({ invoices: [], purchaseOrders: [], deliveryOrders: [], complaints: [] });
@@ -1318,6 +1377,18 @@ function FinancialsPageContent() {
     address: "",
     paymentTerms: "Net 30 Days",
   });
+
+  // Body scroll lock when any modal is open
+  useEffect(() => {
+    if (showAddCustomerModal || showEditCustomerModal || showAddVendorModal || isEditModalOpen || isRollbackModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [showAddCustomerModal, showEditCustomerModal, showAddVendorModal, isEditModalOpen, isRollbackModalOpen]);
 
   // Helper date presets for SOA
   const applySoaPreset = (preset: "this_month" | "last_30" | "ytd" | "all") => {
@@ -2300,6 +2371,26 @@ function FinancialsPageContent() {
                 </div>
               </div>
 
+              {/* Transactions Sub-Ledger Header & Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Transaction Audit Sub-Ledger
+                </h4>
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={soaSearch}
+                    onChange={(e) => {
+                      setSoaSearch(e.target.value);
+                      setSoaPage(1);
+                    }}
+                    placeholder="Filter statement rows..."
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  />
+                </div>
+              </div>
+
               {/* Transactions Sub-Ledger Table */}
               <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
                 <table className="w-full text-left text-xs">
@@ -2315,7 +2406,7 @@ function FinancialsPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {soaData.transactions?.map((tx: any, idx: number) => (
+                    {paginatedSoaTransactions.map((tx: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400">
                           {tx.date}
@@ -2386,6 +2477,14 @@ function FinancialsPageContent() {
                   </tfoot>
                 </table>
               </div>
+
+              <TablePagination
+                currentPage={soaPage}
+                totalItems={filteredSoaTransactions.length}
+                pageSize={20}
+                onPageChange={setSoaPage}
+                itemLabel="transactions"
+              />
             </div>
           ) : (
             <div className="bg-white dark:bg-slate-900 p-16 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-3">
@@ -2836,7 +2935,10 @@ function FinancialsPageContent() {
                   placeholder="Search party, narration, ref, account..."
                   className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-64 focus:ring-2 focus:ring-blue-500"
                   value={glSearch}
-                  onChange={(e) => setGlSearch(e.target.value)}
+                  onChange={(e) => {
+                    setGlSearch(e.target.value);
+                    setGlPage(1);
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && fetchGeneralLedger()}
                 />
               </div>
@@ -2847,6 +2949,7 @@ function FinancialsPageContent() {
                 value={glSourceType}
                 onChange={(e) => {
                   setGlSourceType(e.target.value);
+                  setGlPage(1);
                   setTimeout(fetchGeneralLedger, 50);
                 }}
               >
@@ -2862,7 +2965,10 @@ function FinancialsPageContent() {
               <div className="inline-flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700 text-xs font-bold gap-1">
                 <button
                   type="button"
-                  onClick={() => setGlDirectionFilter("ALL")}
+                  onClick={() => {
+                    setGlDirectionFilter("ALL");
+                    setGlPage(1);
+                  }}
                   className={`px-2.5 py-1 rounded-lg transition-all ${
                     glDirectionFilter === "ALL"
                       ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs font-black"
@@ -2873,7 +2979,10 @@ function FinancialsPageContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setGlDirectionFilter("DEBIT")}
+                  onClick={() => {
+                    setGlDirectionFilter("DEBIT");
+                    setGlPage(1);
+                  }}
                   className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
                     glDirectionFilter === "DEBIT"
                       ? "bg-emerald-500 text-white shadow-2xs font-black"
@@ -2885,7 +2994,10 @@ function FinancialsPageContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setGlDirectionFilter("CREDIT")}
+                  onClick={() => {
+                    setGlDirectionFilter("CREDIT");
+                    setGlPage(1);
+                  }}
                   className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
                     glDirectionFilter === "CREDIT"
                       ? "bg-blue-600 text-white shadow-2xs font-black"
@@ -2946,7 +3058,7 @@ function FinancialsPageContent() {
                         </td>
                       </tr>
                     ) : displayedLedgerList.length > 0 ? (
-                      displayedLedgerList.map(({ entry, details }) => {
+                      paginatedLedgerList.map(({ entry, details }) => {
                         const isExpanded = expandedEntryId === entry.id;
                         return (
                           <React.Fragment key={entry.id}>
@@ -3110,6 +3222,14 @@ function FinancialsPageContent() {
                   </tbody>
                 </table>
               </div>
+
+              <TablePagination
+                currentPage={glPage}
+                totalItems={displayedLedgerList.length}
+                pageSize={20}
+                onPageChange={setGlPage}
+                itemLabel="ledger entries"
+              />
             </div>
           )}
 
@@ -3140,7 +3260,7 @@ function FinancialsPageContent() {
                         </td>
                       </tr>
                     ) : generalLedgerEntries.length > 0 ? (
-                      generalLedgerEntries.map((entry) => (
+                      paginatedAccountingLedger.map((entry) => (
                         <tr key={entry.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                           <td className="p-3.5 font-mono whitespace-nowrap text-slate-600 dark:text-slate-400 align-top">
                             {new Date(entry.entryDate).toLocaleDateString("en-GB").replace(/\//g, "-")}
@@ -3221,6 +3341,14 @@ function FinancialsPageContent() {
                   </tbody>
                 </table>
               </div>
+
+              <TablePagination
+                currentPage={glPage}
+                totalItems={generalLedgerEntries.length}
+                pageSize={20}
+                onPageChange={setGlPage}
+                itemLabel="journal transactions"
+              />
             </div>
           )}
         </div>
@@ -3250,7 +3378,10 @@ function FinancialsPageContent() {
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setPartyAccountTab(tab)}
+                    onClick={() => {
+                      setPartyAccountTab(tab);
+                      setPartyPage(1);
+                    }}
                     className={`px-3 py-1.5 rounded-xl transition-all capitalize font-bold ${
                       partyAccountTab === tab
                         ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm font-black"
@@ -3272,7 +3403,10 @@ function FinancialsPageContent() {
                   placeholder="Search party financial accounts by name, phone..."
                   className="pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium w-full focus:ring-2 focus:ring-blue-500"
                   value={partyAccountSearch}
-                  onChange={(e) => setPartyAccountSearch(e.target.value)}
+                  onChange={(e) => {
+                    setPartyAccountSearch(e.target.value);
+                    setPartyPage(1);
+                  }}
                 />
               </div>
             </div>
@@ -3293,19 +3427,7 @@ function FinancialsPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {((partyAccountTab === "all"
-                    ? partyAccountsList.all
-                    : partyAccountTab === "customers"
-                    ? partyAccountsList.customers
-                    : partyAccountTab === "vendors"
-                    ? partyAccountsList.vendors
-                    : partyAccountsList.employees) || [])
-                    .filter((p: any) =>
-                      !partyAccountSearch ||
-                      p.name.toLowerCase().includes(partyAccountSearch.toLowerCase()) ||
-                      (p.phone && p.phone.includes(partyAccountSearch))
-                    )
-                    .map((party: any) => (
+                  {paginatedPartyAccounts.map((party: any) => (
                       <tr key={party.id || party.name} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="p-3.5 font-bold text-slate-900 dark:text-white">
                           {party.name}
@@ -3385,6 +3507,14 @@ function FinancialsPageContent() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={partyPage}
+              totalItems={filteredPartyAccounts.length}
+              pageSize={20}
+              onPageChange={setPartyPage}
+              itemLabel="party accounts"
+            />
           </div>
         </div>
       )}
@@ -3818,9 +3948,9 @@ function FinancialsPageContent() {
       {/* ========================================================================= */}
       {/* MODAL 1: ADD / EDIT CUSTOMER ACCOUNT MODAL                                */}
       {/* ========================================================================= */}
-      {(showAddCustomerModal || showEditCustomerModal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-scaleIn">
+      {mounted && (showAddCustomerModal || showEditCustomerModal) && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-scaleIn my-auto">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center">
@@ -3969,15 +4099,16 @@ function FinancialsPageContent() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* MODAL 2: ADD VENDOR / SUPPLIER MODAL                                      */}
       {/* ========================================================================= */}
-      {showAddVendorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-scaleIn">
+      {mounted && showAddVendorModal && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden animate-scaleIn my-auto">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -4095,14 +4226,14 @@ function FinancialsPageContent() {
                 <button
                   type="button"
                   onClick={() => setShowAddVendorModal(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingVendor}
-                  className="px-6 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-amber-500/25 transition-all flex items-center gap-2"
+                  className="px-6 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-amber-500/25 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   {isSavingVendor ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   <span>{isSavingVendor ? "Registering..." : "Register Vendor Profile"}</span>
@@ -4110,25 +4241,26 @@ function FinancialsPageContent() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* SUPER ADMIN: EDIT VOUCHER MODAL                                          */}
       {/* ========================================================================= */}
-      {isEditModalOpen && editingVoucher && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+      {mounted && isEditModalOpen && editingVoucher && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 shadow-2xl animate-scaleIn my-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-bold shrink-0">
                   <Pencil className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-800 dark:text-white">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
                     Edit Financial Voucher
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono">
+                  <p className="text-xs text-slate-400 font-mono font-bold">
                     Voucher: {editingVoucher.voucherNumber || editingVoucher.sourceId}
                   </p>
                 </div>
@@ -4136,22 +4268,23 @@ function FinancialsPageContent() {
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1 cursor-pointer"
+                title="Close"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Narration / Description
+                  Narration / Description <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={3}
                   value={editNarration}
                   onChange={(e) => setEditNarration(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500 leading-relaxed"
                   placeholder="Enter voucher narration..."
                 />
               </div>
@@ -4159,34 +4292,34 @@ function FinancialsPageContent() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Amount (PKR)
+                    Amount (PKR) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
                     value={editAmount}
                     onChange={(e) => setEditAmount(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold font-mono focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold font-mono focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
                   />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Entry Date
+                    Entry Date <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
                     value={editDate}
                     onChange={(e) => setEditDate(e.target.value)}
-                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-medium focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -4194,34 +4327,45 @@ function FinancialsPageContent() {
                 type="button"
                 disabled={isSavingEdit || !editNarration.trim()}
                 onClick={handleSaveVoucherEdit}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-black shadow-md flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-black shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer transition-all"
               >
                 {isSavingEdit ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 <span>{isSavingEdit ? "Saving..." : "Save Changes"}</span>
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* SUPER ADMIN: ROLLBACK VOUCHER MODAL                                      */}
       {/* ========================================================================= */}
-      {isRollbackModalOpen && rollbackVoucher && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center font-bold shrink-0">
-                <RotateCcw className="w-5 h-5" />
+      {mounted && isRollbackModalOpen && rollbackVoucher && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 rounded-3xl max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl animate-scaleIn my-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100 dark:border-rose-900/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20 font-bold shrink-0">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Rollback Financial Voucher
+                  </h3>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-bold">
+                    Irreversible Accounting Reversal
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white">
-                  Rollback Financial Voucher
-                </h3>
-                <p className="text-xs text-rose-600 dark:text-rose-400 font-bold">
-                  Irreversible Accounting Reversal
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsRollbackModalOpen(false)}
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1 cursor-pointer"
+                title="Close"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="p-4 rounded-2xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/60 text-xs space-y-2">
@@ -4264,11 +4408,11 @@ function FinancialsPageContent() {
               />
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsRollbackModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -4276,14 +4420,15 @@ function FinancialsPageContent() {
                 type="button"
                 disabled={isRollingBack}
                 onClick={handleConfirmRollback}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-black shadow-md flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-black shadow-md shadow-rose-500/20 flex items-center gap-2 cursor-pointer transition-all"
               >
                 {isRollingBack ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
                 <span>{isRollingBack ? "Rolling back..." : "Confirm Rollback"}</span>
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

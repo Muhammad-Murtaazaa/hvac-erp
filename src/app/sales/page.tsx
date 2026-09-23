@@ -9,6 +9,7 @@ import CustomerSelect from "@/components/shared/CustomerSelect";
 import ProductSelect from "@/components/shared/ProductSelect";
 import ComplaintSelect from "@/components/shared/ComplaintSelect";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { parseInvoiceMetadata } from "@/lib/invoiceHelper";
@@ -32,6 +33,7 @@ function SalesPageContent() {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "invoices"); // invoices, quotations, customers, dos, customer_returns, vendor_returns, sales_setup
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [salesPage, setSalesPage] = useState(1);
 
   const { toast } = useToast();
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
@@ -1601,6 +1603,22 @@ function SalesPageContent() {
     return text.toLowerCase().includes(search.toLowerCase());
   });
 
+  const paginatedInvoices = useMemo(() => {
+    return filteredInvoices.slice((salesPage - 1) * 20, salesPage * 20);
+  }, [filteredInvoices, salesPage]);
+
+  const paginatedQuotations = useMemo(() => {
+    return filteredQuotations.slice((salesPage - 1) * 20, salesPage * 20);
+  }, [filteredQuotations, salesPage]);
+
+  const paginatedDOs = useMemo(() => {
+    return filteredDOs.slice((salesPage - 1) * 20, salesPage * 20);
+  }, [filteredDOs, salesPage]);
+
+  const paginatedCustomers = useMemo(() => {
+    return filteredCustomers.slice((salesPage - 1) * 20, salesPage * 20);
+  }, [filteredCustomers, salesPage]);
+
   return (
     <div className="space-y-6">
       {/* Dynamic Focused Header */}
@@ -1726,6 +1744,7 @@ function SalesPageContent() {
                 setActiveTab(tab.id);
                 setSearch("");
                 setStatus("");
+                setSalesPage(1);
               }}
               className={`px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
                 activeTab === tab.id
@@ -1746,7 +1765,14 @@ function SalesPageContent() {
       ) : (
         /* ==================== LIST RENDERERS ==================== */
         <div className="space-y-4">
-          <SearchFilter placeholder="Search lists by customer name, phone, invoice code..." search={search} onSearchChange={setSearch} />
+          <SearchFilter
+            placeholder="Search lists by customer name, phone, invoice code..."
+            search={search}
+            onSearchChange={(val) => {
+              setSearch(val);
+              setSalesPage(1);
+            }}
+          />
 
           {/* 0. CUSTOMERS DIRECTORY LIST */}
           {activeTab === "customers" && (
@@ -1832,7 +1858,7 @@ function SalesPageContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {filteredCustomers.map((cust) => {
+                      {paginatedCustomers.map((cust) => {
                         const netBal = cust.ledgerBalance !== undefined ? cust.ledgerBalance : cust.outstandingBalance;
                         return (
                           <tr key={cust.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20 transition-colors">
@@ -1944,6 +1970,14 @@ function SalesPageContent() {
                     </tbody>
                   </table>
                 </div>
+
+                <TablePagination
+                  currentPage={salesPage}
+                  totalItems={filteredCustomers.length}
+                  pageSize={20}
+                  onPageChange={setSalesPage}
+                  itemLabel="customers"
+                />
               </div>
             </div>
           )}
@@ -1978,7 +2012,7 @@ function SalesPageContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {filteredInvoices.map((inv) => {
+                      {paginatedInvoices.map((inv) => {
                         const isSelected = selectedInvoiceIds.includes(inv.id);
                         const isFullyPaid = Math.round(Number(inv.amountPaid)) >= Math.round(Number(inv.totalAmount));
                         const displayStatus = isFullyPaid ? "PAID" : inv.status;
@@ -2083,6 +2117,14 @@ function SalesPageContent() {
                     </tbody>
                   </table>
                 </div>
+
+                <TablePagination
+                  currentPage={salesPage}
+                  totalItems={filteredInvoices.length}
+                  pageSize={20}
+                  onPageChange={setSalesPage}
+                  itemLabel="invoices"
+                />
               </div>
 
               {/* Sticky Bulk Action Bar for Invoices */}
@@ -2184,7 +2226,7 @@ function SalesPageContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                      {filteredQuotations.map((quo) => {
+                      {paginatedQuotations.map((quo) => {
                         const statusColors: Record<string, string> = {
                           DRAFT: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
                           SENT: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
@@ -2294,6 +2336,14 @@ function SalesPageContent() {
                     </tbody>
                   </table>
                 </div>
+
+                <TablePagination
+                  currentPage={salesPage}
+                  totalItems={filteredQuotations.length}
+                  pageSize={20}
+                  onPageChange={setSalesPage}
+                  itemLabel="quotations"
+                />
               </div>
             </div>
           )}
@@ -2315,7 +2365,7 @@ function SalesPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {filteredDOs.map((doRec) => (
+                    {paginatedDOs.map((doRec) => (
                       <tr key={doRec.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                         <td className="p-3 font-bold whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
@@ -2408,6 +2458,14 @@ function SalesPageContent() {
                   </tbody>
                 </table>
               </div>
+
+              <TablePagination
+                currentPage={salesPage}
+                totalItems={filteredDOs.length}
+                pageSize={20}
+                onPageChange={setSalesPage}
+                itemLabel="delivery orders"
+              />
             </div>
           )}
 

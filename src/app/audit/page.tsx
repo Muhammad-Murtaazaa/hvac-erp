@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import TablePagination from "@/components/shared/TablePagination";
 import {
   ShieldCheck,
   RotateCcw,
@@ -260,6 +261,7 @@ export default function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [diffModalTab, setDiffModalTab] = useState<"visual" | "sideBySide" | "json">("visual");
   const [copiedJson, setCopiedJson] = useState(false);
@@ -271,6 +273,7 @@ export default function AuditTrailPage() {
   }, []);
 
   useEffect(() => {
+    setPage(1);
     fetchLogs();
   }, [entityFilter, actionFilter]);
 
@@ -359,6 +362,10 @@ export default function AuditTrailPage() {
       );
     });
   }, [logs, searchQuery]);
+
+  const paginatedLogs = useMemo(() => {
+    return filteredLogs.slice((page - 1) * 20, page * 20);
+  }, [filteredLogs, page]);
 
   // Parse structured diff fields for the selected log
   const parsedDiffFields = useMemo(() => {
@@ -613,7 +620,10 @@ export default function AuditTrailPage() {
               placeholder="Search by party name, invoice #, voucher #, user email, or ID..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
         </div>
@@ -625,7 +635,10 @@ export default function AuditTrailPage() {
 
         <select
           value={entityFilter}
-          onChange={(e) => setEntityFilter(e.target.value)}
+          onChange={(e) => {
+            setEntityFilter(e.target.value);
+            setPage(1);
+          }}
           className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500"
         >
           <option value="">All Document Types</option>
@@ -648,7 +661,10 @@ export default function AuditTrailPage() {
 
         <select
           value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
+          onChange={(e) => {
+            setActionFilter(e.target.value);
+            setPage(1);
+          }}
           className="px-3.5 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500"
         >
           <option value="">All Actions</option>
@@ -690,7 +706,7 @@ export default function AuditTrailPage() {
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => {
+                paginatedLogs.map((log) => {
                   const conf = ENTITY_CONFIG[log.entityName] || {
                     label: log.entityName,
                     icon: Database,
@@ -802,6 +818,14 @@ export default function AuditTrailPage() {
             </tbody>
           </table>
         </div>
+
+        <TablePagination
+          currentPage={page}
+          totalItems={filteredLogs.length}
+          pageSize={20}
+          onPageChange={setPage}
+          itemLabel="audit records"
+        />
       </div>
 
       {/* ========================================================================= */}

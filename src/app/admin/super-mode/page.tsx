@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   ShieldAlert,
@@ -33,6 +34,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { useToast } from "@/components/shared/ToastProvider";
+import TablePagination from "@/components/shared/TablePagination";
 
 const CHART_OF_ACCOUNTS = [
   "Cash in Hand",
@@ -88,6 +90,31 @@ export default function SuperAdminModePage() {
   const [rollbackHistory, setRollbackHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Pagination & Search States
+  const [voucherPage, setVoucherPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historySearch, setHistorySearch] = useState("");
+
+  const filteredHistory = useMemo(() => {
+    if (!historySearch.trim()) return rollbackHistory;
+    const q = historySearch.toLowerCase();
+    return rollbackHistory.filter((h: any) =>
+      h.voucherNumber?.toLowerCase().includes(q) ||
+      h.actorEmail?.toLowerCase().includes(q) ||
+      h.partyName?.toLowerCase().includes(q) ||
+      h.reason?.toLowerCase().includes(q) ||
+      h.action?.toLowerCase().includes(q)
+    );
+  }, [rollbackHistory, historySearch]);
+
+  const paginatedVouchers = useMemo(() => {
+    return vouchers.slice((voucherPage - 1) * 20, voucherPage * 20);
+  }, [vouchers, voucherPage]);
+
+  const paginatedHistory = useMemo(() => {
+    return filteredHistory.slice((historyPage - 1) * 20, historyPage * 20);
+  }, [filteredHistory, historyPage]);
+
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<any>(null);
@@ -114,6 +141,23 @@ export default function SuperAdminModePage() {
   const [rollbackReason, setRollbackReason] = useState("");
   const [confirmedSafety, setConfirmedSafety] = useState(false);
   const [executingRollback, setExecutingRollback] = useState(false);
+
+  // Portal mount & body scroll lock
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isEditModalOpen || isRollbackModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isEditModalOpen, isRollbackModalOpen]);
 
   // 1. Check Super Admin Clearance on mount
   useEffect(() => {
@@ -529,7 +573,10 @@ export default function SuperAdminModePage() {
               {VOUCHER_TYPES.map((t) => (
                 <button
                   key={t.key}
-                  onClick={() => setVoucherFilterType(t.key)}
+                  onClick={() => {
+                    setVoucherFilterType(t.key);
+                    setVoucherPage(1);
+                  }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                     voucherFilterType === t.key
                       ? "bg-rose-600 text-white border-rose-600 shadow-sm"
@@ -547,7 +594,10 @@ export default function SuperAdminModePage() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setVoucherPage(1);
+                }}
                 placeholder="Search by voucher number (e.g. CRV-2026-0001), party name, narration, debit/credit account..."
                 className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
@@ -584,7 +634,7 @@ export default function SuperAdminModePage() {
                       </td>
                     </tr>
                   ) : (
-                    vouchers.map((v) => {
+                    paginatedVouchers.map((v) => {
                       const vNum = v.voucherNumber || v.referenceId || "VOUCHER";
                       const isExpanded = expandedVoucherId === v.id;
                       const hasJournal = Boolean(v.journalEntry);
@@ -741,6 +791,14 @@ export default function SuperAdminModePage() {
                 </tbody>
               </table>
             </div>
+
+            <TablePagination
+              currentPage={voucherPage}
+              totalItems={vouchers.length}
+              pageSize={20}
+              onPageChange={setVoucherPage}
+              itemLabel="vouchers"
+            />
           </div>
         </div>
       )}
@@ -748,19 +806,35 @@ export default function SuperAdminModePage() {
       {/* TAB 2: ROLLBACK & AUDIT HISTORY */}
       {activeTab === "history" && (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-black text-slate-900 dark:text-white">Audit Snapshot Trail</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Immutable records of every financial voucher rollback and update executed by Super Admins.
               </p>
             </div>
-            <button
-              onClick={fetchRollbackHistory}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            >
-              <RefreshCw className={`w-4 h-4 ${loadingHistory ? "animate-spin text-rose-500" : ""}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={historySearch}
+                  onChange={(e) => {
+                    setHistorySearch(e.target.value);
+                    setHistoryPage(1);
+                  }}
+                  placeholder="Filter audit logs..."
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium"
+                />
+              </div>
+              <button
+                onClick={fetchRollbackHistory}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Refresh Audit History"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingHistory ? "animate-spin text-rose-500" : ""}`} />
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -784,14 +858,14 @@ export default function SuperAdminModePage() {
                       Loading audit logs...
                     </td>
                   </tr>
-                ) : rollbackHistory.length === 0 ? (
+                ) : filteredHistory.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-10 text-center text-slate-400">
-                      No voucher rollback or modification audit snapshots recorded yet.
+                      {historySearch ? "No audit logs matching your search." : "No voucher rollback or modification audit snapshots recorded yet."}
                     </td>
                   </tr>
                 ) : (
-                  rollbackHistory.map((h) => (
+                  paginatedHistory.map((h) => (
                     <tr key={h.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                       <td className="p-3.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">
                         {new Date(h.timestamp).toLocaleString()}
@@ -828,59 +902,69 @@ export default function SuperAdminModePage() {
               </tbody>
             </table>
           </div>
+
+          <TablePagination
+            currentPage={historyPage}
+            totalItems={filteredHistory.length}
+            pageSize={20}
+            onPageChange={setHistoryPage}
+            itemLabel="audit records"
+          />
         </div>
       )}
 
       {/* ============================================================ */}
       {/* MODAL 1: SUPER ADMIN VOUCHER EDITOR                           */}
       {/* ============================================================ */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      {mounted && isEditModalOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-7 rounded-3xl w-full max-w-2xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh] space-y-5 my-auto">
             {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <Pencil className="w-4 h-4" />
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <Pencil className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
                     Edit Financial Voucher: {editForm.voucherNumber}
                   </h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs text-slate-400 font-medium">
                     Synchronizes adjustments across the General Ledger and Double-Entry Journal.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1 cursor-pointer"
+                title="Close"
               >
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <form onSubmit={handleSaveEdit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Date */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                    Entry Date
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Entry Date <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
                     value={editForm.entryDate}
                     onChange={(e) => setEditForm({ ...editForm, entryDate: e.target.value })}
                     required
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
                   />
                 </div>
 
                 {/* Amount */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
-                    Amount (PKR)
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Amount (PKR) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -889,7 +973,7 @@ export default function SuperAdminModePage() {
                     value={editForm.amount}
                     onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
                     required
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-900 dark:text-white"
                   />
                 </div>
               </div>
@@ -903,7 +987,7 @@ export default function SuperAdminModePage() {
                   <select
                     value={editForm.debitAccount}
                     onChange={(e) => setEditForm({ ...editForm, debitAccount: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold text-slate-900 dark:text-white"
                   >
                     {CHART_OF_ACCOUNTS.map((acc) => (
                       <option key={acc} value={acc}>
@@ -920,7 +1004,7 @@ export default function SuperAdminModePage() {
                   <select
                     value={editForm.creditAccount}
                     onChange={(e) => setEditForm({ ...editForm, creditAccount: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-semibold text-slate-900 dark:text-white"
                   >
                     {CHART_OF_ACCOUNTS.map((acc) => (
                       <option key={acc} value={acc}>
@@ -934,7 +1018,7 @@ export default function SuperAdminModePage() {
               {/* Party Name & Party Type */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Party Name / Beneficiary
                   </label>
                   <input
@@ -942,18 +1026,18 @@ export default function SuperAdminModePage() {
                     value={editForm.partyName}
                     onChange={(e) => setEditForm({ ...editForm, partyName: e.target.value })}
                     placeholder="e.g. Customer / Vendor name"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Party Type
                   </label>
                   <select
                     value={editForm.partyType}
                     onChange={(e) => setEditForm({ ...editForm, partyType: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="GENERAL">GENERAL</option>
                     <option value="CUSTOMER">CUSTOMER</option>
@@ -966,13 +1050,13 @@ export default function SuperAdminModePage() {
               {/* Payment Mode & Cheque */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Payment Method
                   </label>
                   <select
                     value={editForm.paymentMethod}
                     onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="CASH">CASH</option>
                     <option value="BANK_TRANSFER">BANK TRANSFER</option>
@@ -982,7 +1066,7 @@ export default function SuperAdminModePage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     Cheque Number (if applicable)
                   </label>
                   <input
@@ -990,14 +1074,14 @@ export default function SuperAdminModePage() {
                     value={editForm.chequeNumber}
                     onChange={(e) => setEditForm({ ...editForm, chequeNumber: e.target.value })}
                     placeholder="e.g. CHQ-99201"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
                   />
                 </div>
               </div>
 
               {/* Description / Narration */}
               <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Narration / Description
                 </label>
                 <textarea
@@ -1005,23 +1089,23 @@ export default function SuperAdminModePage() {
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                   placeholder="Reason / payment reference description..."
-                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none leading-relaxed"
                 />
               </div>
 
               {/* Actions Footer */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingEdit}
-                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {savingEdit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   <span>Save Voucher Changes</span>
@@ -1029,40 +1113,43 @@ export default function SuperAdminModePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ============================================================ */}
       {/* MODAL 2: PERFECT PRE-FLIGHT ROLLBACK MODAL                   */}
       {/* ============================================================ */}
-      {isRollbackModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/80 rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      {mounted && isRollbackModalOpen && createPortal(
+        <div className="fixed inset-0 w-screen h-screen z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-md overflow-y-auto animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/80 p-6 sm:p-7 rounded-3xl w-full max-w-xl shadow-2xl animate-fadeIn text-slate-800 dark:text-slate-100 overflow-y-auto max-h-[90vh] space-y-5 my-auto">
             {/* Danger Header */}
-            <div className="p-5 bg-rose-50/80 dark:bg-rose-950/40 border-b border-rose-100 dark:border-rose-900/60 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                  <RotateCcw className="w-4 h-4" />
+            <div className="flex items-center justify-between pb-4 border-b border-rose-100 dark:border-rose-900/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20">
+                  <RotateCcw className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-rose-900 dark:text-rose-200">
+                  <h3 className="text-base font-black text-rose-900 dark:text-rose-200">
                     Irreversible Voucher Rollback
                   </h3>
-                  <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-mono font-bold">
                     Voucher: {rollbackTarget?.voucherNumber || rollbackTarget?.referenceId}
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsRollbackModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xl font-bold transition-all p-1 cursor-pointer"
+                title="Close"
               >
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
             {/* Impact Details */}
-            <div className="p-6 space-y-4">
+            <div className="space-y-4">
               {loadingPreview ? (
                 <div className="p-8 text-center text-slate-400 space-y-2">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-rose-500" />
@@ -1122,7 +1209,7 @@ export default function SuperAdminModePage() {
                       onChange={(e) => setRollbackReason(e.target.value)}
                       placeholder="Specify why this financial voucher is being rolled back (e.g. Duplicate entry, incorrect party payment, accounting correction)..."
                       required
-                      className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none leading-relaxed"
                     />
                   </div>
 
@@ -1132,7 +1219,7 @@ export default function SuperAdminModePage() {
                       type="checkbox"
                       checked={confirmedSafety}
                       onChange={(e) => setConfirmedSafety(e.target.checked)}
-                      className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                      className="mt-0.5 rounded text-rose-600 focus:ring-rose-500 cursor-pointer"
                     />
                     <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                       I understand this action is permanent and creates an immutable audit snapshot under my Super Admin email.
@@ -1142,11 +1229,11 @@ export default function SuperAdminModePage() {
               )}
 
               {/* Actions */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsRollbackModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1154,7 +1241,7 @@ export default function SuperAdminModePage() {
                   type="button"
                   onClick={handleConfirmRollback}
                   disabled={executingRollback || !confirmedSafety || !rollbackReason.trim()}
-                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md shadow-rose-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {executingRollback ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   <span>Execute Zero-Leak Rollback</span>
@@ -1162,7 +1249,8 @@ export default function SuperAdminModePage() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
