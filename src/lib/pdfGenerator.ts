@@ -2068,34 +2068,19 @@ export function generatePurchaseOrderPDF(poData: any, companyOverride?: string):
       doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text("Governed by Purchase Order Specifications", 350, y + 1, { align: "right", width: 205 });
       y += 11;
 
-      // 2-column terms rendering
-      const halfCount = Math.ceil(termLines.length / 2);
-      const col1Lines = termLines.slice(0, halfCount);
-      const col2Lines = termLines.slice(halfCount);
-
-      const colWidth = 250;
-      const col1X = startX;
-      const col2X = startX + 265;
-      const termsStartY = y;
-
-      const renderTermColumn = (items: string[], colX: number) => {
-        let curY = termsStartY;
-        items.forEach((itemText) => {
-          const match = itemText.match(/^(\d+[\.\)]\s*[^:]+:)\s*(.*)$/);
-          if (match) {
-            doc.font("Roboto-Bold").fontSize(6.5).fillColor("#1e293b").text(match[1] + " ", colX, curY, { continued: true, width: colWidth });
-            doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(match[2], { width: colWidth, lineGap: 0.5 });
-          } else {
-            doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(itemText, colX, curY, { width: colWidth, lineGap: 0.5 });
-          }
-          curY = doc.y + 2;
-        });
-        return curY;
-      };
-
-      const endY1 = renderTermColumn(col1Lines, col1X);
-      const endY2 = renderTermColumn(col2Lines, col2X);
-      y = Math.max(endY1, endY2) + 10;
+      // Single-column terms rendering across full width
+      let curY = y;
+      termLines.forEach((itemText: string) => {
+        const match = itemText.match(/^(\d+[\.\)]\s*[^:]+:)\s*(.*)$/);
+        if (match) {
+          doc.font("Roboto-Bold").fontSize(6.5).fillColor("#1e293b").text(match[1] + " ", startX, curY, { continued: true, width: contentWidth });
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(match[2], { width: contentWidth, lineGap: 0.5 });
+        } else {
+          doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(itemText, startX, curY, { width: contentWidth, lineGap: 0.5 });
+        }
+        curY = doc.y + 1.8;
+      });
+      y = curY + 8;
 
       // Signatures
       const sigY = Math.max(y, 730);

@@ -485,9 +485,9 @@ export default function POPdfPage() {
                   Governed by Purchase Order Specifications
                 </span>
               </div>
-              <div className={`grid ${orientation === "landscape" ? "grid-cols-3 gap-x-5 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-0.5"} text-[7.5px] leading-[1.2] text-black`}>
+              <div className="space-y-0.5 text-[7.5px] leading-[1.2] text-black">
                 {parsedTerms.map((t, idx) => (
-                  <div key={idx} className="flex gap-1 items-start text-justify">
+                  <div key={idx} className="flex gap-1.5 items-start text-left">
                     {t.title && <span className="font-bold shrink-0 text-black">{t.title}</span>}
                     <span className="font-normal text-slate-900">{t.text}</span>
                   </div>
