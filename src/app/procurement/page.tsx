@@ -9,7 +9,7 @@ import ProductSelect from "@/components/shared/ProductSelect";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useToast } from "@/components/shared/ToastProvider";
-import { parsePoMetadata } from "@/lib/poHelper";
+import { parsePoMetadata, getDefaultPoTerms, updateTermsCompany } from "@/lib/poHelper";
 
 function ProcurementPageContent() {
   const searchParams = useSearchParams();
@@ -112,7 +112,7 @@ function ProcurementPageContent() {
   const [newPoDiscountValue, setNewPoDiscountValue] = useState("0");
   const [newPoIsGst, setNewPoIsGst] = useState(false);
   const [newPoTaxRate, setNewPoTaxRate] = useState(18);
-  const [poNotes, setPoNotes] = useState("");
+  const [poNotes, setPoNotes] = useState(() => getDefaultPoTerms("TCE"));
   const [creatingPo, setCreatingPo] = useState(false);
 
   // Edit PO state
@@ -231,7 +231,7 @@ function ProcurementPageContent() {
       setNewPoDiscountValue("0");
       setNewPoIsGst(false);
       setNewPoTaxRate(18);
-      setPoNotes("");
+      setPoNotes(getDefaultPoTerms("TCE"));
       fetchData();
     } catch (err: any) {
       toast({ title: "PO Creation Failed", message: err.message, type: "error" });
@@ -242,8 +242,9 @@ function ProcurementPageContent() {
 
   const openEditPo = (po: any) => {
     const meta = po.meta || parsePoMetadata(po.notes, po);
+    const targetComp = meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE";
     setEditingPoId(po.id);
-    setEditPoCompany(meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE");
+    setEditPoCompany(targetComp);
     setEditPoNumber(po.poNumber || "");
     setEditPoVendor(po.vendorId || "");
     setEditPoDate(po.createdAt ? new Date(po.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
@@ -265,7 +266,7 @@ function ProcurementPageContent() {
     setEditPoDiscountValue(
       meta.discountType === "PERCENTAGE" ? String(meta.discountPercent) : String(meta.discountAmount)
     );
-    setEditPoNotes(meta.userNotes || "");
+    setEditPoNotes(meta.userNotes && meta.userNotes.trim() ? meta.userNotes : getDefaultPoTerms(targetComp));
     setEditPoStatus(po.status || "APPROVED");
     setIsEditPoOpen(true);
   };
@@ -1103,7 +1104,10 @@ function ProcurementPageContent() {
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setNewPoCompany("TCE")}
+                    onClick={() => {
+                      setNewPoCompany("TCE");
+                      setPoNotes((prev) => updateTermsCompany(prev, "TCE"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       newPoCompany === "TCE"
                         ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -1114,7 +1118,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setNewPoCompany("TECAIR")}
+                    onClick={() => {
+                      setNewPoCompany("TECAIR");
+                      setPoNotes((prev) => updateTermsCompany(prev, "TECAIR"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       newPoCompany === "TECAIR"
                         ? "bg-blue-600 text-white shadow-sm"
@@ -1125,7 +1132,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setNewPoCompany("MTS")}
+                    onClick={() => {
+                      setNewPoCompany("MTS");
+                      setPoNotes((prev) => updateTermsCompany(prev, "MTS"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       newPoCompany === "MTS"
                         ? "bg-indigo-600 text-white shadow-sm"
@@ -1136,7 +1146,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setNewPoCompany("GREEN_LEAVES")}
+                    onClick={() => {
+                      setNewPoCompany("GREEN_LEAVES");
+                      setPoNotes((prev) => updateTermsCompany(prev, "GREEN_LEAVES"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       newPoCompany === "GREEN_LEAVES"
                         ? "bg-emerald-600 text-white shadow-sm"
@@ -1452,16 +1465,26 @@ function ProcurementPageContent() {
                 })()}
               </div>
 
-              {/* PO Notes */}
+              {/* PO Notes / Terms & Conditions */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Purchase Order Notes / Instructions</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider font-bold">Purchase Order Terms &amp; Conditions / Notes</label>
+                  <button
+                    type="button"
+                    onClick={() => setPoNotes(getDefaultPoTerms(newPoCompany))}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                  >
+                    Reset to Default Terms
+                  </button>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={6}
                   placeholder="Enter purchase terms, delivery instructions, quality expectations etc..."
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal leading-relaxed"
                   value={poNotes}
                   onChange={(e) => setPoNotes(e.target.value)}
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Pre-filled with 17 standard terms; completely editable and automatically customized to the chosen letterhead brand.</p>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -1517,7 +1540,10 @@ function ProcurementPageContent() {
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setEditPoCompany("TCE")}
+                    onClick={() => {
+                      setEditPoCompany("TCE");
+                      setEditPoNotes((prev) => updateTermsCompany(prev, "TCE"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       editPoCompany === "TCE"
                         ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
@@ -1528,7 +1554,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditPoCompany("TECAIR")}
+                    onClick={() => {
+                      setEditPoCompany("TECAIR");
+                      setEditPoNotes((prev) => updateTermsCompany(prev, "TECAIR"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       editPoCompany === "TECAIR"
                         ? "bg-blue-600 text-white shadow-sm"
@@ -1539,7 +1568,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditPoCompany("MTS")}
+                    onClick={() => {
+                      setEditPoCompany("MTS");
+                      setEditPoNotes((prev) => updateTermsCompany(prev, "MTS"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       editPoCompany === "MTS"
                         ? "bg-indigo-600 text-white shadow-sm"
@@ -1550,7 +1582,10 @@ function ProcurementPageContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditPoCompany("GREEN_LEAVES")}
+                    onClick={() => {
+                      setEditPoCompany("GREEN_LEAVES");
+                      setEditPoNotes((prev) => updateTermsCompany(prev, "GREEN_LEAVES"));
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       editPoCompany === "GREEN_LEAVES"
                         ? "bg-emerald-600 text-white shadow-sm"
@@ -1830,16 +1865,26 @@ function ProcurementPageContent() {
                 })()}
               </div>
 
-              {/* PO Notes */}
+              {/* PO Notes / Terms & Conditions */}
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-bold">Purchase Order Notes / Instructions</label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider font-bold">Purchase Order Terms &amp; Conditions / Notes</label>
+                  <button
+                    type="button"
+                    onClick={() => setEditPoNotes(getDefaultPoTerms(editPoCompany))}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                  >
+                    Reset to Default Terms
+                  </button>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={6}
                   placeholder="Enter purchase terms, delivery instructions, quality expectations etc..."
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal leading-relaxed"
                   value={editPoNotes}
                   onChange={(e) => setEditPoNotes(e.target.value)}
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Pre-filled with 17 standard terms; completely editable and automatically customized to the chosen letterhead brand.</p>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">

@@ -131,3 +131,51 @@ export function formatPoNotesPayload(data: {
       : "TCE",
   });
 }
+
+export function getCompanyDisplayName(company?: string): string {
+  switch (company) {
+    case "TECAIR":
+      return "TecAir";
+    case "MTS":
+      return "MTS";
+    case "GREEN_LEAVES":
+      return "Green Leaves Pvt Ltd";
+    case "TCE":
+    default:
+      return "Technicool Engineering";
+  }
+}
+
+export function getDefaultPoTerms(company?: string): string {
+  const comp = getCompanyDisplayName(company);
+  return `TERMS & CONDITIONS
+
+1. Order Acceptance: This Purchase Order shall be considered accepted upon written confirmation or commencement of supply/work by the Supplier.
+2. Price: The agreed price shall be as mentioned in this Purchase Order or approved quotation. Any change in price shall require prior written approval from ${comp}.
+3. Taxes & GST: Applicable taxes/GST, if any, shall be charged strictly as mentioned in this Purchase Order or approved quotation. No GST or other tax shall be added separately unless specifically agreed and mentioned in the PO/quotation.
+4. Delivery: The Supplier shall deliver the goods/materials within the agreed delivery period. Any expected delay shall be communicated to ${comp} in advance.
+5. Quality: All goods/materials supplied shall be as per the approved quotation, specifications, make, model and agreed quality standards.
+6. Inspection: ${comp} reserves the right to inspect the supplied goods/materials. Any defective, damaged or incorrect material may be rejected or returned to the Supplier.
+7. Quantity: Goods shall be supplied strictly according to the quantity mentioned in the PO. Any additional quantity requires prior written approval from ${comp}.
+8. Warranty: Warranty, where applicable, shall be as per the manufacturer's/Supplier's warranty terms and the terms agreed in the quotation/PO.
+9. Documentation: The Supplier shall provide the required invoice, delivery challan, warranty documents, serial numbers and other relevant documents, where applicable.
+10. Invoice: The invoice must clearly mention the relevant PO number, item description, quantity, rate, applicable taxes and other agreed details.
+11. Payment: Payment shall be made as mutually agreed between both parties.
+12. Freight & Transportation: Freight, transportation, loading/unloading and other charges shall be borne by the party as specifically agreed in the PO/quotation.
+13. Damaged Material: Any material damaged during transportation due to improper packing or handling shall be the Supplier's responsibility, unless otherwise agreed.
+14. Cancellation: ${comp} reserves the right to cancel or modify the PO in case of material delay, non-compliance with specifications, or other agreed contractual reasons.
+15. Additional Work/Charges: Any extra work, material or charges outside the scope of this PO shall require prior written approval from ${comp} before execution.
+16. PO Applicability: This Purchase Order is issued by ${comp}, as specified on the Purchase Order, and all terms and conditions shall apply accordingly.
+17. Discrepancies: In case of any discrepancy between the PO and quotation, the terms specifically mentioned in the Purchase Order shall prevail unless otherwise agreed in writing.`;
+}
+
+export function updateTermsCompany(termsText: string, newCompany: string): string {
+  if (!termsText || !termsText.trim()) return getDefaultPoTerms(newCompany);
+  const targetName = getCompanyDisplayName(newCompany);
+  return termsText
+    .replace(/Technicool Engineering\s*\/\s*TecAir/gi, targetName)
+    .replace(/Technicool Engineering/gi, targetName)
+    .replace(/Green Leaves Pvt Ltd/gi, targetName)
+    .replace(/TecAir/gi, targetName)
+    .replace(/\bMTS\b/g, targetName);
+}

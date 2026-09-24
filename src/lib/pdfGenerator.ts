@@ -3,9 +3,30 @@ import fs from "fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { parseInvoiceMetadata } from "./invoiceHelper";
-import { parsePoMetadata } from "./poHelper";
+import { parsePoMetadata, getDefaultPoTerms, updateTermsCompany } from "./poHelper";
 import { parseDoMetadata, formatDnNumber } from "./doHelper";
 import { formatDateDisplay } from "./dateUtils";
+
+function numberToWords(num: number): string {
+  const a = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+    "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"
+  ];
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  const convert = (n: number): string => {
+    if (n < 20) return a[n];
+    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
+    if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convert(n % 100) : "");
+    if (n < 1000000) return convert(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convert(n % 1000) : "");
+    if (n < 1000000000) return convert(Math.floor(n / 1000000)) + " Million" + (n % 1000000 !== 0 ? " " + convert(n % 1000000) : "");
+    return convert(Math.floor(n / 1000000000)) + " Billion" + (n % 1000000000 !== 0 ? " " + convert(n % 1000000000) : "");
+  };
+
+  const whole = Math.floor(num);
+  if (whole === 0) return "Zero only";
+  return convert(whole) + " only";
+}
 
 // Setup font paths dynamically using absolute path resolution
 const fontRegularPath = path.resolve("src/assets/fonts/Roboto-Regular.ttf");
@@ -612,7 +633,12 @@ doc.end();
 export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margins: { top: 35, bottom: 30, left: 50, right: 50 }, size: "A4", font: fontRegularPath });
+      const doc = new PDFDocument({ 
+        margins: { top: 25, bottom: 20, left: 45, right: 45 }, 
+        size: "A4", 
+        font: fontRegularPath,
+        autoFirstPage: true 
+      });
       const chunks: Buffer[] = [];
 
       doc.on("data", (chunk) => chunks.push(chunk));
@@ -620,6 +646,13 @@ export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
       doc.on("error", (err) => reject(err));
 
       registerAppFonts(doc);
+
+      const startX = 45;
+      const contentWidth = 505;
+      const endX = startX + contentWidth; // 550
+      const midX = 298;
+      const leftColWidth = midX - startX; // 253
+      const rightColWidth = endX - midX; // 252
 
       // TCE Logo Left
       let logoLoaded = false;
@@ -629,7 +662,7 @@ export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
           logoPath = path.resolve("public/logo.png");
         }
         if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, 50, 40, { width: 70 });
+          doc.image(logoPath, startX, 30, { width: 74 });
           logoLoaded = true;
         }
       } catch (e) {
@@ -639,192 +672,207 @@ export function generateComplaintPDF(complaintData: any): Promise<Buffer> {
       if (!logoLoaded) {
         doc.save();
         doc.fillColor("#F28C28");
-        doc.moveTo(60, 45)
-           .bezierCurveTo(45, 55, 45, 75, 60, 85)
-           .bezierCurveTo(63, 81, 63, 79, 60, 75)
-           .bezierCurveTo(52, 69, 52, 61, 60, 55)
-           .bezierCurveTo(63, 51, 63, 49, 60, 45)
+        doc.moveTo(startX + 10, 36)
+           .bezierCurveTo(startX - 5, 46, startX - 5, 66, startX + 10, 76)
+           .bezierCurveTo(startX + 13, 72, startX + 13, 70, startX + 10, 66)
+           .bezierCurveTo(startX + 2, 60, startX + 2, 52, startX + 10, 46)
+           .bezierCurveTo(startX + 13, 42, startX + 13, 40, startX + 10, 36)
            .closePath()
            .fill();
          
-        doc.moveTo(100, 45)
-           .bezierCurveTo(115, 55, 115, 75, 100, 85)
-           .bezierCurveTo(97, 81, 97, 79, 100, 75)
-           .bezierCurveTo(108, 69, 108, 61, 100, 55)
-           .bezierCurveTo(97, 51, 97, 49, 100, 45)
+        doc.moveTo(startX + 50, 36)
+           .bezierCurveTo(startX + 65, 46, startX + 65, 66, startX + 50, 76)
+           .bezierCurveTo(startX + 47, 72, startX + 47, 70, startX + 50, 66)
+           .bezierCurveTo(startX + 58, 60, startX + 58, 52, startX + 50, 46)
+           .bezierCurveTo(startX + 47, 42, startX + 47, 40, startX + 50, 36)
            .closePath()
            .fill();
 
-        doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984");
-        doc.text("TCE", 60, 57, { width: 40, align: "center" });
+        doc.font("Roboto-Bold").fontSize(20).fillColor("#3A1984");
+        doc.text("TCE", startX + 10, 48, { width: 40, align: "center" });
         doc.restore();
       }
 
       // Right Side Header (Official TCE Letterhead)
-      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", 130, 38);
-      doc.font("Roboto-Bold").fontSize(8).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", 130, 64, { align: "left", width: 420 });
+      const headerTextX = startX + 82;
+      const headerTextWidth = endX - headerTextX;
+      doc.font("Roboto-Bold").fontSize(22).fillColor("#3A1984").text("Technicool Engineering", headerTextX, 30);
+      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#1f2937").text("MAKE YOUR DESIRE CLIMATE", headerTextX, 55, { align: "left", width: headerTextWidth });
 
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#374151");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 130, 76, { width: 420 });
-      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", 130, 87, { width: 420 });
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#374151");
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", headerTextX, 68, { width: headerTextWidth });
+      doc.text("NTN: G535752  |  STRN: 3277876376780  |  Web: www.technicool.com.pk  |  Mobile: 03218304978", headerTextX, 80, { width: headerTextWidth });
 
       // Title
-      doc.font("Roboto-Bold").fontSize(13).fillColor("#003366").text("COMPLAINT SHEET", 50, 105, { align: "center", width: 500, underline: true });
+      doc.font("Roboto-Bold").fontSize(13.5).fillColor("#003366").text("COMPLAINT SHEET", startX, 98, { align: "center", width: contentWidth, underline: true });
 
       // ================= CUSTOMER & COMPLAINT DETAILS BOX =================
-      const topBoxY = 125;
-      const topBoxHeight = 65;
-      doc.rect(50, topBoxY, 500, topBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      const topBoxY = 118;
+      const topBoxHeight = 72;
+      doc.rect(startX, topBoxY, contentWidth, topBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
 
-      // Horizontal lines inside top box
-      doc.moveTo(50, topBoxY + 20).lineTo(550, topBoxY + 20).strokeColor("#003366").lineWidth(1).stroke();
-      doc.moveTo(50, topBoxY + 40).lineTo(550, topBoxY + 40).strokeColor("#003366").lineWidth(1).stroke();
+      // Horizontal lines inside top box (3 rows of 24pt each)
+      doc.moveTo(startX, topBoxY + 24).lineTo(endX, topBoxY + 24).strokeColor("#003366").lineWidth(1).stroke();
+      doc.moveTo(startX, topBoxY + 48).lineTo(endX, topBoxY + 48).strokeColor("#003366").lineWidth(1).stroke();
 
       // Vertical lines inside top box
-      doc.moveTo(120, topBoxY).lineTo(120, topBoxY + topBoxHeight).strokeColor("#003366").lineWidth(1).stroke();
-      doc.moveTo(300, topBoxY).lineTo(300, topBoxY + 40).strokeColor("#003366").lineWidth(1).stroke();
-      doc.moveTo(375, topBoxY).lineTo(375, topBoxY + 40).strokeColor("#003366").lineWidth(1).stroke();
+      doc.moveTo(startX + 72, topBoxY).lineTo(startX + 72, topBoxY + topBoxHeight).strokeColor("#003366").lineWidth(1).stroke();
+      doc.moveTo(startX + 252, topBoxY).lineTo(startX + 252, topBoxY + 48).strokeColor("#003366").lineWidth(1).stroke();
+      doc.moveTo(startX + 332, topBoxY).lineTo(startX + 332, topBoxY + 48).strokeColor("#003366").lineWidth(1).stroke();
 
-      // Labels and Values
-      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#003366");
-      doc.text("Customer:", 55, topBoxY + 6);
-      doc.text("Complaint:", 305, topBoxY + 6);
-      doc.text("Cell #:", 55, topBoxY + 26);
-      doc.text("Date:", 305, topBoxY + 26);
-      doc.text("Site / Address:", 55, topBoxY + 49);
+      // Labels
+      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366");
+      doc.text("Customer:", startX + 5, topBoxY + 7);
+      doc.text("Complaint #:", startX + 257, topBoxY + 7);
+      doc.text("Cell #:", startX + 5, topBoxY + 31);
+      doc.text("Date:", startX + 257, topBoxY + 31);
+      doc.text("Site / Address:", startX + 5, topBoxY + 55);
 
-      // Prefilled data
-      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000");
-      doc.text(complaintData.customerName || "", 125, topBoxY + 6, { width: 170, ellipsis: true });
-      doc.text(complaintData.complaintNumber || "", 380, topBoxY + 6, { width: 165, ellipsis: true });
-      doc.text(complaintData.customerPhone || "", 125, topBoxY + 26, { width: 170, ellipsis: true });
-      doc.text(formatDateDisplay(complaintData.date, "en-GB"), 380, topBoxY + 26, { width: 165, ellipsis: true });
-      doc.text(complaintData.customerAddress || "", 125, topBoxY + 49, { width: 420, height: 14, ellipsis: true });
+      // Values
+      doc.font("Roboto-Regular").fontSize(9).fillColor("#000000");
+      doc.text(complaintData.customerName || "", startX + 77, topBoxY + 7, { width: 170, ellipsis: true });
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366");
+      doc.text(complaintData.complaintNumber || "", startX + 337, topBoxY + 7, { width: 165, ellipsis: true });
+      
+      doc.font("Roboto-Regular").fontSize(9).fillColor("#000000");
+      doc.text(complaintData.customerPhone || "", startX + 77, topBoxY + 31, { width: 170, ellipsis: true });
+      doc.text(formatDateDisplay(complaintData.date, "en-GB"), startX + 337, topBoxY + 31, { width: 165, ellipsis: true });
+      doc.text(complaintData.customerAddress || "", startX + 77, topBoxY + 55, { width: 420, height: 16, ellipsis: true });
 
       // ================= UNIT DETAILS & OPERATING CONDITIONS =================
-      const midBoxY = 200;
-      const midBoxHeight = 170;
-      doc.rect(50, midBoxY, 250, midBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
-      doc.rect(300, midBoxY, 250, midBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      const midBoxY = 198;
+      const midBoxHeight = 186;
+      doc.rect(startX, midBoxY, leftColWidth, midBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      doc.rect(midX, midBoxY, rightColWidth, midBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
 
       // Left Box: Unit Details
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("UNIT DETAILS.", 55, midBoxY + 6);
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("UNIT DETAILS.", startX + 6, midBoxY + 6);
       
       const drawLeftRow = (label: string, labelY: number) => {
-        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#000000").text(label, 55, labelY);
-        doc.moveTo(145, labelY + 8).lineTo(290, labelY + 8).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+        doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text(label, startX + 6, labelY);
+        doc.moveTo(startX + 106, labelY + 9).lineTo(startX + leftColWidth - 8, labelY + 9).strokeColor("#94a3b8").lineWidth(0.75).stroke();
       };
       
-      drawLeftRow("Indoor Unit Model:", midBoxY + 26);
-      drawLeftRow("Indoor Serial:", midBoxY + 51);
-      drawLeftRow("Outdoor Unit Model:", midBoxY + 76);
-      drawLeftRow("Outdoor Serial:", midBoxY + 101);
-      drawLeftRow("Gas Type / Refrigerant:", midBoxY + 126);
+      drawLeftRow("Indoor Unit Model:", midBoxY + 30);
+      drawLeftRow("Indoor Serial:", midBoxY + 60);
+      drawLeftRow("Outdoor Unit Model:", midBoxY + 90);
+      drawLeftRow("Outdoor Serial:", midBoxY + 120);
+      drawLeftRow("Gas Type / Refrigerant:", midBoxY + 150);
 
       // Right Box: Operating Conditions
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("OPERATING CONDITIONS.", 305, midBoxY + 6);
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("OPERATING CONDITIONS.", midX + 6, midBoxY + 6);
 
       const drawRightRow = (label: string, labelY: number) => {
-        doc.font("Roboto-Regular").fontSize(7.5).fillColor("#000000").text(label, 305, labelY);
-        doc.moveTo(415, labelY + 8).lineTo(540, labelY + 8).strokeColor("#94a3b8").lineWidth(0.5).stroke();
+        doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text(label, midX + 6, labelY);
+        doc.moveTo(midX + 118, labelY + 9).lineTo(endX - 8, labelY + 9).strokeColor("#94a3b8").lineWidth(0.75).stroke();
       };
 
-      drawRightRow("Grill Temperature:", midBoxY + 20);
-      drawRightRow("Room Temperature:", midBoxY + 38);
-      drawRightRow("Room Size:", midBoxY + 56);
-      drawRightRow("Remote Set Temperature:", midBoxY + 74);
-      drawRightRow("Ambient Temperature:", midBoxY + 92);
-      drawRightRow("Gas Pressure:", midBoxY + 110);
-      drawRightRow("Voltage:", midBoxY + 128);
-      drawRightRow("Amp:", midBoxY + 146);
+      drawRightRow("Grill Temperature:", midBoxY + 23);
+      drawRightRow("Room Temperature:", midBoxY + 43);
+      drawRightRow("Room Size:", midBoxY + 63);
+      drawRightRow("Remote Set Temp:", midBoxY + 83);
+      drawRightRow("Ambient Temp:", midBoxY + 103);
+      drawRightRow("Gas Pressure:", midBoxY + 123);
+      drawRightRow("Voltage:", midBoxY + 143);
+      drawRightRow("Amp:", midBoxY + 163);
 
       // ================= WORK DETAIL BOX =================
-      const workBoxY = 380;
-      const workBoxHeight = 95;
-      doc.rect(50, workBoxY, 500, workBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("WORK DETAIL.", 55, workBoxY + 6);
+      const workBoxY = 392;
+      const workBoxHeight = 106;
+      doc.rect(startX, workBoxY, contentWidth, workBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("WORK DETAIL.", startX + 6, workBoxY + 6);
 
-      // Draw manual writing lines inside Work Detail
-      for (let i = 1; i <= 3; i++) {
-        doc.moveTo(55, workBoxY + 18 + i * 23).lineTo(540, workBoxY + 18 + i * 23).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      }
-
-      // Prefill with Description
       if (complaintData.description) {
+        doc.font("Roboto-Bold").fontSize(8.5).fillColor("#003366").text("Customer Complaint:", startX + 6, workBoxY + 22);
         doc.font("Roboto-Regular").fontSize(8.5).fillColor("#1e293b");
-        doc.text(complaintData.description, 55, workBoxY + 28, { width: 480, lineGap: 14.5 });
+        doc.text(complaintData.description, startX + 105, workBoxY + 22, { width: contentWidth - 115, height: 26, ellipsis: true });
+        
+        doc.font("Roboto-Bold").fontSize(8).fillColor("#64748b").text("Action Taken / Notes:", startX + 6, workBoxY + 50);
+        doc.moveTo(startX + 105, workBoxY + 58).lineTo(endX - 8, workBoxY + 58).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+        doc.moveTo(startX + 6, workBoxY + 78).lineTo(endX - 8, workBoxY + 78).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+        doc.moveTo(startX + 6, workBoxY + 98).lineTo(endX - 8, workBoxY + 98).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      } else {
+        for (let i = 1; i <= 4; i++) {
+          doc.moveTo(startX + 6, workBoxY + 16 + i * 21).lineTo(endX - 8, workBoxY + 16 + i * 21).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+        }
       }
 
       // ================= CUSTOMER REMARKS BOX =================
-      const remarksBoxY = 495;
-      const remarksBoxHeight = 95;
-      doc.rect(50, remarksBoxY, 500, remarksBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("CUSTOMER REMARKS.", 55, remarksBoxY + 6);
+      const remarksBoxY = 506;
+      const remarksBoxHeight = 104;
+      doc.rect(startX, remarksBoxY, contentWidth, remarksBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("CUSTOMER REMARKS.", startX + 6, remarksBoxY + 6);
 
       // Extra Work Required & Signature
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#000000").text("Extra Work Required:", 55, remarksBoxY + 22);
+      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text("Extra Work Required:", startX + 6, remarksBoxY + 23);
       
       // Draw checkboxes
-      doc.rect(145, remarksBoxY + 21, 7, 7).strokeColor("#003366").lineWidth(0.8).stroke();
-      doc.text("Yes", 155, remarksBoxY + 21.5);
-      doc.rect(185, remarksBoxY + 21, 7, 7).strokeColor("#003366").lineWidth(0.8).stroke();
-      doc.text("No", 195, remarksBoxY + 21.5);
+      doc.rect(startX + 104, remarksBoxY + 22, 9, 9).strokeColor("#003366").lineWidth(0.8).stroke();
+      doc.font("Roboto-Regular").fontSize(8.5).text("Yes", startX + 117, remarksBoxY + 23);
+      doc.rect(startX + 144, remarksBoxY + 22, 9, 9).strokeColor("#003366").lineWidth(0.8).stroke();
+      doc.text("No", startX + 157, remarksBoxY + 23);
 
-      doc.text("If Yes, Customer Signature: _____________________________________", 230, remarksBoxY + 21);
+      doc.text("If Yes, Customer Signature: ____________________________________________", startX + 185, remarksBoxY + 23);
 
-      // Draw lines for customer remarks
-      doc.moveTo(55, remarksBoxY + 55).lineTo(540, remarksBoxY + 55).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      doc.moveTo(55, remarksBoxY + 80).lineTo(540, remarksBoxY + 80).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      // Draw lines for customer remarks (3 lines)
+      doc.moveTo(startX + 6, remarksBoxY + 52).lineTo(endX - 8, remarksBoxY + 52).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      doc.moveTo(startX + 6, remarksBoxY + 74).lineTo(endX - 8, remarksBoxY + 74).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      doc.moveTo(startX + 6, remarksBoxY + 95).lineTo(endX - 8, remarksBoxY + 95).strokeColor("#94a3b8").lineWidth(0.75).stroke();
 
       // ================= BOTTOM BOXES (TECHNICIAN & COORDINATOR) =================
-      const botBoxY = 590;
-      const botBoxHeight = 145;
-      doc.rect(50, botBoxY, 250, botBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
-      doc.rect(300, botBoxY, 250, botBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      const botBoxY = 618;
+      const botBoxHeight = 158;
+      doc.rect(startX, botBoxY, leftColWidth, botBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
+      doc.rect(midX, botBoxY, rightColWidth, botBoxHeight).strokeColor("#003366").lineWidth(1.2).stroke();
 
       // Left Box: Technician Info
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("TECHNICIAN NAME.", 55, botBoxY + 6);
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("TECHNICIAN NAME.", startX + 6, botBoxY + 6);
       
       const techNameStr = complaintData.technician?.name || "";
-      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#000000").text(techNameStr, 55, botBoxY + 24);
-      doc.moveTo(55, botBoxY + 36).lineTo(290, botBoxY + 36).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      doc.moveTo(55, botBoxY + 58).lineTo(290, botBoxY + 58).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      doc.font("Roboto-Bold").fontSize(10).fillColor("#000000").text(techNameStr, startX + 6, botBoxY + 26, { width: leftColWidth - 12 });
+      doc.moveTo(startX + 6, botBoxY + 40).lineTo(midX - 8, botBoxY + 40).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      doc.moveTo(startX + 6, botBoxY + 64).lineTo(midX - 8, botBoxY + 64).strokeColor("#94a3b8").lineWidth(0.75).stroke();
 
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("SIGNATURES.", 55, botBoxY + 80);
-      doc.font("Roboto-Regular").fontSize(8).fillColor("#000000").text("Technician Signature: _______________________", 55, botBoxY + 115);
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("SIGNATURES.", startX + 6, botBoxY + 90);
+      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text("Technician Signature: _______________________________", startX + 6, botBoxY + 130);
 
       // Right Box: Coordinator Info & Status
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("COORDINATOR / OFFICE REMARKS.", 305, botBoxY + 6);
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("COORDINATOR / OFFICE REMARKS.", midX + 6, botBoxY + 6);
 
       const statusVal = (complaintData.status || "OPEN").toUpperCase();
       
       const drawCheckbox = (x: number, y: number, checked: boolean) => {
-        doc.rect(x, y, 7, 7).strokeColor("#003366").lineWidth(0.8).stroke();
+        doc.rect(x, y, 9, 9).strokeColor("#003366").lineWidth(0.8).stroke();
         if (checked) {
-          doc.font("Roboto-Bold").fontSize(7).fillColor("#003366").text("X", x + 1, y - 0.5);
+          doc.font("Roboto-Bold").fontSize(8).fillColor("#003366").text("X", x + 1.5, y + 0.5);
         }
       };
 
-      drawCheckbox(305, botBoxY + 24, statusVal === "OPEN" || statusVal === "PENDING");
-      doc.font("Roboto-Regular").fontSize(8).fillColor("#000000").text("Pending", 318, botBoxY + 23);
+      drawCheckbox(midX + 10, botBoxY + 24, statusVal === "OPEN" || statusVal === "PENDING");
+      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text("Pending", midX + 25, botBoxY + 24);
 
-      drawCheckbox(305, botBoxY + 38, statusVal === "IN_PROGRESS");
-      doc.font("Roboto-Regular").fontSize(8).text("In Progress", 318, botBoxY + 37);
+      drawCheckbox(midX + 80, botBoxY + 24, statusVal === "IN_PROGRESS");
+      doc.font("Roboto-Regular").fontSize(8.5).text("In Progress", midX + 95, botBoxY + 24);
 
-      drawCheckbox(305, botBoxY + 52, statusVal === "RESOLVED");
-      doc.font("Roboto-Regular").fontSize(8).text("Resolved", 318, botBoxY + 51);
+      drawCheckbox(midX + 160, botBoxY + 24, statusVal === "RESOLVED");
+      doc.font("Roboto-Regular").fontSize(8.5).text("Resolved", midX + 175, botBoxY + 24);
 
-      drawCheckbox(305, botBoxY + 66, statusVal === "CLOSED");
-      doc.font("Roboto-Regular").fontSize(8).text("Closed", 318, botBoxY + 65);
+      drawCheckbox(midX + 10, botBoxY + 42, statusVal === "CLOSED");
+      doc.font("Roboto-Regular").fontSize(8.5).text("Closed", midX + 25, botBoxY + 42);
 
-      doc.font("Roboto-Bold").fontSize(9).fillColor("#003366").text("SIGNATURES.", 305, botBoxY + 85);
-      doc.font("Roboto-Regular").fontSize(8).fillColor("#000000").text("Coordinator Signature: _______________________", 305, botBoxY + 115);
+      // Office remarks line
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#64748b").text("Notes:", midX + 6, botBoxY + 60);
+      doc.moveTo(midX + 38, botBoxY + 68).lineTo(endX - 8, botBoxY + 68).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+
+      doc.font("Roboto-Bold").fontSize(9.5).fillColor("#003366").text("SIGNATURES.", midX + 6, botBoxY + 90);
+      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#000000").text("Coordinator Signature: ______________________________", midX + 6, botBoxY + 130);
 
       // ================= FOOTER =================
-      doc.moveTo(50, 750).lineTo(550, 750).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
-      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b");
-      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", 50, 757, { align: "center", width: 500 });
-      doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk", 50, 767, { align: "center", width: 500 });
+      const footerDividerY = 784;
+      doc.moveTo(startX, footerDividerY).lineTo(endX, footerDividerY).strokeColor("#cbd5e1").lineWidth(0.75).stroke();
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b");
+      doc.text("Office No.22 Inside Aneesa Center Opp, MashAllah Electronics Khanewal Road Multan.", startX, footerDividerY + 6, { align: "center", width: contentWidth });
+      doc.text("Web: www.technicool.com.pk   |   Email: services@technicool.com.pk   |   Mobile: 03218304978", startX, footerDividerY + 18, { align: "center", width: contentWidth });
 
       doc.end();
     } catch (err) {
@@ -1891,7 +1939,12 @@ export function generateStockValuationPDF(data: {
 export function generatePurchaseOrderPDF(poData: any, companyOverride?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ margin: 50, font: fontRegularPath });
+      const doc = new PDFDocument({ 
+        margins: { top: 25, bottom: 20, left: 40, right: 40 }, 
+        size: "A4", 
+        font: fontRegularPath,
+        autoFirstPage: true 
+      });
       const chunks: Buffer[] = [];
 
       doc.on("data", (chunk) => chunks.push(chunk));
@@ -1907,99 +1960,157 @@ export function generatePurchaseOrderPDF(poData: any, companyOverride?: string):
         ? companyOverride
         : ((poData as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : (poData as any).company === "TECAIR" || meta.company === "TECAIR" ? "TECAIR" : (poData as any).company === "MTS" || meta.company === "MTS" ? "MTS" : "TCE");
 
+      const startX = 40;
+      const contentWidth = 515;
+      const endX = startX + contentWidth; // 555
+
       // Draw Company Letterhead Header
       drawLetterheadHeader(doc, company);
 
       // Title Banner
-      doc.rect(50, 102, 500, 20).fill("#1e293b");
-      doc.font("Roboto-Bold").fontSize(11).fillColor("#ffffff").text("PURCHASE ORDER", 50, 107, { align: "center", width: 500 });
+      doc.rect(startX, 88, contentWidth, 18).fill("#1e293b");
+      doc.font("Roboto-Bold").fontSize(10).fillColor("#ffffff").text("PURCHASE ORDER", startX, 92, { align: "center", width: contentWidth });
 
       const vendor = poData.vendor || {};
 
       // PO Details Box
-      doc.font("Roboto-Bold").fontSize(13).fillColor("#1f2937").text(`PO NUMBER: ${poData.poNumber || "-"}`, 50, 130);
-      doc.font("Roboto-Regular").fontSize(9.5).fillColor("#4b5563");
-      doc.text(`PO Date: ${formatDateDisplay(poData.createdAt || poData.date || new Date(), "en-GB")}`, 50, 148);
-      doc.text(`Supplier / Vendor: ${vendor.name || "Unknown Vendor"}`, 50, 162);
-      if (vendor.phone) doc.text(`Phone: ${vendor.phone}`, 50, 176);
-      if (vendor.address) doc.text(`Address: ${vendor.address}`, 50, 190, { width: 280 });
+      const detailsY = 112;
+      doc.font("Roboto-Bold").fontSize(11).fillColor("#1f2937").text(`PO NUMBER: ${poData.poNumber || "-"}`, startX, detailsY);
+      doc.font("Roboto-Regular").fontSize(8.5).fillColor("#374151");
+      doc.text(`PO Date: ${formatDateDisplay(poData.createdAt || poData.date || new Date(), "en-GB")}`, startX, detailsY + 16);
+      doc.text(`Supplier / Vendor: ${vendor.name || "Unknown Vendor"}`, startX, detailsY + 28);
+      if (vendor.phone) doc.text(`Phone: ${vendor.phone}`, startX, detailsY + 40);
+      if (vendor.address) doc.text(`Address: ${vendor.address}`, startX, detailsY + 52, { width: 260, height: 20, ellipsis: true });
 
-      doc.text(`Status: ${poData.status || "APPROVED"}`, 340, 148);
-      if (vendor.ntn) doc.text(`Vendor NTN: ${vendor.ntn}`, 340, 162);
-      doc.text(`Delivery Location: ${company === "GREEN_LEAVES" ? "Green Leaves Islamabad" : company === "TECAIR" ? "TECAIR Multan" : company === "MTS" ? "MTS Islamabad" : "Technicool Multan"}`, 340, 176);
+      doc.text(`Status: ${poData.status || "APPROVED"}`, 330, detailsY + 16);
+      if (vendor.ntn) doc.text(`Vendor NTN: ${vendor.ntn}`, 330, detailsY + 28);
+      const deliveryLoc = company === "GREEN_LEAVES" ? "Green Leaves Islamabad" : company === "TECAIR" ? "TECAIR Multan" : company === "MTS" ? "MTS Islamabad" : "Technicool Multan";
+      doc.text(`Delivery Location: ${meta.deliveryAddress || deliveryLoc}`, 330, detailsY + 40, { width: 220, height: 20, ellipsis: true });
 
-      let y = 220;
+      let y = detailsY + 75;
 
-        // Table columns header
-        doc.font("Roboto-Bold").fontSize(10).fillColor("#1e3a8a");
-        doc.text("Item / Description", 50, y);
-        doc.text("Qty", 310, y, { width: 50, align: "right" });
-        doc.text("Unit Cost (PKR)", 370, y, { width: 90, align: "right" });
-        doc.text("Total (PKR)", 470, y, { width: 80, align: "right" });
+      // Table columns header
+      doc.font("Roboto-Bold").fontSize(8.5).fillColor("#1e3a8a");
+      doc.text("Item / Description", startX, y);
+      doc.text("Unit", 280, y, { width: 40, align: "center" });
+      doc.text("Qty", 325, y, { width: 45, align: "right" });
+      doc.text("Rate (PKR)", 375, y, { width: 85, align: "right" });
+      doc.text("Total (PKR)", 465, y, { width: 90, align: "right" });
 
-        doc.moveTo(50, y + 15).lineTo(550, y + 15).strokeColor("#1e3a8a").stroke();
-        y += 25;
+      doc.moveTo(startX, y + 12).lineTo(endX, y + 12).strokeColor("#1e3a8a").lineWidth(1).stroke();
+      y += 18;
 
-        const lineItems = poData.lineItems || [];
-        doc.font("Roboto-Regular").fillColor("#1f2937");
-        lineItems.forEach((item: any) => {
-          const desc = item.product ? `[${item.product.sku}] ${item.product.name}` : (item.description || item.name || "Ordered Item");
-          const qty = Number(item.quantityOrdered || item.quantity || 0);
-          const cost = Number(item.unitCost || 0);
-          const total = Number(item.totalCost || qty * cost);
+      const lineItems = poData.lineItems || [];
+      doc.font("Roboto-Regular").fontSize(8).fillColor("#1f2937");
+      lineItems.forEach((item: any) => {
+        const desc = item.product ? `[${item.product.sku}] ${item.product.name}` : (item.description || item.name || "Ordered Item");
+        const qty = Number(item.quantityOrdered || item.quantity || 0);
+        const cost = Number(item.unitCost || 0);
+        const total = Number(item.totalCost || qty * cost);
 
-          doc.fontSize(9.5).text(desc, 50, y, { width: 250 });
-          doc.text(qty.toString(), 310, y, { width: 50, align: "right" });
-          doc.text(cost.toLocaleString("en-US", { minimumFractionDigits: 0 }), 370, y, { width: 90, align: "right" });
-          doc.text(total.toLocaleString("en-US", { minimumFractionDigits: 0 }), 470, y, { width: 80, align: "right" });
-          
-          y += 20;
-        });
-
-        // Bottom Totals
-        y += 10;
-        doc.moveTo(340, y).lineTo(550, y).strokeColor("#cbd5e1").stroke();
-        y += 10;
-
-        const subtotal = meta.subtotalAmount || lineItems.reduce((acc: number, item: any) => acc + (Number(item.quantityOrdered || item.quantity || 0) * Number(item.unitCost || 0)), 0);
-        const discount = meta.discountAmount ?? Number(poData.discount || 0);
-        const tax = meta.taxAmount || 0;
-        const totalAmount = meta.totalAmount || Number(poData.totalAmount || subtotal - discount + tax);
-
-        doc.font("Roboto-Regular").fontSize(9.5).text("Subtotal:", 340, y);
-        doc.text(`PKR ${Math.round(subtotal).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+        doc.text(desc, startX, y, { width: 235, height: 14, ellipsis: true });
+        doc.text(item.product?.unit || "Nos", 280, y, { width: 40, align: "center" });
+        doc.text(qty.toString(), 325, y, { width: 45, align: "right" });
+        doc.text(cost.toLocaleString("en-US", { minimumFractionDigits: 0 }), 375, y, { width: 85, align: "right" });
+        doc.text(total.toLocaleString("en-US", { minimumFractionDigits: 0 }), 465, y, { width: 90, align: "right" });
+        
         y += 16;
+      });
 
-        if (discount > 0) {
-          doc.text("Discount:", 340, y);
-          doc.text(`- PKR ${Math.round(discount).toLocaleString()}`, 470, y, { width: 80, align: "right" });
-          y += 16;
-        }
+      // Bottom Totals
+      y += 4;
+      doc.moveTo(330, y).lineTo(endX, y).strokeColor("#cbd5e1").lineWidth(0.5).stroke();
+      y += 6;
 
-        if (tax > 0) {
-          doc.text(`Sales Tax (${meta.taxRate || 18}%):`, 340, y);
-          doc.text(`+ PKR ${Math.round(tax).toLocaleString()}`, 470, y, { width: 80, align: "right" });
-          y += 16;
-        }
+      const subtotal = meta.subtotalAmount || lineItems.reduce((acc: number, item: any) => acc + (Number(item.quantityOrdered || item.quantity || 0) * Number(item.unitCost || 0)), 0);
+      const discount = meta.discountAmount ?? Number(poData.discount || 0);
+      const tax = meta.taxAmount || 0;
+      const totalAmount = meta.totalAmount || Number(poData.totalAmount || subtotal - discount + tax);
 
-        doc.font("Roboto-Bold").fontSize(11).fillColor("#1e3a8a");
-        doc.text("Net Total:", 340, y);
-        doc.text(`PKR ${Math.round(totalAmount).toLocaleString()}`, 470, y, { width: 80, align: "right" });
+      doc.font("Roboto-Regular").fontSize(8.5).text("Subtotal:", 330, y);
+      doc.text(`PKR ${Math.round(subtotal).toLocaleString()}`, 465, y, { width: 90, align: "right" });
+      y += 14;
 
-        // Signatures
-        y = 675;
-        doc.moveTo(60, y).lineTo(200, y).strokeColor("#94a3b8").stroke();
-        doc.font("Roboto-Regular").fontSize(8).fillColor("#64748b").text("Procurement Officer", 60, y + 5, { width: 140, align: "center" });
-
-        doc.moveTo(360, y).lineTo(500, y).strokeColor("#94a3b8").stroke();
-        doc.text("Authorized Signature & Stamp", 360, y + 5, { width: 140, align: "center" });
-
-        // Draw Letterhead Footer
-        drawLetterheadFooter(doc, company, 742);
-
-        doc.end();
-      } catch (err) {
-        reject(err);
+      if (discount > 0) {
+        doc.text("Discount:", 330, y);
+        doc.text(`- PKR ${Math.round(discount).toLocaleString()}`, 465, y, { width: 90, align: "right" });
+        y += 14;
       }
-    });
-  }
+
+      if (tax > 0) {
+        doc.text(`Sales Tax (${meta.taxRate || 18}%):`, 330, y);
+        doc.text(`+ PKR ${Math.round(tax).toLocaleString()}`, 465, y, { width: 90, align: "right" });
+        y += 14;
+      }
+
+      doc.font("Roboto-Bold").fontSize(9).fillColor("#1e3a8a");
+      doc.text("Net Total:", 330, y);
+      doc.text(`PKR ${Math.round(totalAmount).toLocaleString()}`, 465, y, { width: 90, align: "right" });
+      y += 16;
+
+      // Words
+      doc.font("Roboto-Bold").fontSize(8).fillColor("#374151").text("Total in Words: ", startX, y, { continued: true });
+      doc.font("Roboto-Regular").text(numberToWords(totalAmount));
+      y += 14;
+
+      // ================= TERMS & CONDITIONS =================
+      const rawNotes = meta.userNotes && meta.userNotes.trim() ? meta.userNotes : getDefaultPoTerms(company);
+      const termsText = updateTermsCompany(rawNotes, company);
+      const termLines = termsText
+        .split(/\r?\n/)
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0 && !/^TERMS\s*&\s*CONDITIONS/i.test(l));
+
+      doc.moveTo(startX, y).lineTo(endX, y).strokeColor("#003366").lineWidth(0.8).stroke();
+      y += 4;
+
+      doc.font("Roboto-Bold").fontSize(7.5).fillColor("#003366").text("TERMS & CONDITIONS", startX, y);
+      doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text("Governed by Purchase Order Specifications", 350, y + 1, { align: "right", width: 205 });
+      y += 11;
+
+      // 2-column terms rendering
+      const halfCount = Math.ceil(termLines.length / 2);
+      const col1Lines = termLines.slice(0, halfCount);
+      const col2Lines = termLines.slice(halfCount);
+
+      const colWidth = 250;
+      const col1X = startX;
+      const col2X = startX + 265;
+      const termsStartY = y;
+
+      const renderTermColumn = (items: string[], colX: number) => {
+        let curY = termsStartY;
+        items.forEach((itemText) => {
+          const match = itemText.match(/^(\d+[\.\)]\s*[^:]+:)\s*(.*)$/);
+          if (match) {
+            doc.font("Roboto-Bold").fontSize(6.5).fillColor("#1e293b").text(match[1] + " ", colX, curY, { continued: true, width: colWidth });
+            doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(match[2], { width: colWidth, lineGap: 0.5 });
+          } else {
+            doc.font("Roboto-Regular").fontSize(6.5).fillColor("#334155").text(itemText, colX, curY, { width: colWidth, lineGap: 0.5 });
+          }
+          curY = doc.y + 2;
+        });
+        return curY;
+      };
+
+      const endY1 = renderTermColumn(col1Lines, col1X);
+      const endY2 = renderTermColumn(col2Lines, col2X);
+      y = Math.max(endY1, endY2) + 10;
+
+      // Signatures
+      const sigY = Math.max(y, 730);
+      doc.moveTo(startX + 20, sigY).lineTo(startX + 160, sigY).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      doc.font("Roboto-Regular").fontSize(7.5).fillColor("#64748b").text("Procurement Officer", startX + 20, sigY + 4, { width: 140, align: "center" });
+
+      doc.moveTo(endX - 160, sigY).lineTo(endX - 20, sigY).strokeColor("#94a3b8").lineWidth(0.75).stroke();
+      doc.text("Authorized Signature & Stamp", endX - 160, sigY + 4, { width: 140, align: "center" });
+
+      // Draw Letterhead Footer
+      drawLetterheadFooter(doc, company, sigY + 32);
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}

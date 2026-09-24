@@ -5,8 +5,24 @@ import { useParams, useRouter } from "next/navigation";
 import { Printer, ArrowLeft } from "lucide-react";
 import { SkeletonDocument } from "@/components/shared/SkeletonTable";
 
-import { parsePoMetadata } from "@/lib/poHelper";
+import { parsePoMetadata, getDefaultPoTerms, updateTermsCompany } from "@/lib/poHelper";
 import { buildPdfFileName } from "@/lib/pdfFileName";
+
+function parseTerms(notes: string) {
+  if (!notes) return [];
+  const lines = notes.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const terms: { title?: string; text: string }[] = [];
+  for (const line of lines) {
+    if (/^TERMS\s*&\s*CONDITIONS/i.test(line)) continue;
+    const match = line.match(/^(\d+[\.\)]\s*[^:]+:)\s*(.*)$/);
+    if (match) {
+      terms.push({ title: match[1], text: match[2] });
+    } else {
+      terms.push({ text: line });
+    }
+  }
+  return terms;
+}
 
 // Number to Words Helper
 function numberToWords(num: number): string {
@@ -38,6 +54,7 @@ export default function POPdfPage() {
   const [po, setPo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -112,11 +129,15 @@ export default function POPdfPage() {
   const salesTax = meta.taxAmount;
   const totalAmount = meta.totalAmount || Number(po.totalAmount || 0);
 
+  const rawNotes = meta.userNotes && meta.userNotes.trim() ? meta.userNotes : getDefaultPoTerms(selectedCompany);
+  const termsText = updateTermsCompany(rawNotes, selectedCompany);
+  const parsedTerms = parseTerms(termsText);
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 py-8 px-4 print:bg-white print:py-0 print:px-0 print:m-0">
       <style dangerouslySetInnerHTML={{ __html: `
         @page {
-          size: A4 portrait;
+          size: A4 ${orientation};
           margin: 0 !important;
         }
         @media print {
@@ -130,8 +151,9 @@ export default function POPdfPage() {
             print-color-adjust: exact !important;
           }
           .page-container {
-            min-height: 287mm !important;
-            padding: 6mm 10mm 6mm 10mm !important;
+            min-height: ${orientation === "landscape" ? "200mm" : "287mm"} !important;
+            max-height: ${orientation === "landscape" ? "205mm" : "295mm"} !important;
+            padding: ${orientation === "landscape" ? "5mm 8mm 5mm 8mm" : "5mm 8mm 5mm 8mm"} !important;
             box-sizing: border-box !important;
             display: flex !important;
             flex-direction: column !important;
@@ -148,7 +170,7 @@ export default function POPdfPage() {
         }
       `}} />
       {/* Top control bar */}
-      <div className="max-w-4xl mx-auto mb-6 flex justify-between items-center print:hidden">
+      <div className={`${orientation === "landscape" ? "max-w-[297mm]" : "max-w-4xl"} mx-auto mb-6 flex justify-between items-center print:hidden flex-wrap gap-3`}>
         <button
           onClick={() => router.back()}
           className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition-all"
@@ -156,53 +178,81 @@ export default function POPdfPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Procurement
         </button>
 
-        {/* Company Letterhead Switcher */}
-        <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
-          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedCompany("TCE")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedCompany === "TCE"
-                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            🏢 TCE
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCompany("TECAIR")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedCompany === "TECAIR"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            ❄️ TECAIR
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCompany("MTS")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedCompany === "MTS"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            ⚙️ MTS
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCompany("GREEN_LEAVES")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedCompany === "GREEN_LEAVES"
-                ? "bg-emerald-600 text-white shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            🍃 Green Leaves
-          </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Page Orientation Switcher */}
+          <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
+            <button
+              type="button"
+              onClick={() => setOrientation("portrait")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                orientation === "portrait"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              📄 Portrait
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrientation("landscape")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                orientation === "landscape"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              📑 Landscape
+            </button>
+          </div>
+
+          {/* Company Letterhead Switcher */}
+          <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
+            <button
+              type="button"
+              onClick={() => setSelectedCompany("TCE")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedCompany === "TCE"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              🏢 TCE
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompany("TECAIR")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedCompany === "TECAIR"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              ❄️ TECAIR
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompany("MTS")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedCompany === "MTS"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              ⚙️ MTS
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedCompany("GREEN_LEAVES")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedCompany === "GREEN_LEAVES"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              🍃 Green Leaves
+            </button>
+          </div>
         </div>
 
         <button
@@ -214,7 +264,7 @@ export default function POPdfPage() {
       </div>
 
       {/* Invoice Sheet */}
-      <div className="page-container max-w-4xl mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-10 shadow-xl print:border-none print:shadow-none print:m-0 print:max-w-none print:w-full print:bg-white text-black font-sans relative overflow-hidden font-normal">
+      <div className={`page-container ${orientation === "landscape" ? "max-w-[297mm]" : "max-w-4xl"} mx-auto bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 shadow-xl print:border-none print:shadow-none print:m-0 print:max-w-none print:w-full print:bg-white text-black font-sans relative overflow-hidden font-normal`}>
         <div className="page-content">
           {/* Background Logo Watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
@@ -424,12 +474,24 @@ export default function POPdfPage() {
             </div>
           </div>
 
-          {/* Custom Notes / Terms Section at bottom */}
-          {meta.userNotes ? (
-            <div className="mt-4 text-[13px] mb-4 font-normal">
-              <h4 className="font-normal text-black mb-1 uppercase tracking-wider">Note:</h4>
-              <div className="text-black font-normal whitespace-pre-line leading-relaxed">
-                {meta.userNotes}
+          {/* Terms & Conditions Section */}
+          {parsedTerms.length > 0 ? (
+            <div className="mt-2.5 pt-1.5 border-t-2 border-black font-sans break-inside-avoid">
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-bold text-[9.5px] uppercase tracking-wider text-black">
+                  TERMS &amp; CONDITIONS
+                </span>
+                <span className="text-[8px] italic text-slate-700 font-normal">
+                  Governed by Purchase Order Specifications
+                </span>
+              </div>
+              <div className={`grid ${orientation === "landscape" ? "grid-cols-3 gap-x-5 gap-y-0.5" : "grid-cols-2 gap-x-4 gap-y-0.5"} text-[7.5px] leading-[1.2] text-black`}>
+                {parsedTerms.map((t, idx) => (
+                  <div key={idx} className="flex gap-1 items-start text-justify">
+                    {t.title && <span className="font-bold shrink-0 text-black">{t.title}</span>}
+                    <span className="font-normal text-slate-900">{t.text}</span>
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}
