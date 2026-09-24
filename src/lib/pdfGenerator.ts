@@ -2065,7 +2065,6 @@ export function generatePurchaseOrderPDF(poData: any, companyOverride?: string):
       y += 4;
 
       doc.font("Roboto-Bold").fontSize(7.5).fillColor("#003366").text("TERMS & CONDITIONS", startX, y);
-      doc.font("Roboto-Regular").fontSize(6.5).fillColor("#64748b").text("Governed by Purchase Order Specifications", 350, y + 1, { align: "right", width: 205 });
       y += 11;
 
       // Single-column terms rendering across full width

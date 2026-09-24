@@ -477,12 +477,9 @@ export default function POPdfPage() {
           {/* Terms & Conditions Section */}
           {parsedTerms.length > 0 ? (
             <div className="mt-2.5 pt-1.5 border-t-2 border-black font-sans break-inside-avoid">
-              <div className="flex justify-between items-center mb-1">
+              <div className="mb-1">
                 <span className="font-bold text-[9.5px] uppercase tracking-wider text-black">
                   TERMS &amp; CONDITIONS
-                </span>
-                <span className="text-[8px] italic text-slate-700 font-normal">
-                  Governed by Purchase Order Specifications
                 </span>
               </div>
               <div className="space-y-0.5 text-[7.5px] leading-[1.2] text-black">
