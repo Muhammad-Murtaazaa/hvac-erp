@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy React Website
 
 on:
   push:
@@ -8,25 +8,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Decode SSH Key
-        run: |
-          echo "${{ secrets.VPS_SSH_KEY }}" | base64 -d > ./deploy_key
-          chmod 644 ./deploy_key
-
       - name: Execute Deployment Script via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_IP }}
           username: root
-          key_path: ./deploy_key
+          key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            cd /var/www/hvac-erp
+            cd /var/www/tce-website
             git fetch origin main
             git reset --hard origin/main
-            chmod +x /var/www/hvac-erp/deploy.sh
-            /var/www/hvac-erp/deploy.sh
-
-      - name: Cleanup SSH Key
-        if: always()
-        run: rm -f ./deploy_key
+            npm install
+            npm run build
