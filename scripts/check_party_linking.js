@@ -44,3 +44,10 @@ async function checkParties() {
 checkParties()
   .catch(console.error)
   .finally(() => prisma.$disconnect());
+
+
+
+
+
+
+
