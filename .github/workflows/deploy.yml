@@ -8,6 +8,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug Secrets
+        run: |
+          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then echo "SSH Key is EMPTY"; else echo "SSH Key is LOADED"; fi
+          if [ -z "${{ secrets.VPS_IP }}" ]; then echo "IP is EMPTY"; else echo "IP is LOADED"; fi
+
       - name: Execute Deployment Script via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
