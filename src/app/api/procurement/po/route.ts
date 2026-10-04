@@ -57,9 +57,16 @@ export async function GET(req: Request) {
 
   const purchaseOrders = rawPOs.map((po) => {
     const meta = parsePoMetadata(po.notes, po);
+    let status = po.status || "APPROVED";
+    if (status === "SUBMITTED") status = "APPROVED";
+    const hasUnreceived = (po.lineItems || []).some((l) => (l.quantityReceived || 0) < l.quantityOrdered);
+    const hasAnyReceived = (po.lineItems || []).some((l) => (l.quantityReceived || 0) > 0);
+    if (status === "COMPLETED" && hasUnreceived) {
+      status = hasAnyReceived ? "PARTIALLY_RECEIVED" : "APPROVED";
+    }
     return {
       ...po,
-      status: po.status || "SUBMITTED",
+      status,
       meta,
     };
   });
@@ -95,7 +102,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Vendor and line items are required" }, { status: 400 });
     }
 
-    const poStatus = status || "APPROVED";
+    const requestedStatus = status || "APPROVED";
+    const poStatus = (requestedStatus === "COMPLETED" || requestedStatus === "SUBMITTED") ? "APPROVED" : requestedStatus;
 
     const purchaseOrder = await prisma.$transaction(async (tx: any) => {
       let poNumber = customPoNumber ? customPoNumber.trim() : "";

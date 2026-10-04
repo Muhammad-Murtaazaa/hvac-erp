@@ -131,6 +131,7 @@ function ProcurementPageContent() {
   const [editPoTaxRate, setEditPoTaxRate] = useState(18);
   const [editPoNotes, setEditPoNotes] = useState("");
   const [editPoStatus, setEditPoStatus] = useState("APPROVED");
+  const [editingPo, setEditingPo] = useState<any>(null);
   const [updatingPo, setUpdatingPo] = useState(false);
 
   // GRN states
@@ -158,12 +159,57 @@ function ProcurementPageContent() {
         const poData = await poRes.json();
         setPurchaseOrders(poData.purchaseOrders || []);
 
-        // Filter out unresolved pending items for shortages list
+        // Build comprehensive Pending Stock list:
+        // 1. Explicit unresolved shortage items (pOPendingItem from partial GRNs)
+        // 2. Outstanding unreceived PO lines on active POs that aren't already tracked as an explicit shortage
         const pLines: any[] = [];
         (poData.purchaseOrders || []).forEach((po: any) => {
+          const s = (po.status || "").toUpperCase();
+          if (s === "CANCELLED" || s === "DRAFT") return;
+
+          const trackedProductIds = new Set<string>();
+
+          // Explicit shortages from partial GRNs
           (po.pendingItems || []).forEach((pi: any) => {
             if (!pi.isResolved) {
-              pLines.push({ ...pi, poNumber: po.poNumber || "-", vendorName: po.vendor?.name || "Unknown Vendor" });
+              const missing = Number(pi.quantityMissing) || 0;
+              const resolved = Number(pi.quantityResolved) || 0;
+              const outstanding = Math.max(0, missing - resolved);
+              if (outstanding > 0) {
+                trackedProductIds.add(pi.productId);
+                pLines.push({
+                  ...pi,
+                  poId: po.id,
+                  poNumber: po.poNumber || "-",
+                  vendorName: po.vendor?.name || "Unknown Vendor",
+                  isShortageRecord: true,
+                  outstanding,
+                  poObj: po,
+                });
+              }
+            }
+          });
+
+          // Outstanding unreceived PO lines
+          (po.lineItems || []).forEach((line: any) => {
+            const ordered = Number(line.quantityOrdered) || 0;
+            const received = Number(line.quantityReceived) || 0;
+            const remaining = Math.max(0, ordered - received);
+            if (remaining > 0 && !trackedProductIds.has(line.productId)) {
+              pLines.push({
+                id: `line-${line.id}`,
+                poId: po.id,
+                poNumber: po.poNumber || "-",
+                vendorName: po.vendor?.name || "Unknown Vendor",
+                product: line.product,
+                productId: line.productId,
+                quantityMissing: ordered,
+                quantityResolved: received,
+                outstanding: remaining,
+                isShortageRecord: false,
+                lineItem: line,
+                poObj: po,
+              });
             }
           });
         });
@@ -241,6 +287,7 @@ function ProcurementPageContent() {
   };
 
   const openEditPo = (po: any) => {
+    setEditingPo(po);
     const meta = po.meta || parsePoMetadata(po.notes, po);
     const targetComp = meta.company === "GREEN_LEAVES" ? "GREEN_LEAVES" : meta.company === "TECAIR" ? "TECAIR" : meta.company === "MTS" ? "MTS" : "TCE";
     setEditingPoId(po.id);
@@ -271,10 +318,25 @@ function ProcurementPageContent() {
     setIsEditPoOpen(true);
   };
 
+  const canMarkCompleted =
+    (editingPo?.lineItems || []).length > 0 &&
+    (editingPo?.lineItems || []).every(
+      (l: any) => (Number(l.quantityReceived) || 0) >= (Number(l.quantityOrdered) || 0)
+    );
+
   const handleUpdatePo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editPoVendor || editPoLines.some((l) => !l.productId || !l.quantityOrdered || !l.unitCost)) {
       toast({ title: "Missing Information", message: "Please fill out the vendor and all PO line details.", type: "warning" });
+      return;
+    }
+
+    if (editPoStatus === "COMPLETED" && !canMarkCompleted) {
+      toast({
+        title: "Cannot Complete PO",
+        message: "This purchase order has unreceived stock. It cannot be marked Completed until all items are received via GRN.",
+        type: "error",
+      });
       return;
     }
 
@@ -548,17 +610,14 @@ function ProcurementPageContent() {
   const isPendingArrival = (po: any) => {
     if (!po) return false;
     const s = (po.status || "").toUpperCase();
-    if (s === "COMPLETED" || s === "RECEIVED" || s === "CANCELLED" || s === "DRAFT") {
+    if (s === "CANCELLED" || s === "DRAFT") {
       return false;
     }
-    // If all line items are already received, it's not pending arrival
-    if (Array.isArray(po.lineItems) && po.lineItems.length > 0) {
-      const hasUnreceived = po.lineItems.some(
-        (l: any) => (Number(l.quantityOrdered) || 0) > (Number(l.quantityReceived) || 0)
-      );
-      if (!hasUnreceived) return false;
-    }
-    return s === "APPROVED" || s === "SUBMITTED" || s === "PARTIALLY_RECEIVED";
+    const lines = Array.isArray(po.lineItems) ? po.lineItems : [];
+    if (lines.length === 0) return false;
+    return lines.some(
+      (l: any) => (Number(l.quantityOrdered) || 0) > (Number(l.quantityReceived) || 0)
+    );
   };
 
   // Filters
@@ -903,8 +962,8 @@ function ProcurementPageContent() {
                     <th className="p-3">Vendor</th>
                     <th className="p-3">Product SKU</th>
                     <th className="p-3">Product Name</th>
-                    <th className="p-3 text-right">Shortage Qty</th>
-                    <th className="p-3 text-right">Resolved Qty</th>
+                    <th className="p-3 text-right">Ordered / Shortage</th>
+                    <th className="p-3 text-right">Received / Resolved</th>
                     <th className="p-3 text-right font-bold text-rose-500">Outstanding</th>
                     <th className="p-3 text-center">Action</th>
                   </tr>
@@ -913,7 +972,7 @@ function ProcurementPageContent() {
                   {paginatedShortages.map((item) => {
                     const missing = item.quantityMissing || 0;
                     const resolved = item.quantityResolved || 0;
-                    const outstanding = missing - resolved;
+                    const outstanding = item.outstanding !== undefined ? item.outstanding : (missing - resolved);
                     return (
                       <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-950/20">
                         <td className="p-3 font-bold">{item.poNumber || "-"}</td>
@@ -925,7 +984,18 @@ function ProcurementPageContent() {
                         <td className="p-3 text-right font-black text-rose-500 text-sm">{outstanding}</td>
                         <td className="p-3 text-center">
                           <button
-                            onClick={() => openResolveForm(item)}
+                            onClick={() => {
+                              if (item.isShortageRecord) {
+                                openResolveForm(item);
+                              } else {
+                                const targetPo = item.poObj || purchaseOrders.find((p) => p.id === item.poId);
+                                if (targetPo) {
+                                  openGrnForm(targetPo);
+                                } else {
+                                  openResolveForm(item);
+                                }
+                              }
+                            }}
                             className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded text-[10px] font-bold flex items-center gap-1 mx-auto"
                           >
                             <RotateCcw className="w-3.5 h-3.5" /> Receive Stock
@@ -1649,7 +1719,9 @@ function ProcurementPageContent() {
                     <option value="DRAFT">Draft</option>
                     <option value="SUBMITTED">Submitted</option>
                     <option value="PARTIALLY_RECEIVED">Partially Received</option>
-                    <option value="COMPLETED">Completed</option>
+                    <option value="COMPLETED" disabled={!canMarkCompleted}>
+                      Completed {!canMarkCompleted ? "(Disabled: Stock Not Fully Received)" : ""}
+                    </option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
                 </div>

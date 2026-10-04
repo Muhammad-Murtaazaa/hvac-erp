@@ -293,14 +293,37 @@ export async function POST(req: Request) {
 
       // 2. Recalculate and update PO overall status
       const allPoLines = await tx.pOLineItem.findMany({ where: { poId } });
-      const allPendingLines = await tx.pOPendingItem.findMany({ where: { poId } });
 
-      const allReceived = allPoLines.every((l) => l.quantityReceived >= l.quantityOrdered);
-      const allShortagesResolved = allPendingLines.every((l) => l.isResolved);
+      // Also ensure any unreceived PO lines have an active tracking shortage record
+      for (const poLine of allPoLines) {
+        if (poLine.quantityReceived < poLine.quantityOrdered) {
+          const existingPending = await tx.pOPendingItem.findFirst({
+            where: { poId, productId: poLine.productId, isResolved: false },
+          });
+          if (!existingPending) {
+            await tx.pOPendingItem.create({
+              data: {
+                poId,
+                productId: poLine.productId,
+                quantityMissing: poLine.quantityOrdered - poLine.quantityReceived,
+                quantityResolved: 0,
+                isResolved: false,
+              },
+            });
+          }
+        }
+      }
+
+      const updatedPendingLines = await tx.pOPendingItem.findMany({ where: { poId } });
+      const allReceived = allPoLines.length > 0 && allPoLines.every((l: any) => l.quantityReceived >= l.quantityOrdered);
+      const allShortagesResolved = updatedPendingLines.every((l: any) => l.isResolved);
+      const anyReceived = allPoLines.some((l: any) => l.quantityReceived > 0);
 
       let finalStatus = "PARTIALLY_RECEIVED";
       if (allReceived && allShortagesResolved) {
         finalStatus = "COMPLETED";
+      } else if (!anyReceived) {
+        finalStatus = "APPROVED";
       }
 
       await tx.purchaseOrder.update({

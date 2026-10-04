@@ -43,10 +43,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const meta = parsePoMetadata(po.notes, po);
 
+  let poStatus = po.status || "APPROVED";
+  if (poStatus === "SUBMITTED") poStatus = "APPROVED";
+  const hasUnreceived = (po.lineItems || []).some((l) => (l.quantityReceived || 0) < l.quantityOrdered);
+  const hasAnyReceived = (po.lineItems || []).some((l) => (l.quantityReceived || 0) > 0);
+  if (poStatus === "COMPLETED" && hasUnreceived) {
+    poStatus = hasAnyReceived ? "PARTIALLY_RECEIVED" : "APPROVED";
+  }
+
   return NextResponse.json({
     purchaseOrder: {
       ...po,
-      status: po.status || "SUBMITTED",
+      status: poStatus,
       meta,
     },
   });
@@ -231,8 +239,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         company: poCompany,
       });
 
-      const nextStatus = requestedStatus || po.status;
-
       // Delete existing line items
       await tx.pOLineItem.deleteMany({
         where: { poId: params.id },
@@ -280,6 +286,22 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
           unitCost: cost,
           expectedDeliveryDate: deliveryDate ? new Date(deliveryDate) : new Date(),
         });
+      }
+
+      // Compute actual receipts status
+      const totalOrdered = resolvedLineItems.reduce((acc, l) => acc + (l.quantityOrdered || 0), 0);
+      const totalReceived = resolvedLineItems.reduce((acc, l) => acc + (l.quantityReceived || 0), 0);
+      const allReceived = resolvedLineItems.length > 0 && resolvedLineItems.every((l) => (l.quantityReceived || 0) >= l.quantityOrdered);
+
+      const existingPending = await tx.pOPendingItem.findMany({ where: { poId: params.id } });
+      const allShortagesResolved = existingPending.every((l: any) => l.isResolved);
+
+      let nextStatus = requestedStatus || po.status || "APPROVED";
+      if (nextStatus === "SUBMITTED") nextStatus = "APPROVED";
+
+      // Business Rule: CANNOT mark COMPLETED if items or shortages remain unreceived!
+      if (nextStatus === "COMPLETED" && (!allReceived || !allShortagesResolved)) {
+        nextStatus = totalReceived > 0 ? "PARTIALLY_RECEIVED" : "APPROVED";
       }
 
       // Update PO
