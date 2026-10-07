@@ -575,9 +575,11 @@ function SalesPageContent() {
           extraFields: extraFieldsObj,
         };
       }
+      const prodName = products.find((p) => p.id === l.productId)?.name || "";
+      const desc = String(l.description || "").trim() || prodName;
       return {
         productId: l.productId || null,
-        description: String(l.description || "").trim(),
+        description: desc,
         quantity: l.quantity,
         salesPrice: l.salesPrice,
         unit: lineUnit,
@@ -585,7 +587,7 @@ function SalesPageContent() {
       };
     });
 
-    if (!clientName || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+    if (!clientName || formattedLines.some((l) => (!l.productId && !l.description) || !l.quantity || !l.salesPrice)) {
       toast({ title: "Missing Information", message: "Please enter client details and fill out all item lines.", type: "warning" });
       return;
     }
@@ -715,11 +717,14 @@ function SalesPageContent() {
         }
         const unit = parsedExtra.unit || (l.product && l.product.unit) || "Nos";
         const isCustom = !l.productId;
+        const prodName = l.product?.name || products.find((p: any) => p.id === l.productId)?.name || "";
         return {
           id: l.id,
           productId: l.productId || "",
           customName: isCustom ? (parsedExtra.customName || l.description || "") : "",
-          description: isCustom ? (parsedExtra.scope || (parsedExtra.customName ? l.description?.replace(parsedExtra.customName, "").replace(/^ - /, "") : l.description) || "") : (l.description || ""),
+          description: isCustom
+            ? (parsedExtra.scope || (parsedExtra.customName ? l.description?.replace(parsedExtra.customName, "").replace(/^ - /, "") : l.description) || "")
+            : (l.description || prodName || ""),
           quantity: String(l.quantity || 1),
           salesPrice: String(l.salesPrice || 0),
           unit: unit,
@@ -763,9 +768,11 @@ function SalesPageContent() {
           extraFields: extraFieldsObj,
         };
       }
+      const prodName = products.find((p) => p.id === l.productId)?.name || "";
+      const desc = String(l.description || "").trim() || prodName;
       return {
         productId: l.productId || null,
-        description: String(l.description || "").trim(),
+        description: desc,
         quantity: l.quantity,
         salesPrice: l.salesPrice,
         unit: lineUnit,
@@ -773,7 +780,7 @@ function SalesPageContent() {
       };
     });
 
-    if (!String(editClientName || "").trim() || formattedLines.length === 0 || formattedLines.some((l) => !l.description || !l.quantity || !l.salesPrice)) {
+    if (!String(editClientName || "").trim() || formattedLines.length === 0 || formattedLines.some((l) => (!l.productId && !l.description) || !l.quantity || !l.salesPrice)) {
       setEditInvoiceError("Please enter client details and fill out all item lines with descriptions, quantities and rates.");
       return;
     }

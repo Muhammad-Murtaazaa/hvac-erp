@@ -183,7 +183,7 @@ export async function POST(req: Request) {
 
         lineItemsWithInfo.push({
           productId,
-          description: item.description || null,
+          description: item.description || (productInfo ? productInfo.name : null),
           quantity: qty,
           salesPrice: Math.round(price),
           cogs: lineCogs,

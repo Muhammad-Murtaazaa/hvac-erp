@@ -92,9 +92,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           totalCogs += lineCogs;
         }
 
+        const prodName = item.product ? item.product.name : null;
         lineItemsWithInfo.push({
           productId,
-          description: item.description || null,
+          description: item.description || prodName || null,
           quantity: qty,
           salesPrice: Math.round(price),
           extraFields: item.extraFields,

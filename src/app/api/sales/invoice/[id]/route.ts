@@ -159,7 +159,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
         lineItemsWithInfo.push({
           productId,
-          description: item.description || null,
+          description: item.description || (productInfo ? productInfo.name : null),
           quantity: qty,
           salesPrice: Math.round(price),
           cogs: lineCogs,
