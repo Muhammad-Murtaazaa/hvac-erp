@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import prisma from "./db";
+import prisma, { getPrismaClient, getActiveCompany, CompanyId } from "./db";
 
 const JWT_SECRET = process.env.JWT_SECRET || "hvac-erp-very-secret-jwt-key-2026-08-06";
 
@@ -13,15 +13,17 @@ export interface UserSession {
   };
   permissions: string[];
   isDeveloper?: boolean;
+  company: CompanyId;
+  availableCompanies: CompanyId[];
 }
 
-export function signToken(payload: { id: string; email: string; name: string }) {
+export function signToken(payload: { id: string; email: string; name: string; company?: CompanyId }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
 }
 
-export function verifyToken(token: string): { id: string; email: string; name: string } | null {
+export function verifyToken(token: string): { id: string; email: string; name: string; company?: CompanyId } | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as { id: string; email: string; name: string };
+    return jwt.verify(token, JWT_SECRET) as { id: string; email: string; name: string; company?: CompanyId };
   } catch (error) {
     return null;
   }
@@ -59,7 +61,11 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
     const decoded = verifyToken(token);
     if (!decoded) return null;
 
-    const user = await prisma.user.findUnique({
+    // Resolve active company from request context
+    const activeCompany = getActiveCompany(req);
+    const db = getPrismaClient(activeCompany);
+
+    let user = await db.user.findUnique({
       where: { id: decoded.id },
       include: {
         role: {
@@ -74,9 +80,40 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
       },
     });
 
+    // Fallback: If user ID in token was generated in the other database, look up by unique email
+    if (!user && decoded.email) {
+      user = await db.user.findUnique({
+        where: { email: decoded.email },
+        include: {
+          role: {
+            include: {
+              permissions: {
+                include: {
+                  permission: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
     if (!user || !user.isActive) return null;
 
     const permissions = user.role.permissions.map((rp) => rp.permission.name);
+
+    // Check which companies this user has access to
+    const otherCompany: CompanyId = activeCompany === "TCE" ? "TECAIR" : "TCE";
+    const otherDb = getPrismaClient(otherCompany);
+    const otherUser = await otherDb.user.findFirst({
+      where: { email: user.email, isActive: true },
+      select: { id: true },
+    });
+
+    const availableCompanies: CompanyId[] = [activeCompany];
+    if (otherUser) {
+      availableCompanies.push(otherCompany);
+    }
 
     const session: UserSession = {
       id: user.id,
@@ -87,6 +124,8 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
         name: user.role.name,
       },
       permissions,
+      company: activeCompany,
+      availableCompanies,
     };
     session.isDeveloper = isDeveloper(session);
 
@@ -96,6 +135,7 @@ export async function getCurrentUser(req: Request): Promise<UserSession | null> 
     return null;
   }
 }
+
 
 export function isSuperAdmin(session: UserSession | null): boolean {
   if (!session) return false;

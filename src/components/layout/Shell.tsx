@@ -41,7 +41,11 @@ import {
   FileText,
   Terminal,
   ShieldAlert,
+  Check,
+  RefreshCw,
+  Building2,
 } from "lucide-react";
+
 import { ToastProvider } from "@/components/shared/ToastProvider";
 import SpeedDialFAB from "@/components/shared/SpeedDialFAB";
 import MobileBottomNav from "@/components/shared/MobileBottomNav";
@@ -164,6 +168,73 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  // Multi-Company workspace state
+  const [activeCompany, setActiveCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [companySwitcherOpen, setCompanySwitcherOpen] = useState(false);
+  const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
+  const [availableCompanies, setAvailableCompanies] = useState<string[]>(["TCE", "TECAIR"]);
+
+  // Install global fetch interceptor to guarantee x-company-id header on every client API call
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const originalFetch = window.fetch;
+    window.fetch = async function (input, init) {
+      const activeCo = localStorage.getItem("active_company") || "TCE";
+      init = init || {};
+      const headers = new Headers(init.headers || {});
+      if (!headers.has("x-company-id")) {
+        headers.set("x-company-id", activeCo);
+      }
+      init.headers = headers;
+      return originalFetch(input, init);
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  // Sync active company from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("active_company");
+      if (saved === "TECAIR" || saved === "TCE") {
+        setActiveCompany(saved as "TCE" | "TECAIR");
+      }
+    }
+  }, []);
+
+  const switchCompany = async (targetCo: "TCE" | "TECAIR") => {
+    if (targetCo === activeCompany) {
+      setCompanySwitcherOpen(false);
+      return;
+    }
+    setSwitchingWorkspace(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/auth/switch-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ company: targetCo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to switch to ${targetCo}`);
+      }
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("active_company", targetCo);
+      document.cookie = `active_company=${targetCo}; path=/; max-age=2592000; SameSite=Lax`;
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "Failed to switch organization");
+    } finally {
+      setSwitchingWorkspace(false);
+      setCompanySwitcherOpen(false);
+    }
+  };
 
   // Collapsible Accordion Groups state
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -321,6 +392,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
         const data = await res.json();
         setCurrentUser(data.user);
+        if (data.activeCompany) {
+          setActiveCompany(data.activeCompany);
+          localStorage.setItem("active_company", data.activeCompany);
+        }
+        if (data.availableCompanies) {
+          setAvailableCompanies(data.availableCompanies);
+        }
       } catch (err) {
         console.error("Auth verification failed", err);
         localStorage.removeItem("token");
@@ -448,9 +526,34 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col h-full overflow-hidden">
           {/* Sidebar Brand header */}
           <div className="h-20 flex items-center justify-center px-4 border-b border-slate-100 dark:border-slate-800/80 relative flex-shrink-0">
-            {!collapsed ? (
-              <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
-                <img src="/logo.png" alt="TCE Logo" className="h-14 w-auto object-contain" />
+            {activeCompany === "TECAIR" ? (
+              !collapsed ? (
+                <div className="flex items-center gap-2.5 h-16 w-full animate-fadeIn justify-center">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-teal-500/20">
+                    TEC
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white leading-tight">
+                      TECAIR
+                    </span>
+                    <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-widest">
+                      ERP Workspace
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-xs shadow-md shadow-teal-500/20">
+                    TEC
+                  </div>
+                </div>
+              )
+            ) : !collapsed ? (
+              <div className="flex flex-col items-center justify-center h-16 w-full animate-fadeIn">
+                <img src="/logo.png" alt="TCE Logo" className="h-12 w-auto object-contain" />
+                <span className="text-[8px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mt-0.5">
+                  TCE Operations
+                </span>
               </div>
             ) : (
               <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
@@ -752,6 +855,88 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
           {/* Right actions panel */}
           <div className="flex items-center gap-3">
+            {/* Organization / Company Workspace Switcher */}
+            <div className="relative">
+              <button
+                onClick={() => setCompanySwitcherOpen(!companySwitcherOpen)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  activeCompany === "TECAIR"
+                    ? "bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 hover:bg-teal-100/70"
+                    : "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700 hover:bg-blue-100/70"
+                }`}
+                title="Switch Active Organization Workspace"
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    activeCompany === "TECAIR" ? "bg-teal-500 animate-pulse" : "bg-blue-600 animate-pulse"
+                  }`}
+                />
+                <span className="hidden md:inline font-mono text-[10px] uppercase tracking-wider text-slate-400">Workspace:</span>
+                <span className="font-extrabold">{activeCompany}</span>
+                <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+              </button>
+
+              {companySwitcherOpen && (
+                <div className="absolute right-0 top-11 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-fadeIn">
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/60 mb-1">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Workspace</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">100% database & ledger segregation</p>
+                  </div>
+
+                  {/* Option 1: TCE */}
+                  <button
+                    onClick={() => switchCompany("TCE")}
+                    disabled={switchingWorkspace}
+                    className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all ${
+                      activeCompany === "TCE"
+                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 font-bold"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                        TCE
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold leading-tight">Technicool (TCE)</p>
+                        <p className="text-[10px] text-slate-500">Primary HVAC Enterprise</p>
+                      </div>
+                    </div>
+                    {activeCompany === "TCE" && <Check className="w-4 h-4 text-blue-600" />}
+                  </button>
+
+                  {/* Option 2: TECAIR */}
+                  <button
+                    onClick={() => switchCompany("TECAIR")}
+                    disabled={switchingWorkspace}
+                    className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all mt-1 ${
+                      activeCompany === "TECAIR"
+                        ? "bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 font-bold"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-xs">
+                        TEC
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold leading-tight">TECAIR Systems</p>
+                        <p className="text-[10px] text-slate-500">Dedicated Clean DB</p>
+                      </div>
+                    </div>
+                    {activeCompany === "TECAIR" && <Check className="w-4 h-4 text-teal-600" />}
+                  </button>
+
+                  {switchingWorkspace && (
+                    <div className="px-3 py-2 text-center text-xs text-blue-600 flex items-center justify-center gap-2 mt-1 border-t border-slate-100 dark:border-slate-800">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Switching workspace...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Gradient Ask Copilot shortcut */}
             {pathname !== "/copilot" && (
               <button

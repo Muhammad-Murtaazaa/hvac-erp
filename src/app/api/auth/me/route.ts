@@ -8,5 +8,9 @@ export async function GET(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return NextResponse.json({ user: session });
+  return NextResponse.json({
+    user: session,
+    activeCompany: session.company,
+    availableCompanies: session.availableCompanies,
+  });
 }

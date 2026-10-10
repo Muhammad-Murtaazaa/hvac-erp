@@ -35,6 +35,15 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
 
+  // Company selection states
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR">("TCE");
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [availableCompanies, setAvailableCompanies] = useState<
+    { id: "TCE" | "TECAIR"; name: string; role: string }[]
+  >([]);
+  const [pendingAuthData, setPendingAuthData] = useState<any>(null);
+  const [switchingCompany, setSwitchingCompany] = useState(false);
+
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,6 +60,12 @@ export default function LoginPage() {
         return;
       }
 
+      // Sync saved company preference
+      const savedCompany = localStorage.getItem("active_company");
+      if (savedCompany === "TECAIR" || savedCompany === "TCE") {
+        setSelectedCompany(savedCompany as "TCE" | "TECAIR");
+      }
+
       // Check for saved remember me preferences
       const savedEmail = localStorage.getItem("tce_remember_email");
       const savedRemember = localStorage.getItem("tce_remember_me");
@@ -60,6 +75,49 @@ export default function LoginPage() {
       }
     }
   }, [router]);
+
+
+  const handleSelectCompany = async (companyId: "TCE" | "TECAIR") => {
+    if (!pendingAuthData) return;
+    setSwitchingCompany(true);
+    try {
+      const res = await fetch("/api/auth/switch-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pendingAuthData.token}`,
+        },
+        body: JSON.stringify({ company: companyId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to activate ${companyId} workspace`);
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("active_company", companyId);
+        document.cookie = `active_company=${companyId}; path=/; max-age=2592000; SameSite=Lax`;
+
+        const isDev = Boolean(
+          data.user?.isDeveloper ||
+          data.user?.email?.toLowerCase() === "muhammad.murtaazaa@gmail.com"
+        );
+
+        if (isDev) {
+          router.push("/dev");
+        } else {
+          router.push("/dashboard");
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+      setShowCompanyPicker(false);
+    } finally {
+      setSwitchingCompany(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +129,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, company: selectedCompany }),
       });
 
       const data = await res.json();
@@ -101,6 +159,16 @@ export default function LoginPage() {
         }
 
         localStorage.setItem("token", data.token);
+        localStorage.setItem("active_company", data.activeCompany || "TCE");
+        document.cookie = `active_company=${data.activeCompany || "TCE"}; path=/; max-age=2592000; SameSite=Lax`;
+      }
+
+      // If user has access to multiple companies and selection is required, display Company Picker Interstitial
+      if (data.requiresCompanySelection && data.availableCompanies && data.availableCompanies.length > 1) {
+        setPendingAuthData(data);
+        setAvailableCompanies(data.availableCompanies);
+        setShowCompanyPicker(true);
+        return;
       }
 
       if (isDev) {
@@ -114,6 +182,7 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
 
   // Step 1: Request 6-digit OTP code to email
   const handleRequestOtp = async (e: React.FormEvent) => {
@@ -215,7 +284,13 @@ export default function LoginPage() {
       <div className="w-full max-w-5xl bg-white rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.6),0_0_50px_rgba(59,130,246,0.12)] overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[580px] relative z-10 border border-white/40">
         
         {/* LEFT COLUMN: Modern Branded Artwork */}
-        <div className="lg:col-span-6 bg-gradient-to-br from-blue-700 via-indigo-800 to-slate-950 p-8 sm:p-12 text-white flex flex-col justify-between relative overflow-hidden">
+        <div
+          className={`lg:col-span-6 p-8 sm:p-12 text-white flex flex-col justify-between relative overflow-hidden transition-all duration-500 ${
+            selectedCompany === "TECAIR"
+              ? "bg-gradient-to-br from-teal-800 via-cyan-900 to-slate-950"
+              : "bg-gradient-to-br from-blue-700 via-indigo-800 to-slate-950"
+          }`}
+        >
           <div className="absolute inset-0 opacity-10 pointer-events-none">
             <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
               <path d="M 100 0 Q 300 200 100 400 T 100 800" fill="none" stroke="white" strokeWidth="1.5" />
@@ -228,17 +303,19 @@ export default function LoginPage() {
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold tracking-wider uppercase text-blue-200">
               <Sparkles className="w-3.5 h-3.5 text-blue-300" />
-              <span>Enterprise Operations</span>
+              <span>{selectedCompany === "TECAIR" ? "TECAIR Systems Workspace" : "Enterprise Operations"}</span>
             </div>
           </div>
 
           {/* Center Hero */}
           <div className="my-auto py-8 relative z-10">
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight text-white mb-3">
-              Welcome back!
+              {selectedCompany === "TECAIR" ? "TECAIR Systems" : "Welcome back!"}
             </h1>
             <p className="text-blue-100/80 text-sm leading-relaxed max-w-sm">
-              Log in with your credentials to access your Technicool Engineering unified management console.
+              {selectedCompany === "TECAIR"
+                ? "Sign in to access your dedicated TECAIR ERP platform with 100% database & accounting segregation."
+                : "Log in with your credentials to access your Technicool Engineering unified management console."}
             </p>
           </div>
 
@@ -248,7 +325,7 @@ export default function LoginPage() {
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>TLS 256-bit Encrypted Session</span>
             </div>
-            <span>Technicool Engineering</span>
+            <span>{selectedCompany === "TECAIR" ? "TECAIR Systems (Pvt) Ltd" : "Technicool Engineering"}</span>
           </div>
         </div>
 
@@ -256,15 +333,65 @@ export default function LoginPage() {
         <div className="lg:col-span-6 p-8 sm:p-12 flex flex-col justify-between bg-white relative">
           
           <div>
-            {/* Enlarged Logo Container with Elevated White Background */}
-            <div className="mb-6 flex items-center justify-start">
-              <div className="bg-white px-6 py-3.5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.06)] inline-flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Technicool Engineering Logo"
-                  className="h-12 w-auto object-contain drop-shadow-sm max-w-[200px]"
-                />
+            {/* Prominent Company Workspace Switcher */}
+            <div className="mb-6">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                Select Company Workspace:
+              </label>
+              <div className="grid grid-cols-2 p-1.5 bg-slate-100 rounded-2xl border border-slate-200/80 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCompany("TCE")}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedCompany === "TCE"
+                      ? "bg-white text-blue-700 shadow-md shadow-blue-500/10 border border-slate-200"
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-200/40"
+                  }`}
+                >
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedCompany === "TCE" ? "bg-blue-600 animate-pulse" : "bg-slate-300"}`} />
+                  <span>🏢 TCE (Technicool)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedCompany("TECAIR")}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    selectedCompany === "TECAIR"
+                      ? "bg-white text-teal-700 shadow-md shadow-teal-500/10 border border-slate-200"
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-200/40"
+                  }`}
+                >
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedCompany === "TECAIR" ? "bg-teal-500 animate-pulse" : "bg-slate-300"}`} />
+                  <span>❄️ TECAIR Systems</span>
+                </button>
               </div>
+            </div>
+
+            {/* Enlarged Logo Container with Dynamic Branding */}
+            <div className="mb-6 flex items-center justify-start">
+              {selectedCompany === "TECAIR" ? (
+                <div className="bg-teal-50/80 px-5 py-3 rounded-2xl border border-teal-200 shadow-sm inline-flex items-center gap-3 animate-fadeIn">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-teal-500/20">
+                    TEC
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-base tracking-tight text-teal-950 leading-tight">
+                      TECAIR SYSTEMS
+                    </span>
+                    <span className="text-[9px] font-bold text-teal-600 uppercase tracking-widest">
+                      Dedicated ERP Workspace
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white px-6 py-3.5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.06)] inline-flex items-center justify-center animate-fadeIn">
+                  <img
+                    src="/logo.png"
+                    alt="Technicool Engineering Logo"
+                    className="h-12 w-auto object-contain drop-shadow-sm max-w-[200px]"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Header Titles */}
@@ -274,6 +401,8 @@ export default function LoginPage() {
                   ? otpStep === 1
                     ? "Reset Your Password"
                     : "Enter Verification Code"
+                  : selectedCompany === "TECAIR"
+                  ? "Sign in to TECAIR ERP"
                   : "Sign in to TCE ERP"}
               </h2>
               <p className="text-xs text-slate-500 mt-1">
@@ -281,9 +410,12 @@ export default function LoginPage() {
                   ? otpStep === 1
                     ? "Enter your account email to receive a 6-digit OTP verification code."
                     : `Enter the 6-digit code sent to ${resetEmail} and your new password.`
+                  : selectedCompany === "TECAIR"
+                  ? "Enter your credentials to access the TECAIR database & operations."
                   : "Please enter your enterprise credentials to continue"}
               </p>
             </div>
+
 
             {/* Error Alert Box */}
             {error && (
@@ -561,8 +693,120 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-
       </div>
+
+      {/* Company Picker Interstitial Modal */}
+      {showCompanyPicker && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden relative p-6 sm:p-8">
+            <div className="text-center max-w-md mx-auto mb-8">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 mb-4 border border-blue-100 shadow-sm">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                Select Active Organization
+              </h2>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                Your credentials are authorized for multiple enterprise entities. Choose which company workspace you want to load:
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              {/* Option 1: TCE */}
+              <button
+                type="button"
+                disabled={switchingCompany}
+                onClick={() => handleSelectCompany("TCE")}
+                className="group relative text-left p-5 rounded-2xl border-2 border-slate-200 hover:border-blue-600 bg-white hover:bg-blue-50/30 transition-all hover:shadow-xl hover:shadow-blue-500/10 cursor-pointer flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                      Primary
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400 group-hover:text-blue-600">
+                      TCE
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 flex items-center gap-1.5">
+                    🏢 Technicool (TCE)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Primary HVAC enterprise operations, commercial contracting, and service ledger.
+                  </p>
+                  {availableCompanies.find((c) => c.id === "TCE")?.role && (
+                    <div className="mt-3 inline-block text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                      Role: <strong className="text-slate-800">{availableCompanies.find((c) => c.id === "TCE")?.role}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-600">
+                  <span>Open TCE ERP</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+
+              {/* Option 2: TECAIR */}
+              <button
+                type="button"
+                disabled={switchingCompany}
+                onClick={() => handleSelectCompany("TECAIR")}
+                className="group relative text-left p-5 rounded-2xl border-2 border-slate-200 hover:border-teal-600 bg-white hover:bg-teal-50/30 transition-all hover:shadow-xl hover:shadow-teal-500/10 cursor-pointer flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                      Dedicated
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400 group-hover:text-teal-600">
+                      TECAIR
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-teal-600 flex items-center gap-1.5">
+                    ❄️ TECAIR Systems
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Separate operating database with 100% data and accounting isolation.
+                  </p>
+                  {availableCompanies.find((c) => c.id === "TECAIR")?.role && (
+                    <div className="mt-3 inline-block text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                      Role: <strong className="text-slate-800">{availableCompanies.find((c) => c.id === "TECAIR")?.role}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-teal-600">
+                  <span>Open TECAIR ERP</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            </div>
+
+            {switchingCompany && (
+              <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-slate-600 mb-3 animate-pulse">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                <span>Initializing organization database connection...</span>
+              </div>
+            )}
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompanyPicker(false);
+                  setPendingAuthData(null);
+                  localStorage.removeItem("token");
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors font-medium"
+              >
+                Cancel and return to login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

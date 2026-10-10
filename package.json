@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:isolation": "node scripts/run_audit.js",
+    "test:smoke": "node scripts/run_deep_smoke.js",
+    "test:multi-company": "node scripts/run_audit.js && node scripts/run_deep_smoke.js"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.14",
