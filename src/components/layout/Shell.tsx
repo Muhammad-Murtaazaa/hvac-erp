@@ -528,24 +528,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="h-20 flex items-center justify-center px-4 border-b border-slate-100 dark:border-slate-800/80 relative flex-shrink-0">
             {activeCompany === "TECAIR" ? (
               !collapsed ? (
-                <div className="flex items-center gap-2.5 h-16 w-full animate-fadeIn justify-center">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-teal-500/20">
-                    TEC
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white leading-tight">
-                      TECAIR
-                    </span>
-                    <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-widest">
-                      ERP Workspace
-                    </span>
-                  </div>
+                <div className="flex flex-col items-center justify-center h-16 w-full animate-fadeIn px-2">
+                  <img src="/tecair-logo.png" alt="TECAIR Logo" className="h-10 w-auto object-contain max-w-[170px]" />
+                  <span className="text-[8px] font-extrabold text-teal-600 dark:text-teal-400 uppercase tracking-widest mt-0.5">
+                    TECAIR SYSTEMS
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-16 w-full animate-fadeIn">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-xs shadow-md shadow-teal-500/20">
-                    TEC
-                  </div>
+                  <img src="/tecair-logo.png" alt="TECAIR Logo" className="h-8 w-auto object-contain" />
                 </div>
               )
             ) : !collapsed ? (
@@ -578,6 +569,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               {filteredPinnedItems.map((item) => {
                 const active = isItemActive(item.href);
                 const Icon = item.icon;
+                const isTecair = activeCompany === "TECAIR";
 
                 return (
                   <button
@@ -587,9 +579,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                       router.push(item.href);
                     }}
                     title={collapsed ? item.name : undefined}
-                    className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                    className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 ${
+                      isTecair ? "focus-visible:ring-teal-500/50" : "focus-visible:ring-blue-500/50"
+                    } ${
                       active
-                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-bold"
+                        ? isTecair
+                          ? "bg-teal-600 text-white shadow-md shadow-teal-500/25 font-bold"
+                          : "bg-blue-600 text-white shadow-md shadow-blue-500/20 font-bold"
                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
                     } ${collapsed ? "justify-center p-3" : "gap-3 px-3 py-2.5"}`}
                   >
@@ -611,6 +607,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
                 const isOpen = !!openGroups[group.id];
                 const hasActiveItem = visibleItems.some((item) => isItemActive(item.href));
+                const isTecair = activeCompany === "TECAIR";
 
                 return (
                   <div key={group.id} className="space-y-1">
@@ -622,7 +619,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                         className="w-full flex items-center justify-between px-2.5 py-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer focus:outline-none"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className={`w-1.5 h-1.5 rounded-full ${hasActiveItem ? "bg-blue-500" : "bg-transparent"}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${hasActiveItem ? (isTecair ? "bg-teal-500" : "bg-blue-500") : "bg-transparent"}`} />
                           <span className="text-[11px] font-bold tracking-wider uppercase text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 truncate">
                             {group.title}
                           </span>
@@ -650,9 +647,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                                 router.push(item.href);
                               }}
                               title={collapsed ? item.name : undefined}
-                              className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                              className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 ${
+                                isTecair ? "focus-visible:ring-teal-500/50" : "focus-visible:ring-blue-500/50"
+                              } ${
                                 active
-                                  ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 font-bold"
+                                  ? isTecair
+                                    ? "bg-teal-600 text-white shadow-sm shadow-teal-500/25 font-bold"
+                                    : "bg-blue-600 text-white shadow-sm shadow-blue-500/20 font-bold"
                                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
                               } ${collapsed ? "justify-center p-2.5" : "gap-2.5 px-2.5 py-1.5"}`}
                             >
@@ -698,6 +699,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Main viewport */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Company Visual Differentiation Top Stripe */}
+        <div
+          className={`h-1 w-full shrink-0 transition-all duration-300 ${
+            activeCompany === "TECAIR"
+              ? "bg-gradient-to-r from-teal-500 via-cyan-500 to-emerald-400"
+              : "bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-400"
+          }`}
+        />
+
         {/* Top Navbar */}
         <header className="h-16 flex items-center justify-between px-6 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800/80 z-30">
           <div className="flex items-center gap-4">
@@ -717,12 +727,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {/* Universal Search Bar */}
             <div className="relative hidden md:block w-full">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <Search
+                  className={`absolute left-3 top-2.5 w-4 h-4 ${
+                    activeCompany === "TECAIR" ? "text-teal-500" : "text-slate-400"
+                  }`}
+                />
                 <input
                   id="universal-search-input"
                   type="text"
                   placeholder="Search database or pages..."
-                  className="w-full pl-9 pr-16 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold text-slate-800 dark:text-slate-100 transition-all"
+                  className={`w-full pl-9 pr-16 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-2 font-semibold text-slate-800 dark:text-slate-100 transition-all ${
+                    activeCompany === "TECAIR" ? "focus:ring-teal-500" : "focus:ring-blue-500"
+                  }`}
                   value={universalSearch}
                   onFocus={() => setShowDropdown(true)}
                   onBlur={() => setTimeout(() => setShowDropdown(false), 200)}

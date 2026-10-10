@@ -53,7 +53,13 @@ export default function POPdfPage() {
 
   const [po, setPo] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">(() => {
+    if (typeof window !== "undefined") {
+      const active = localStorage.getItem("active_company");
+      if (active === "TECAIR") return "TECAIR";
+    }
+    return "TCE";
+  });
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -78,8 +84,12 @@ export default function POPdfPage() {
         setPo(data.purchaseOrder);
         if (data.purchaseOrder) {
           const m = data.purchaseOrder.meta || parsePoMetadata(data.purchaseOrder.notes, data.purchaseOrder);
+          const activeCo = localStorage.getItem("active_company") || "TCE";
+          const defaultCo = activeCo === "TECAIR" ? "TECAIR" : "TCE";
           if (m.company === "TECAIR" || m.company === "TCE" || m.company === "MTS" || m.company === "GREEN_LEAVES" || m.company === "GREEN LEAVES") {
             setSelectedCompany((m.company === "GREEN LEAVES" || m.company === "GREEN_LEAVES") ? "GREEN_LEAVES" : m.company);
+          } else {
+            setSelectedCompany(defaultCo);
           }
           document.title = buildPdfFileName({
             docType: "PO",

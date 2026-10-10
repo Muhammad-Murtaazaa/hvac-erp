@@ -15,7 +15,13 @@ export default function DeliveryOrderPdfPage() {
   const doId = params.id as string;
 
   const [doRecord, setDoRecord] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">(() => {
+    if (typeof window !== "undefined") {
+      const active = localStorage.getItem("active_company");
+      if (active === "TECAIR") return "TECAIR";
+    }
+    return "TCE";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
@@ -33,6 +39,8 @@ export default function DeliveryOrderPdfPage() {
         setDoRecord(data.deliveryOrder);
         if (data.deliveryOrder) {
           const doMeta = parseDoMetadata(data.deliveryOrder.notes, data.deliveryOrder);
+          const activeCo = localStorage.getItem("active_company") || "TCE";
+          const defaultCo = activeCo === "TECAIR" ? "TECAIR" : "TCE";
           const initialCompany: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
             ((data.deliveryOrder as any).company === "GREEN_LEAVES" || doMeta.company === "GREEN_LEAVES")
               ? "GREEN_LEAVES"
@@ -40,7 +48,7 @@ export default function DeliveryOrderPdfPage() {
               ? "TECAIR"
               : ((data.deliveryOrder as any).company === "MTS" || doMeta.company === "MTS")
               ? "MTS"
-              : "TCE";
+              : defaultCo;
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({

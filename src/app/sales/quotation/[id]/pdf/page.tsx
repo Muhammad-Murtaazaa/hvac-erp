@@ -36,7 +36,13 @@ export default function QuotationPdfPage() {
   const quotationId = params.id as string;
 
   const [quotation, setQuotation] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">(() => {
+    if (typeof window !== "undefined") {
+      const active = localStorage.getItem("active_company");
+      if (active === "TECAIR") return "TECAIR";
+    }
+    return "TCE";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -52,6 +58,8 @@ export default function QuotationPdfPage() {
         setQuotation(data.quotation);
         if (data.quotation) {
           const meta = parseInvoiceMetadata(data.quotation.notes, data.quotation);
+          const activeCo = localStorage.getItem("active_company") || "TCE";
+          const defaultCo = activeCo === "TECAIR" ? "TECAIR" : "TCE";
           const initialCompany: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
             ((data.quotation as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES")
               ? "GREEN_LEAVES"
@@ -59,7 +67,7 @@ export default function QuotationPdfPage() {
               ? "TECAIR"
               : ((data.quotation as any).company === "MTS" || meta.company === "MTS")
               ? "MTS"
-              : "TCE";
+              : defaultCo;
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({

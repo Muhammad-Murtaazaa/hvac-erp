@@ -370,18 +370,12 @@ export default function LoginPage() {
             {/* Enlarged Logo Container with Dynamic Branding */}
             <div className="mb-6 flex items-center justify-start">
               {selectedCompany === "TECAIR" ? (
-                <div className="bg-teal-50/80 px-5 py-3 rounded-2xl border border-teal-200 shadow-sm inline-flex items-center gap-3 animate-fadeIn">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-cyan-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-teal-500/20">
-                    TEC
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="font-extrabold text-base tracking-tight text-teal-950 leading-tight">
-                      TECAIR SYSTEMS
-                    </span>
-                    <span className="text-[9px] font-bold text-teal-600 uppercase tracking-widest">
-                      Dedicated ERP Workspace
-                    </span>
-                  </div>
+                <div className="bg-white px-6 py-3.5 rounded-2xl border border-teal-200/80 shadow-[0_4px_20px_rgba(20,184,166,0.12)] inline-flex items-center justify-center animate-fadeIn">
+                  <img
+                    src="/tecair-logo.png"
+                    alt="TECAIR Systems Logo"
+                    className="h-12 w-auto object-contain drop-shadow-sm max-w-[220px]"
+                  />
                 </div>
               ) : (
                 <div className="bg-white px-6 py-3.5 rounded-2xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.06)] inline-flex items-center justify-center animate-fadeIn">
@@ -483,7 +477,11 @@ export default function LoginPage() {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      className={`w-4 h-4 rounded border-slate-300 cursor-pointer ${
+                        selectedCompany === "TECAIR"
+                          ? "text-teal-600 focus:ring-teal-500"
+                          : "text-blue-600 focus:ring-blue-500"
+                      }`}
                     />
                     <span>Remember me</span>
                   </label>
@@ -497,7 +495,11 @@ export default function LoginPage() {
                       setError("");
                       setSuccessMessage("");
                     }}
-                    className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors"
+                    className={`font-medium hover:underline transition-colors ${
+                      selectedCompany === "TECAIR"
+                        ? "text-teal-600 hover:text-teal-700"
+                        : "text-blue-600 hover:text-blue-700"
+                    }`}
                   >
                     Forgot password?
                   </button>
@@ -507,7 +509,11 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60 text-white py-3.5 rounded-full text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 transition-all transform active:scale-[0.99] cursor-pointer"
+                  className={`w-full mt-3 disabled:opacity-60 text-white py-3.5 rounded-full text-sm font-bold flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] cursor-pointer ${
+                    selectedCompany === "TECAIR"
+                      ? "bg-gradient-to-r from-teal-600 via-teal-700 to-cyan-700 hover:from-teal-700 hover:to-cyan-800 shadow-lg shadow-teal-600/25 hover:shadow-teal-600/40"
+                      : "bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40"
+                  }`}
                 >
                   {loading ? (
                     <>

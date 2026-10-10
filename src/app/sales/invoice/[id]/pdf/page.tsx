@@ -36,7 +36,13 @@ export default function InvoicePdfPage() {
   const invoiceId = params.id as string;
 
   const [invoice, setInvoice] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+  const [selectedCompany, setSelectedCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">(() => {
+    if (typeof window !== "undefined") {
+      const active = localStorage.getItem("active_company");
+      if (active === "TECAIR") return "TECAIR";
+    }
+    return "TCE";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -52,6 +58,8 @@ export default function InvoicePdfPage() {
         setInvoice(data.invoice);
         if (data.invoice) {
           const meta = parseInvoiceMetadata(data.invoice.notes, data.invoice);
+          const activeCo = localStorage.getItem("active_company") || "TCE";
+          const defaultCo = activeCo === "TECAIR" ? "TECAIR" : "TCE";
           const initialCompany: "TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES" =
             ((data.invoice as any).company === "GREEN_LEAVES" || meta.company === "GREEN_LEAVES")
               ? "GREEN_LEAVES"
@@ -59,7 +67,7 @@ export default function InvoicePdfPage() {
               ? "TECAIR"
               : ((data.invoice as any).company === "MTS" || meta.company === "MTS")
               ? "MTS"
-              : "TCE";
+              : defaultCo;
           setSelectedCompany(initialCompany);
 
           document.title = buildPdfFileName({
