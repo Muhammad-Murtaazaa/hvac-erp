@@ -98,8 +98,23 @@ function ProcurementPageContent() {
   const [editVendorPaymentTerms, setEditVendorPaymentTerms] = useState("Net 30 Days");
   const [updatingVendor, setUpdatingVendor] = useState(false);
 
+  // Active Company / Workspace context
+  const [activeWorkspace, setActiveWorkspace] = useState<"TCE" | "TECAIR">("TCE");
+
   // New PO state
   const [newPoCompany, setNewPoCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("active_company");
+      if (saved === "TECAIR") {
+        setActiveWorkspace("TECAIR");
+        setNewPoCompany("TECAIR");
+        setEditPoCompany("TECAIR");
+        setPoNotes(() => getDefaultPoTerms("TECAIR"));
+      }
+    }
+  }, []);
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newPoVendor, setNewPoVendor] = useState("");
   const [newPoDate, setNewPoDate] = useState(new Date().toISOString().split("T")[0]);
@@ -1172,20 +1187,22 @@ function ProcurementPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for Purchase Order print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewPoCompany("TCE");
-                      setPoNotes((prev) => updateTermsCompany(prev, "TCE"));
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      newPoCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewPoCompany("TCE");
+                        setPoNotes((prev) => updateTermsCompany(prev, "TCE"));
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        newPoCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1608,20 +1625,22 @@ function ProcurementPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for Purchase Order print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditPoCompany("TCE");
-                      setEditPoNotes((prev) => updateTermsCompany(prev, "TCE"));
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      editPoCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditPoCompany("TCE");
+                        setEditPoNotes((prev) => updateTermsCompany(prev, "TCE"));
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        editPoCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

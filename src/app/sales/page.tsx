@@ -124,8 +124,26 @@ function SalesPageContent() {
   // Sales Tax & Pricing Setup states
   const [salesTaxRate, setSalesTaxRate] = useState(18);
 
+  // Active Company / Workspace context
+  const [activeWorkspace, setActiveWorkspace] = useState<"TCE" | "TECAIR">("TCE");
+
   // Standalone Invoice State
   const [invoiceCompany, setInvoiceCompany] = useState<"TCE" | "TECAIR" | "MTS" | "GREEN_LEAVES">("TCE");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("active_company");
+      if (saved === "TECAIR") {
+        setActiveWorkspace("TECAIR");
+        setInvoiceCompany("TECAIR");
+        setEditInvoiceCompany("TECAIR");
+        setQuoCompany("TECAIR");
+        setEditQuoCompany("TECAIR");
+        setDoCompany("TECAIR");
+        setEditDoCompany("TECAIR");
+      }
+    }
+  }, []);
   const [clientName, setClientName] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(getLocalDateString());
   const [isGst, setIsGst] = useState(true);
@@ -2679,17 +2697,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for print, preview & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setInvoiceCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      invoiceCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        invoiceCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setInvoiceCompany("TECAIR")}
@@ -3417,17 +3437,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for print, preview & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setEditInvoiceCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      editInvoiceCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setEditInvoiceCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        editInvoiceCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setEditInvoiceCompany("TECAIR")}
@@ -4165,17 +4187,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for quotation print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setQuoCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      quoCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setQuoCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        quoCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setQuoCompany("TECAIR")}
@@ -4643,17 +4667,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for quotation print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setEditQuoCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      editQuoCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setEditQuoCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        editQuoCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setEditQuoCompany("TECAIR")}
@@ -5144,17 +5170,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for Delivery Challan print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setDoCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      doCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setDoCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        doCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setDoCompany("TECAIR")}
@@ -5511,17 +5539,19 @@ function SalesPageContent() {
                   <span className="text-[11px] text-slate-500 block">Choose official branding for Delivery Challan print & PDF export</span>
                 </div>
                 <div className="inline-flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setEditDoCompany("TCE")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      editDoCompany === "TCE"
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    🏢 TCE (Technicool)
-                  </button>
+                  {activeWorkspace !== "TECAIR" && (
+                    <button
+                      type="button"
+                      onClick={() => setEditDoCompany("TCE")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        editDoCompany === "TCE"
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      🏢 TCE (Technicool)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setEditDoCompany("TECAIR")}

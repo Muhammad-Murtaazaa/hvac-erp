@@ -45,6 +45,13 @@ export default function InvoicePdfPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeWorkspace, setActiveWorkspace] = useState<string>("TCE");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setActiveWorkspace(localStorage.getItem("active_company") || "TCE");
+    }
+  }, []);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -170,17 +177,19 @@ export default function InvoicePdfPage() {
         {/* Company Letterhead Switcher */}
         <div className="flex items-center bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm gap-1">
           <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-2">Letterhead:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedCompany("TCE")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              selectedCompany === "TCE"
-                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
-            }`}
-          >
-            🏢 TCE
-          </button>
+          {activeWorkspace !== "TECAIR" && (
+            <button
+              type="button"
+              onClick={() => setSelectedCompany("TCE")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                selectedCompany === "TCE"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+              }`}
+            >
+              🏢 TCE
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSelectedCompany("TECAIR")}
