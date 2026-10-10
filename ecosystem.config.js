@@ -2,11 +2,11 @@ module.exports = {
   apps: [
     {
       name: "hvac-erp",
-      script: "node_modules/next/dist/bin/next",
-      args: "start -p 3000",
+      script: "npm",
+      args: "start",
       cwd: "./",
-      instances: "max", // or 1-2 based on VPS CPU cores
-      exec_mode: "cluster",
+      instances: 1,
+      exec_mode: "fork",
       autorestart: true,
       watch: false,
       max_memory_restart: "1G",

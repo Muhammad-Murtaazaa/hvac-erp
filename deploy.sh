@@ -24,12 +24,14 @@ node scripts/seed_dev_user.js
 echo "🏗️ Building production Next.js application..."
 npm run build
 
-echo "🔄 Reloading PM2 process with zero downtime..."
+echo "🔄 Reloading PM2 process..."
+pm2 delete hvac-erp 2>/dev/null || true
 if [ -f ecosystem.config.js ]; then
-  pm2 reload ecosystem.config.js --update-env || pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
+  pm2 start ecosystem.config.js
 else
-  pm2 reload hvac-erp || pm2 restart hvac-erp || pm2 start npm --name "hvac-erp" -- start
+  pm2 start npm --name "hvac-erp" -- start
 fi
+pm2 save
 
 echo "✅ Deployment completed successfully with zero data loss!"
 
